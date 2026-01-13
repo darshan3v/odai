@@ -1,0 +1,57 @@
+{
+  "version": 10,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 23
+  },
+  "configurePresets": [
+    {
+      "name": "linux-debug",
+      "displayName": "Linux Debug",
+      "binaryDir": "${sourceDir}/build/debug/linux",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug"
+      }
+    },
+    {
+      "name": "linux-release",
+      "displayName": "Linux Release",
+      "binaryDir": "${sourceDir}/build/release/linux",
+      "generator": "Ninja",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release"
+      }
+    },
+    {
+      "name": "android-arm64-debug",
+      "displayName": "Android ARM64 Debug",
+      "binaryDir": "${sourceDir}/build/debug/android",
+      "generator": "Ninja",
+      "toolchainFile": "$env{ANDROID_HOME}/ndk/29.0.14206865/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-26"
+      }
+    },
+    {
+      "name": "android-arm64-release",
+      "displayName": "Android ARM64 Release",
+      "binaryDir": "${sourceDir}/build/release/android",
+      "generator": "Ninja",
+      "toolchainFile": "$env{ANDROID_HOME}/ndk/29.0.14206865/build/cmake/android.toolchain.cmake",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "ANDROID_ABI": "arm64-v8a",
+        "ANDROID_PLATFORM": "android-26"
+      }
+    }
+  ],
+  "buildPresets": [
+    { "name": "linux-debug", "configurePreset": "linux-debug" },
+    { "name": "linux-release", "configurePreset": "linux-release" },
+    { "name": "android-arm64-debug", "configurePreset": "android-arm64-debug" },
+    { "name": "android-arm64-release", "configurePreset": "android-arm64-release" }
+  ]
+}

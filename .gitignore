@@ -1,0 +1,9 @@
+.cache/
+build/
+out/
+*.gguf
+main.cpp
+odai_bin
+odai.log
+odaisample.db
+ToDo.md
