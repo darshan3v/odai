@@ -1,4 +1,4 @@
-#include "odai_logger.h"
+#include "odai_sdk.h"
 #include "db/odai_sqlite_db.h"
 
 #include <sqlite3.h>
@@ -118,13 +118,16 @@ bool ODAISqliteDb::create_chat(const ChatId &chat_id, const ChatConfig &chat_con
             return false;
         }
 
+        if(!chat_config.is_sane())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR,"Invalid chat config passed");
+            return false;
+        }
+
         json j = chat_config;
         string chat_config_json = j.dump();
 
-        SQLite::Transaction transaction(*db);
-
-        // Wrap the parameter in jsonb()
-        // This takes your text string and compiles it to binary JSONB *inside* the DB engine.
+        begin_transaction();
 
         SQLite::Statement insert_chat(*db, "INSERT INTO chats (chat_id, chat_config) VALUES (:chat_id, jsonb(:chat_config))");
 
@@ -139,7 +142,7 @@ bool ODAISqliteDb::create_chat(const ChatId &chat_id, const ChatConfig &chat_con
         system_msg.message_metadata = {};
         insert_chat_messages(chat_id, {system_msg});
 
-        transaction.commit();
+        commit_transaction();
 
         return true;
     }
@@ -279,21 +282,32 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId &chat_id, const vector<Chat
             return true;
         }
 
-        // Prepare statement once, reuse for all messages
-        SQLite::Statement insert_message(*db,
-                                         "INSERT INTO chat_messages (chat_id, role, content, message_metadata, sequence_index) "
-                                         "VALUES (:chat_id, :role, :content, jsonb(:message_metadata), "
-                                         "COALESCE((SELECT MAX(sequence_index) + 1 FROM chat_messages WHERE chat_id = :chat_id), 0))");
+        // Start transaction (supports nesting)
+        begin_transaction();
 
-        for (const auto &msg : messages)
-        {
-            insert_message.bind(":chat_id", chat_id);
-            insert_message.bind(":role", msg.role);
-            insert_message.bind(":content", msg.content);
-            insert_message.bind(":message_metadata", msg.message_metadata.dump());
-            insert_message.exec();
-            insert_message.reset(); // Reset for next iteration
-            insert_message.clearBindings();
+        try {
+            // Prepare statement once, reuse for all messages
+            SQLite::Statement insert_message(*db,
+                                             "INSERT INTO chat_messages (chat_id, role, content, message_metadata, sequence_index) "
+                                             "VALUES (:chat_id, :role, :content, jsonb(:message_metadata), "
+                                             "COALESCE((SELECT MAX(sequence_index) + 1 FROM chat_messages WHERE chat_id = :chat_id), 0))");
+
+            for (const auto &msg : messages)
+            {
+                insert_message.bind(":chat_id", chat_id);
+                insert_message.bind(":role", msg.role);
+                insert_message.bind(":content", msg.content);
+                insert_message.bind(":message_metadata", msg.message_metadata.dump());
+                insert_message.exec();
+                insert_message.reset(); // Reset for next iteration
+                insert_message.clearBindings();
+            }
+            
+            commit_transaction();
+        }
+        catch (...) {
+            rollback_transaction();
+            throw; // Re-throw to be caught by outer catch
         }
 
         return true;
@@ -318,5 +332,96 @@ void ODAISqliteDb::close()
     catch (const std::exception &e)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Error closing database: {}", e.what());
+    }
+}
+
+bool ODAISqliteDb::begin_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        m_transaction_depth++;
+        if (m_transaction_depth == 1)
+        {
+            // Start the physical transaction
+            m_transaction = std::make_unique<SQLite::Transaction>(*db);
+        }
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to begin transaction: {}", e.what());
+        if (m_transaction_depth == 1) 
+        {
+             m_transaction_depth = 0;
+             m_transaction.reset();
+        }
+        else m_transaction_depth--; 
+        return false;
+    }
+}
+
+bool ODAISqliteDb::commit_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        if (m_transaction_depth > 0)
+        {
+            m_transaction_depth--;
+            if (m_transaction_depth == 0)
+            {
+                // Commit the physical transaction
+                if (m_transaction)
+                {
+                    m_transaction->commit();
+                    m_transaction.reset();
+                }
+            }
+            return true;
+        }
+        
+        ODAI_LOG(ODAI_LOG_WARN, "commit_transaction called with no active transaction");
+        return false;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to commit transaction: {}", e.what());
+        // If commit fails, we leave the transaction object (destructor will rollback if reset/destroyed)
+        return false;
+    }
+}
+
+bool ODAISqliteDb::rollback_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        // Regardless of depth, we roll back everything
+        // Destroying the Transaction object safely rolls it back if not committed
+        m_transaction.reset();
+        m_transaction_depth = 0;
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
+        m_transaction_depth = 0;
+        return false;
     }
 }

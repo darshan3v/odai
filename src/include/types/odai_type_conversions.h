@@ -3,6 +3,8 @@
 
 #include<nlohmann/json.hpp>
 
+// The assumption here is that c / c++ param is sane, and hence we don't do sanity checks here
+
 /// Converts a C-style database configuration to C++ style.
 /// Creates a new C++ DBConfig by copying the database type and path from the C struct.
 /// @param c C-style database configuration to convert

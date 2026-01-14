@@ -60,12 +60,5 @@ public:
     }
 };
 
-/// Global logger instance. Automatically initialized at program startup.
-inline ODAILogger *g_odaiLogger = new ODAILogger();
-
-/// Macro for logging messages with automatic function name and line number.
-/// Prepends the function name and line number to the format string.
-/// @param level Log level (ODAI_LOG_ERROR, ODAI_LOG_WARN, ODAI_LOG_INFO, or ODAI_LOG_DEBUG)
-/// @param fmt Format string compatible with std::format
-/// @param ... Variable arguments to format into the message
-#define ODAI_LOG(level, fmt, ...) g_odaiLogger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+// Global logger is now managed by ODAISdk singleton in odai_sdk.h
+// Macro ODAI_LOG is also defined there

@@ -127,11 +127,11 @@ unset(BUILD_SHARED_LIBS)
 set(ODAI_SOURCES
     src/impl/odai_logger.cpp
     src/impl/odai_public.cpp
+    src/impl/odai_sdk.cpp
 
     src/impl/types/odai_type_conversions.cpp
 
     src/impl/utils/odai_helpers.cpp
-    src/impl/utils/odai_csanitizers.cpp
     src/impl/utils/string_utils.cpp
 
     src/impl/backendEngine/odai_llama_backend_engine.cpp

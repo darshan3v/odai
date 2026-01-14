@@ -76,10 +76,27 @@ public:
     /// @return true if all messages inserted successfully, false on error
     bool insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages) override;
 
+    /// Starts a transaction.
+    /// Supports nested calls by flattening: real SQL transaction starts only on the first call.
+    /// @return true if transaction started successfully (or was already active).
+    bool begin_transaction() override;
+
+    /// Commits a transaction.
+    /// Supports nested calls: real SQL commit happens only when the outermost transaction commits.
+    /// @return true if commit call was successful (or decremented depth).
+    bool commit_transaction() override;
+
+    /// Rolls back the entire transaction.
+    /// This aborts the current transaction completely regardless of nesting depth.
+    bool rollback_transaction() override;
+
     /// Closes the database connection and releases resources.
     void close() override;
 
 private:
+    int m_transaction_depth = 0;
+    std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
+
     inline static string DB_SCHEMA = R"(
         
 CREATE TABLE chats (

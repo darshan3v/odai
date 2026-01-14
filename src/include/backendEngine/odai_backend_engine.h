@@ -43,7 +43,7 @@ public:
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
     virtual int32_t generate_streaming_response(string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
-    /// Generates a streaming response for the given query in the given chat session.
+    /// Generates a streaming chat response for the given query in the given chat session.
     /// @param chat_id Unique identifier for the chat session whose cached context will be used
     /// @param query The input query/message to generate a response for
     /// @param callback Function called for each chunk of generated text
@@ -51,8 +51,15 @@ public:
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
     virtual int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
+    /// Checks if the context for a specific chat session is currently loaded in memory.
+    /// @param chat_id Unique identifier for the chat session
+    /// @return true if context is loaded, false otherwise
+    virtual bool is_chat_context_loaded(const ChatId &chat_id) = 0;
+
+    /// Unloads the context for a specific chat session from memory, freeing resources.
+    /// @param chat_id Unique identifier for the chat session
+    /// @return true if unloaded successfully (or was not loaded), false on error
+    virtual bool unload_chat_context(const ChatId &chat_id) = 0;
+
     virtual ~ODAIBackendEngine() = default;
 };
-
-// it needs to be inline not static, because if static it will simply create multiple copies wherever header is included
-inline unique_ptr<ODAIBackendEngine> g_backendEngine = nullptr;

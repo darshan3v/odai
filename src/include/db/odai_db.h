@@ -53,15 +53,26 @@ public:
 
     /// Inserts multiple chat messages into the database.
     /// Each message is assigned a sequence index automatically based on existing messages for the chat.
+    /// @note This operation is wrapped in a transaction. If any insertion fails, the entire operation is rolled back.
     /// @param chat_id Unique identifier for the chat session
     /// @param messages Vector of ChatMessage objects to insert
     /// @return true if all messages inserted successfully, false on error
     virtual bool insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages) = 0;
 
+    /// Starts a transaction.
+    /// Supports nested calls by flattening: real transaction starts only on the first call.
+    /// @return true if transaction started successfully (or was already active).
+    virtual bool begin_transaction() = 0;
+
+    /// Commits a transaction.
+    /// Supports nested calls: real commit happens only when the outermost transaction commits.
+    /// @return true if commit call was successful (or decremented depth).
+    virtual bool commit_transaction() = 0;
+
+    /// Rolls back the entire transaction.
+    /// This aborts the current transaction completely regardless of nesting depth.
+    virtual bool rollback_transaction() = 0;
+
     /// Closes the database connection and releases resources.
     virtual void close() = 0;
 };
-
-/// Global database instance for RAG operations.
-/// Shared database connection used across the application for managing chat sessions and messages.
-inline unique_ptr<ODAIDb> g_db = nullptr;

@@ -13,8 +13,10 @@ public:
     /// Loads both the embedding model and language model specified in the configuration.
     /// If initialization fails at any step, the function returns false and logs an error.
     /// @param config Configuration for RAG
+    /// @param db Pointer to the database instance
+    /// @param backendEngine Pointer to the backend engine instance
     /// @return true if both models loaded successfully, false otherwise
-    bool initialize(const RagConfig& config);
+    bool initialize(const RagConfig& config, ODAIDb* db, ODAIBackendEngine* backendEngine);
 
     /// Generates a streaming response for the given query using RAG context retrieval.
     /// Retrieves relevant context based on the scope ID and generates a response using the loaded language model.
@@ -44,7 +46,20 @@ public:
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
     int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const ScopeId &scope_id,
                                             odai_stream_resp_callback_fn callback, void *user_data);
-};
 
-/// Global RAG engine instance. Initialized when the RAG engine is set up.
-inline unique_ptr<ODAIRagEngine> g_ragEngine = nullptr;
+    /// Unloads the chat session from memory, freeing up resources.
+    /// @param chat_id Unique identifier for the chat session
+    /// @return true if unloaded successfully, false on error
+    bool unload_chat_session(const ChatId &chat_id);
+
+private:
+    /// Helper to ensure chat session is loaded into memory (backend engine context).
+    /// If not loaded, it retrieves history from DB and loads it.
+    /// @param chat_id Unique identifier for the chat session
+    /// @param chat_config Configuration for the chat
+    /// @return true if session is loaded (or was already loaded), false on error
+    bool ensure_chat_session_loaded(const ChatId &chat_id, const ChatConfig &chat_config);
+
+    ODAIDb* m_db = nullptr;
+    ODAIBackendEngine* m_backendEngine = nullptr;
+};

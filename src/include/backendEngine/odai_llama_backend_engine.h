@@ -62,6 +62,8 @@ struct ChatSessionLLMContext
 class ODAILlamaEngine : public ODAIBackendEngine
 {
 public:
+    ODAILlamaEngine(const BackendEngineConfig &backend_engine_config);
+
     /// Initializes the llama backend engine and sets up logging.
     /// @return true if initialization succeeded, false otherwise
     bool initialize_engine() override;
@@ -102,6 +104,16 @@ public:
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
     int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
+
+    /// Checks if the context for a specific chat session is currently loaded in memory.
+    /// @param chat_id Unique identifier for the chat session
+    /// @return true if context is loaded, false otherwise
+    bool is_chat_context_loaded(const ChatId &chat_id) override;
+
+    /// Unloads the context for a specific chat session from memory, freeing resources.
+    /// @param chat_id Unique identifier for the chat session
+    /// @return true if unloaded successfully (or was not loaded), false on error
+    bool unload_chat_context(const ChatId &chat_id) override;
 
     /// Destructor that frees the llama backend resources.
     ~ODAILlamaEngine() override;

@@ -1,7 +1,8 @@
 #include "llama.h"
 
 #include "backendEngine/odai_llama_backend_engine.h"
-#include "odai_logger.h"
+#include "odai_sdk.h"
+#include "odai_sdk.h"
 #include "utils/string_utils.h"
 
 /// Redirects llama.cpp log messages to the Odai logging system.
@@ -25,6 +26,10 @@ static void llama_log_redirect(ggml_log_level level, const char *text,
     return; // Ignore debug/spam from llama if you want
 
   ODAI_LOG(our_level, "[llama.cpp] {}", text);
+}
+
+ODAILlamaEngine::ODAILlamaEngine(const BackendEngineConfig &backend_engine_config)
+{
 }
 
 bool ODAILlamaEngine::initialize_engine()
@@ -154,6 +159,10 @@ bool ODAILlamaEngine::load_language_model(const LLMModelConfig &config)
     this->llm_model_config = config;
     return true;
   }
+
+  // Clear all chat contexts since they depend on the old model
+  this->chat_context.clear();
+  ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts as new model is being loaded");
 
   llama_model_params llm_model_params = llama_model_default_params();
   llm_model_params.n_gpu_layers = 0; // Load entire model on CPU
@@ -653,6 +662,24 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id,
 
   // Use the cached context and sampler to generate streaming response
   return this->generate_streaming_response_impl(*chat_session.context, *chat_session.sampler, formatted_prompt, callback, user_data);
+}
+
+bool ODAILlamaEngine::is_chat_context_loaded(const ChatId &chat_id)
+{
+  return this->chat_context.find(chat_id) != this->chat_context.end();
+}
+
+bool ODAILlamaEngine::unload_chat_context(const ChatId &chat_id)
+{
+  auto it = this->chat_context.find(chat_id);
+  if (it != this->chat_context.end())
+  {
+    this->chat_context.erase(it);
+    ODAI_LOG(ODAI_LOG_INFO, "Unloaded chat context for chat_id: {}", chat_id);
+    return true;
+  }
+  ODAI_LOG(ODAI_LOG_WARN, "Chat context not found for chat_id: {}, so nothing to unload", chat_id);
+  return false;
 }
 
 ODAILlamaEngine::~ODAILlamaEngine() { llama_backend_free(); }

@@ -5,13 +5,9 @@
 #include <cstdint>
 #include <cstddef>
 #include "types/odai_ctypes.h"
+#include "types/odai_export.h"
 
 // In your header
-#ifdef BUILDING_ODAI_SHARED
-#define ODAI_API __attribute__((visibility("default")))
-#else
-#define ODAI_API
-#endif
 
 #ifdef __cplusplus
 extern "C"
@@ -111,7 +107,6 @@ extern "C"
   /// Generates a streaming chat response for the given query in the specified chat session.
   /// Uses the chat history and configuration from the loaded chat session.
   /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
-  /// ToDo: Implementation not yet defined.
   /// @param chat_id The unique identifier of the chat session
   /// @param query The input query/message to generate a response for
   /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
@@ -120,6 +115,11 @@ extern "C"
   /// @return true if response was generated successfully, false on error or if callback returns false to cancel streaming
   ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_ScopeId scope_id,
                                                       odai_stream_resp_callback_fn callback, void *user_data);
+
+  /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).
+  /// @param chat_id The unique identifier of the chat session to unload
+  /// @return true if chat session was unloaded successfully, false on error
+  ODAI_API bool odai_unload_chat(const c_ChatId chat_id);
 
 #ifdef __cplusplus
 }
