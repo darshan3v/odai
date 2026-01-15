@@ -62,16 +62,16 @@ bool odai_add_document(const char *content, const c_DocumentId document_id, cons
     return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id), ScopeId(scope_id));
 }
 
-int32_t odai_generate_streaming_response(const char *c_query, const c_ScopeId c_scope_id,
+int32_t odai_generate_streaming_response(const char *c_query,
                                          odai_stream_resp_callback_fn c_callback, void *c_user_data)
 {
-    if (c_query == nullptr || c_scope_id == nullptr)
+    if (c_query == nullptr)
     {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid query / scopeId is passed");
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
         return -1;
     }
 
-    return ODAISdk::get_instance().generate_streaming_response(string(c_query), ScopeId(c_scope_id), c_callback, c_user_data);
+    return ODAISdk::get_instance().generate_streaming_response(string(c_query), c_callback, c_user_data);
 }
 
 bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig *c_chat_config, c_ChatId c_chat_id_out, size_t *chat_id_out_len)

@@ -94,7 +94,7 @@ public:
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_response(string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
+    int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
 
     /// Generates a streaming chat response using the cached context and sampler for the given chat session.
     /// Loads the query into the cached context and then continues generation.
@@ -216,7 +216,7 @@ private:
     /// @param messages Vector of chat messages to format
     /// @param add_generation_prompt Whether to add generation prompt (set to true when expecting model response)
     /// @return Formatted prompt string, or empty string on error
-    string format_chat_messages_to_prompt(const vector<ChatMessage> &messages, bool add_generation_prompt);
+    string format_chat_messages_to_prompt(const vector<ChatMessage> &messages, const bool add_generation_prompt);
 
     /// Core implementation of streaming response generation that handles token generation and buffering.
     /// Takes an already-initialized context and sampler to perform the streaming.

@@ -102,10 +102,17 @@ typedef struct
     /// Configuration for the language model used for text generation
     LLMModelConfig llmModelConfig;
     // Additional configuration parameters like strategy etc...
+    RagProfile profile;
 
     bool is_sane() const
     {
         if (!embeddingModelConfig.is_sane() || !llmModelConfig.is_sane())
+            return false;
+        
+        if (profile != RAG_PROFILE_GENERAL && 
+            profile != RAG_PROFILE_CODE && 
+            profile != RAG_PROFILE_PRECISE && 
+            profile != RAG_PROFILE_FAST)
             return false;
 
         return true;

@@ -14,14 +14,6 @@ extern "C"
 {
 #endif
 
-  /// Log level type for controlling logging verbosity.
-  /// Use the constants ODAI_LOG_ERROR, ODAI_LOG_WARN, ODAI_LOG_INFO, ODAI_LOG_DEBUG.
-  typedef uint8_t OdaiLogLevel;
-
-  /// Backend engine type identifier.
-  /// Use the constants like LLAMA_BACKEND_ENGINE to specify which backend to use.
-  typedef uint8_t BackendEngineType;
-
   /// Callback function type for logging messages.
   /// Called whenever a log message is generated at or below the current log level.
   /// @param level The log level of the message (OdaiLogLevel)
@@ -61,15 +53,14 @@ extern "C"
   /// @return true if document was added successfully, false otherwise
   ODAI_API bool odai_add_document(const char *content, const c_DocumentId document_id, const c_ScopeId scope_id);
 
-  /// Generates a streaming response for the given query using RAG.
-  /// This is a synchronous function that calls the callback for each chunk.
-  /// Retrieves relevant context from the knowledge base and streams the generated response token by token.
+  /// Generates a streaming response for the given query.
+  /// Its like a Completion API, and won't use RAG
+  /// This is a synchronous function that calls the callback for chunks of responses.
   /// @param query The input query/prompt to generate a response for
-  /// @param scope_id Scope identifier to filter documents during retrieval
-  /// @param callback Function called for each generated token
+  /// @param callback Function called for each generated chunk of response
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel streaming.
-  ODAI_API int32_t odai_generate_streaming_response(const char *query, const c_ScopeId scope_id,
+  ODAI_API int32_t odai_generate_streaming_response(const char *query,
                                                     odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Creates a new chat session with the specified configuration.

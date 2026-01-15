@@ -41,7 +41,7 @@ public:
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    virtual int32_t generate_streaming_response(string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
+    virtual int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
     /// Generates a streaming chat response for the given query in the given chat session.
     /// @param chat_id Unique identifier for the chat session whose cached context will be used

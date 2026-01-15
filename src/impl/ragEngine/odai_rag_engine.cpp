@@ -34,7 +34,7 @@ bool ODAIRagEngine::initialize(const RagConfig &config, ODAIDb* db, ODAIBackendE
     return true;
 }
 
-int32_t ODAIRagEngine::generate_streaming_response(const string &query, const ScopeId &scopeId, odai_stream_resp_callback_fn callback, void *user_data)
+int32_t ODAIRagEngine::generate_streaming_response(const string &query, odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
     {
@@ -48,20 +48,7 @@ int32_t ODAIRagEngine::generate_streaming_response(const string &query, const Sc
         return -1;
     }
 
-    if (scopeId.empty())
-    {
-        ODAI_LOG(ODAI_LOG_WARN, "ScopeId is empty");
-        return -1;
-    }
-
-    // Gather context based on scopeId,
-    string context = "";
-    // ToDo -> Implement context retrieval and processing
-
-    // ToDo -> Combine context and query into prompt
-    string prompt = query;
-
-    return m_backendEngine->generate_streaming_response(prompt, callback, user_data);
+    return m_backendEngine->generate_streaming_response(query, callback, user_data);
 }
 
 bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
@@ -118,28 +105,28 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
         return -1;
     }
 
-    if (!this->ensure_chat_session_loaded(chat_id, chat_config))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to ensure chat session is loaded for chat_id: {}", chat_id);
-        return -1;
-    }
-
     // Check RAG settings: if RAG is enabled but scope_id is empty, return error
     if (chat_config.use_rag && scope_id.empty())
     {
         ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but scope_id is empty", chat_id);
         return -1;
     }
-
+    
     // If RAG is enabled and scope_id is provided, retrieve and combine context
     if (chat_config.use_rag && !scope_id.empty())
     {
         // ToDo -> Implement context retrieval from knowledge base based on scope_id
         // string context = retrieve_context_from_knowledge_base(scope_id, prompt);
-        // final_prompt = combine_context_and_query(context, prompt);
         ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with scope_id: {}", chat_id, scope_id);
     }
 
+    if (!this->ensure_chat_session_loaded(chat_id, chat_config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to ensure chat session is loaded for chat_id: {}", chat_id);
+        return -1;
+    }
+
+    // final_prompt = combine_context_and_query(context, prompt);
     string final_prompt = prompt; // Placeholder until context retrieval is implemented
 
     StreamingBufferContext buffer_ctx;

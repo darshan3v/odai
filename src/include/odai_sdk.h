@@ -53,13 +53,13 @@ public:
     /// @return true if document was added successfully, false otherwise
     bool add_document(const string& content, const DocumentId& documentId, const ScopeId& scopeId);
 
-    /// Generates a streaming response for the given query using RAG.
+    /// Generates a streaming response for the given query.
+    /// Its like a Completion API, and won't use RAG
     /// @param query The input query/prompt
-    /// @param scopeId Scope identifier to filter documents during retrieval
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return Total number of tokens generated, or -1 on error
-    int32_t generate_streaming_response(const string& query, const ScopeId& scopeId, 
+    int32_t generate_streaming_response(const string& query, 
                                      odai_stream_resp_callback_fn callback, void *userData);
 
     /// Creates a new chat session with the specified configuration.

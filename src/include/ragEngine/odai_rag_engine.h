@@ -18,15 +18,13 @@ public:
     /// @return true if both models loaded successfully, false otherwise
     bool initialize(const RagConfig& config, ODAIDb* db, ODAIBackendEngine* backendEngine);
 
-    /// Generates a streaming response for the given query using RAG context retrieval.
-    /// Retrieves relevant context based on the scope ID and generates a response using the loaded language model.
+    /// Generates a streaming response for the given query.
     /// The response is streamed incrementally via the callback function.
     /// @param query The input query/prompt to generate a response for
-    /// @param scopeId The scope identifier used to retrieve relevant context from the knowledge base
     /// @param callback Function called for each chunk of generated text. Can return false to cancel streaming.
     /// @param user_data User-provided data passed to the callback function
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_response(const string &query, const ScopeId &scopeId, odai_stream_resp_callback_fn callback, void *user_data);
+    int32_t generate_streaming_response(const string &query, odai_stream_resp_callback_fn callback, void *user_data);
     
     /// Loads a chat from the database to backend engine using the provided chat ID.
     /// Retrieves the chat configuration and loads the appropriate language model.

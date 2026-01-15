@@ -24,7 +24,11 @@ LLMModelConfig toCpp(const c_LLMModelConfig &c)
 
 RagConfig toCpp(const c_RagConfig &c)
 {
-    return {toCpp(c.embeddingModelConfig), toCpp(c.llmModelConfig)};
+    RagConfig config;
+    config.embeddingModelConfig = toCpp(c.embeddingModelConfig);
+    config.llmModelConfig = toCpp(c.llmModelConfig);
+    config.profile = c.profile;
+    return config;
 }
 
 ChatConfig toCpp(const c_ChatConfig &c)

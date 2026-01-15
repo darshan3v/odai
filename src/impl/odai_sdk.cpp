@@ -133,7 +133,7 @@ bool ODAISdk::add_document(const string& content, const DocumentId& documentId, 
     return true;
 }
 
-int32_t ODAISdk::generate_streaming_response(const string& query, const ScopeId& scopeId, 
+int32_t ODAISdk::generate_streaming_response(const string& query, 
                                           odai_stream_resp_callback_fn callback, void *userData)
 {
     try
@@ -150,9 +150,9 @@ int32_t ODAISdk::generate_streaming_response(const string& query, const ScopeId&
             return -1;
         }
 
-        if (query.empty() || scopeId.empty())
+        if (query.empty())
         {
-            ODAI_LOG(ODAI_LOG_ERROR, "invalid query / scopeId is passed");
+            ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
             return -1;
         }
 
@@ -162,7 +162,7 @@ int32_t ODAISdk::generate_streaming_response(const string& query, const ScopeId&
             return -1;
         }
 
-        int32_t total_tokens = m_ragEngine->generate_streaming_response(query, scopeId, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_response(query, callback, userData);
         if (total_tokens < 0)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");

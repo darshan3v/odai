@@ -54,7 +54,8 @@ struct c_RagConfig
     struct c_EmbeddingModelConfig embeddingModelConfig;
     /// Configuration for the language model used for text generation
     struct c_LLMModelConfig llmModelConfig;
-    // Additional configuration parameters like strategy etc...
+    /// RAG Profile
+    RagProfile profile;
 };
 
 /// C-style configuration structure for chat sessions.

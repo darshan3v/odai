@@ -454,7 +454,7 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(
 }
 
 int32_t ODAILlamaEngine::generate_streaming_response(
-    string &prompt, odai_stream_resp_callback_fn callback,
+    const string &prompt, odai_stream_resp_callback_fn callback,
     void *user_data)
 {
   if (this->isInitialized == false)
@@ -501,7 +501,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(
 }
 
 string
-ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage> &messages, bool add_generation_prompt)
+ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage> &messages, const bool add_generation_prompt)
 {
   if (this->llmModel == nullptr)
   {
