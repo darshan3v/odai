@@ -1,10 +1,9 @@
 #pragma once
 
+#include "types/odai_common_types.h"
 #include <nlohmann/json.hpp>
 #include <string>
 #include <cstdint>
-
-#include "types/odai_ctypes.h"
 
 using namespace std;
 using namespace nlohmann;

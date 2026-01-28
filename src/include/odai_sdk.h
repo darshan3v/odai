@@ -40,12 +40,6 @@ public:
     /// @return true if initialization succeeded, false otherwise
     bool initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig& backendConfig);
 
-    /// Initializes the RAG (Retrieval-Augmented Generation) engine with RAG configurations.
-    /// Must be called before using RAG-related functions.
-    /// @param config Configuration structure containing embedding and language model paths and RAG related config
-    /// @return true if RAG engine initialized successfully, false otherwise
-    bool initialize_rag_engine(const RagConfig& config);
-
     /// Adds a document to the RAG knowledge base for retrieval during generation.
     /// @param content The text content of the document to add
     /// @param documentId Unique identifier for this document
@@ -55,11 +49,12 @@ public:
 
     /// Generates a streaming response for the given query.
     /// Its like a Completion API, and won't use RAG
+    /// @param llmModelConfig The Language Model and its config to be used for response generation
     /// @param query The input query/prompt
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return Total number of tokens generated, or -1 on error
-    int32_t generate_streaming_response(const string& query, 
+    int32_t generate_streaming_response(const LLMModelConfig& llmModelConfig, const string& query, 
                                      odai_stream_resp_callback_fn callback, void *userData);
 
     /// Creates a new chat session with the specified configuration.
@@ -69,7 +64,8 @@ public:
     /// @return true if chat session was created successfully, false otherwise
     bool create_chat(const ChatId& chatIdIn, const ChatConfig& chatConfig, ChatId& chatIdOut);
 
-    /// Loads an existing chat by its ID and loads the chat KV cache into memory.
+    /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
+    /// Its only purpose is to pre-load a existing chat
     /// @param chatId The unique identifier of the chat session to load
     /// @return true if chat session was loaded successfully, false if not found or on error
     bool load_chat(const ChatId& chatId);
@@ -81,6 +77,7 @@ public:
     bool get_chat_history(const ChatId& chatId, vector<ChatMessage>& messages);
 
     /// Generates a streaming chat response for the given query in the specified chat session.
+    /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
     /// @param chatId The unique identifier of the chat session
     /// @param query The input query/message
     /// @param scopeId Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)

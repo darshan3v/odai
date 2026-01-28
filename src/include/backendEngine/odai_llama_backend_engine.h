@@ -119,7 +119,6 @@ public:
     ~ODAILlamaEngine() override;
 
 private:
-private:
     bool isInitialized = false;
 
     EmbeddingModelConfig embedding_model_config;

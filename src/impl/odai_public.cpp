@@ -1,5 +1,7 @@
 #include "odai_public.h"
 #include "odai_sdk.h"
+#include "types/odai_common_types.h"
+#include "types/odai_ctypes.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_csanitizers.h"
 #include "utils/string_utils.h"
@@ -34,24 +36,6 @@ bool odai_initialize_sdk(const c_DBConfig *c_dbConfig, const c_BackendEngineConf
     return ODAISdk::get_instance().initialize_sdk(toCpp(*c_dbConfig), toCpp(*c_backendEngineConfig));
 }
 
-bool odai_initialize_rag_engine(const c_RagConfig *c_config)
-{
-    if (!is_sane(c_config))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid ragconfig passed");
-        return false;
-    }
-    
-    // Check inner configs sanity as done in original code, though ODAISdk also checks logic
-    if (!is_sane(&c_config->embeddingModelConfig) || !is_sane(&c_config->llmModelConfig))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "make sure given ragconfig is correct");
-        return false;
-    }
-
-    return ODAISdk::get_instance().initialize_rag_engine(toCpp(*c_config));
-}
-
 bool odai_add_document(const char *content, const c_DocumentId document_id, const c_ScopeId scope_id)
 {
     if (content == nullptr || document_id == nullptr || scope_id == nullptr)
@@ -62,16 +46,23 @@ bool odai_add_document(const char *content, const c_DocumentId document_id, cons
     return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id), ScopeId(scope_id));
 }
 
-int32_t odai_generate_streaming_response(const char *c_query,
+int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *c_query,
                                          odai_stream_resp_callback_fn c_callback, void *c_user_data)
 {
+
+    if(!is_sane(llm_model_config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid llm_model_config passed");
+        return -1;
+    }
+
     if (c_query == nullptr)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
         return -1;
     }
 
-    return ODAISdk::get_instance().generate_streaming_response(string(c_query), c_callback, c_user_data);
+    return ODAISdk::get_instance().generate_streaming_response(toCpp(*llm_model_config), string(c_query), c_callback, c_user_data);
 }
 
 bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig *c_chat_config, c_ChatId c_chat_id_out, size_t *chat_id_out_len)

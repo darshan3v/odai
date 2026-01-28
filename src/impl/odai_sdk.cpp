@@ -3,7 +3,10 @@
 
 #include "db/odai_sqlite_db.h"
 #include "backendEngine/odai_llama_backend_engine.h"
+#include "types/odai_common_types.h"
+#include "types/odai_types.h"
 #include "utils/odai_helpers.h"
+#include <memory>
 
 using namespace std;
 
@@ -87,6 +90,16 @@ bool ODAISdk::initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig
             return false;
         }
 
+        // Initalize the RAGEngine
+        m_ragEngine = make_unique<ODAIRagEngine>(m_db.get(),m_backendEngine.get());
+
+        if ((m_ragEngine.get() == nullptr))
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine");
+            m_sdkInitialized = false;
+            return false;
+        }
+
         m_sdkInitialized = true;
         ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK Initialized successfully");
         return true;
@@ -99,54 +112,28 @@ bool ODAISdk::initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig
     }
 }
 
-bool ODAISdk::initialize_rag_engine(const RagConfig& config)
-{
-    try
-    {
-        m_ragEngine = std::make_unique<ODAIRagEngine>();
-
-        if (!config.is_sane())
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "make sure given ragconfig is correct");
-            return false;
-        }
-
-        if (!m_ragEngine->initialize(config, m_db.get(), m_backendEngine.get()))
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "failed to initalize RAG Engine");
-            return false;
-        }
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-        return false;
-    }
-
-    ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
-    return true;
-}
-
 bool ODAISdk::add_document(const string& content, const DocumentId& documentId, const ScopeId& scopeId)
 {
     // TODO: Implementation of add_document
     return true;
 }
 
-int32_t ODAISdk::generate_streaming_response(const string& query, 
+int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_config, const string& query, 
                                           odai_stream_resp_callback_fn callback, void *userData)
 {
     try
     {
+
+        
         if (!m_sdkInitialized)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
             return -1;
         }
-
-        if (m_ragEngine == nullptr)
+        
+        if(!llm_model_config.is_sane())
         {
-            ODAI_LOG(ODAI_LOG_ERROR, "rag engine is not yet initalized");
+            ODAI_LOG(ODAI_LOG_ERROR, "invalid LLM Model Config passed");
             return -1;
         }
 
@@ -162,7 +149,7 @@ int32_t ODAISdk::generate_streaming_response(const string& query,
             return -1;
         }
 
-        int32_t total_tokens = m_ragEngine->generate_streaming_response(query, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_response(llm_model_config, query, callback, userData);
         if (total_tokens < 0)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");
@@ -301,13 +288,6 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
             return false;
         }
 
-        // Sanity check: RAG engine initialization
-        if (m_ragEngine == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "RAG engine is not yet initialized");
-            return false;
-        }
-
         if (chatId.empty())
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Invalid chat_id passed");
@@ -365,12 +345,6 @@ bool ODAISdk::unload_chat(const ChatId& chatId)
         if (!m_sdkInitialized)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-            return false;
-        }
-
-        if (m_ragEngine == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "rag engine is not yet initialized");
             return false;
         }
 

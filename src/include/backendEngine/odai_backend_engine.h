@@ -1,8 +1,6 @@
 #pragma once
 
 #include "types/odai_types.h"
-#include "odai_public.h"
-#include <memory>
 #include <vector>
 
 /// Abstract base class for backend engines that handle model loading and text generation.

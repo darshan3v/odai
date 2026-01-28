@@ -38,12 +38,6 @@ extern "C"
   /// @return true if initialization succeeded, false otherwise
   ODAI_API bool odai_initialize_sdk(const c_DBConfig *dbConfig, const c_BackendEngineConfig *backendEngineConfig);
 
-  /// Initializes the RAG (Retrieval-Augmented Generation) engine with RAG configurations.
-  /// Must be called before using RAG-related functions like odai_add_document or odai_generate_response.
-  /// @param config Configuration structure containing embedding and language model paths and RAG related config
-  /// @return true if RAG engine initialized successfully, false otherwise
-  ODAI_API bool odai_initialize_rag_engine(const c_RagConfig *config);
-
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// The document content is embedded and stored in the database for later retrieval.
   /// ToDo: Implementation not yet defined.
@@ -56,11 +50,12 @@ extern "C"
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG
   /// This is a synchronous function that calls the callback for chunks of responses.
+  /// @param llm_model_config The Language Model and its config to be used for response generation
   /// @param query The input query/prompt to generate a response for
   /// @param callback Function called for each generated chunk of response
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel streaming.
-  ODAI_API int32_t odai_generate_streaming_response(const char *query,
+  ODAI_API int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *query,
                                                     odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Creates a new chat session with the specified configuration.
@@ -73,9 +68,9 @@ extern "C"
   /// @return true if chat session was created successfully, false otherwise
   ODAI_API bool odai_create_chat(const c_ChatId chat_id_in, const c_ChatConfig *chat_config, c_ChatId chat_id_out, size_t *chat_id_out_len);
 
-  /// Loads an existing chat by its ID and loads the chat KV cache into memory.
-  /// Must be called before generating responses for a specific chat session.
-  /// This function loads the chat's key-value cache from persistent storage into memory for efficient context continuation.
+
+   /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
+  /// Its only purpose is to pre-load a existing chat
   /// @param chat_id The unique identifier of the chat session to load
   /// @return true if chat session was loaded successfully, false if chat_id not found or on error
   ODAI_API bool odai_load_chat(const c_ChatId chat_id);
@@ -96,7 +91,7 @@ extern "C"
   ODAI_API void odai_free_chat_messages(c_ChatMessage *messages, size_t count);
 
   /// Generates a streaming chat response for the given query in the specified chat session.
-  /// Uses the chat history and configuration from the loaded chat session.
+  /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
   /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
   /// @param chat_id The unique identifier of the chat session
   /// @param query The input query/message to generate a response for

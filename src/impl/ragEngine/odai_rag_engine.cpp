@@ -1,40 +1,16 @@
 #include "backendEngine/odai_backend_engine.h"
 #include "odai_sdk.h"
-
 #include "ragEngine/odai_rag_engine.h"
-#include "backendEngine/odai_llama_backend_engine.h"
-#include "db/odai_sqlite_db.h"
-#include "types/odai_ctypes.h"
 
-// Implementation for initializing the RAG engine with the provided configuration
-bool ODAIRagEngine::initialize(const RagConfig &config, ODAIDb* db, ODAIBackendEngine* backendEngine)
+ODAIRagEngine::ODAIRagEngine(ODAIDb* db, ODAIBackendEngine* backendEngine)
 {
     this->m_db = db;
     this->m_backendEngine = backendEngine;
 
-    if (!config.is_sane())
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid rag config passed");
-        return false;
-    }
-
-    if (!m_backendEngine->load_embedding_model(config.embeddingModelConfig))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed initialize RagEngine because failed to load Embedding Model");
-        return false;
-    }
-
-    if (!m_backendEngine->load_language_model(config.llmModelConfig))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed initialize RagEngine because failed to load Language Model");
-        return false;
-    }
-
     ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
-    return true;
 }
 
-int32_t ODAIRagEngine::generate_streaming_response(const string &query, odai_stream_resp_callback_fn callback, void *user_data)
+int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config, const string &query, odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
     {
@@ -45,6 +21,12 @@ int32_t ODAIRagEngine::generate_streaming_response(const string &query, odai_str
     if (query.empty())
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Query is empty");
+        return -1;
+    }
+
+    if(!m_backendEngine->load_language_model(llm_model_config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
         return -1;
     }
 
