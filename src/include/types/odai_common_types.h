@@ -32,3 +32,10 @@ typedef uint8_t RagProfile;
 #define RAG_PROFILE_CODE (RagProfile)1
 #define RAG_PROFILE_PRECISE (RagProfile)2
 #define RAG_PROFILE_FAST (RagProfile)3
+
+/// Strategy for Chunking
+typedef uint8_t ChunkingStrategy;
+#define FIXED_SIZE_CHUNKING (ChunkingStrategy)0
+
+#define DEFAULT_CHUNKING_SIZE 512
+#define DEFAULT_CHUNKING_OVERLAP 50

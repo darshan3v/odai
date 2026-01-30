@@ -74,8 +74,8 @@ bool ODAISqliteDb::initialize_db()
 
         if (initialize_schema)
         {
-            db->exec(DB_SCHEMA);
-            ODAI_LOG(ODAI_LOG_INFO, "initialized db with schema");
+        db->exec(DB_SCHEMA);
+        ODAI_LOG(ODAI_LOG_INFO, "initialized db with schema");
         }
 
         return true;
@@ -422,6 +422,93 @@ bool ODAISqliteDb::rollback_transaction()
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
         m_transaction_depth = 0;
+        return false;
+    }
+}
+
+bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig &config)
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        if (!config.is_sane())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
+            return false;
+        }
+
+        json j = config;
+        string config_json = j.dump();
+
+        SQLite::Statement insert(*db, "INSERT INTO semantic_spaces (name, config) VALUES (:name, jsonb(:config))");
+        insert.bind(":name", config.name);
+        insert.bind(":config", config_json);
+        
+        insert.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space: {}, Error: {}", config.name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig> &spaces)
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        spaces.clear();
+
+        SQLite::Statement query(*db, "SELECT json(config) as config FROM semantic_spaces ORDER BY name");
+
+        while (query.executeStep())
+        {
+            SQLite::Column config_col = query.getColumn("config");
+            json config_json = json::parse(config_col.getString());
+            spaces.push_back(config_json.get<SemanticSpaceConfig>());
+        }
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to list semantic spaces, Error: {}", e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::delete_semantic_space(const string &name)
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement remove(*db, "DELETE FROM semantic_spaces WHERE name = :name");
+        remove.bind(":name", name);
+        remove.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space: {}, Error: {}", name, e.what());
         return false;
     }
 }

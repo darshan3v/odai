@@ -28,6 +28,31 @@ inline bool is_sane(const c_EmbeddingModelConfig *config)
            config->modelPath != nullptr;
 }
 
+/// Validates that a chunking configuration is sane and usable.
+/// @param config The chunking configuration to validate
+/// @return true if the configuration is valid
+inline bool is_sane(const c_ChunkingConfig *config)
+{
+    if (config == nullptr)
+        return false;
+
+    if (config->strategy != FIXED_SIZE_CHUNKING)
+        return false;
+
+    return true;
+}
+
+/// Validates that a semantic space configuration is sane.
+/// @param config The semantic space configuration to validate
+/// @return true of the configuration is valid
+inline bool is_sane(const c_SemanticSpaceConfig *config)
+{
+    return config != nullptr &&
+           config->name != nullptr &&
+           is_sane(&config->embeddingModelConfig) &&
+           is_sane(&config->chunkingConfig);
+}
+
 /// Validates that a language model configuration is sane and usable.
 /// Checks that the model path is not null.
 /// @param config The language model configuration to validate

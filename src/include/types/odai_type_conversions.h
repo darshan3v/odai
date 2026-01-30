@@ -29,6 +29,16 @@ EmbeddingModelConfig toCpp(const c_EmbeddingModelConfig &c);
 /// @return C++ LLMModelConfig with the converted configuration
 LLMModelConfig toCpp(const c_LLMModelConfig &c);
 
+/// Converts a C-style chunking configuration to C++ style.
+/// @param c C-style chunking configuration to convert
+/// @return C++ ChunkingConfig with the converted configuration
+ChunkingConfig toCpp(const c_ChunkingConfig &c);
+
+/// Converts a C-style semantic space configuration to C++ style.
+/// @param c C-style semantic space configuration to convert
+/// @return C++ SemanticSpaceConfig with the converted configuration
+SemanticSpaceConfig toCpp(const c_SemanticSpaceConfig &c);
+
 /// Converts a C-style RAG configuration to C++ style.
 /// Creates a new C++ RagConfig by converting both embedding and LLM model configurations.
 /// @param c C-style RAG configuration to convert
@@ -49,9 +59,28 @@ c_ChatMessage toC(const ChatMessage& cpp);
 
 // This creates to_json() and from_json() functions automatically.
 
+/// Converts a C++ SemanticSpaceConfig to C-style c_SemanticSpaceConfig.
+/// Allocates memory for string fields that must be freed by the caller.
+c_SemanticSpaceConfig toC(const SemanticSpaceConfig& cpp);
+
+/// Converts a C++ ChunkingConfig to C-style c_ChunkingConfig.
+c_ChunkingConfig toC(const ChunkingConfig& cpp);
+
+/// Converts a C++ EmbeddingModelConfig to C-style c_EmbeddingModelConfig.
+/// Allocates memory for string fields that must be freed by the caller.
+c_EmbeddingModelConfig toC(const EmbeddingModelConfig& cpp);
+
 /// Defines JSON serialization for LLMModelConfig.
 /// Enables automatic conversion between LLMModelConfig and JSON using nlohmann/json.
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LLMModelConfig, modelPath)
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(EmbeddingModelConfig, modelPath)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FixedSizeChunkingConfig, chunkSize, chunkOverlap)
+
+void to_json(json& j, const ChunkingConfig& p);
+void from_json(const json& j, ChunkingConfig& p);
+
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, name, embeddingModelConfig, chunkingConfig, dimensions)
 
 /// Defines JSON serialization for ChatConfig.
 /// Enables automatic conversion between ChatConfig and JSON using nlohmann/json.

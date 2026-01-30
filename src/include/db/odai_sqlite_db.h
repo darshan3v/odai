@@ -93,6 +93,21 @@ public:
     /// Closes the database connection and releases resources.
     void close() override;
 
+    /// Creates a new semantic space configuration in the database.
+    /// @param config The semantic space configuration to store.
+    /// @return true if created successfully, false on error.
+    bool create_semantic_space(const SemanticSpaceConfig &config) override;
+
+    /// Lists all available semantic spaces from the database.
+    /// @param spaces Vector to be populated with the list of semantic spaces.
+    /// @return true if listed successfully, false on error.
+    bool list_semantic_spaces(vector<SemanticSpaceConfig> &spaces) override;
+
+    /// Deletes a semantic space configuration from the database.
+    /// @param name The name of the semantic space to delete.
+    /// @return true if deleted successfully, false on error.
+    bool delete_semantic_space(const string &name) override;
+
 private:
     int m_transaction_depth = 0;
     std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
@@ -133,9 +148,6 @@ CREATE TABLE document (
 
 -- Chunks: The unique content blobs.
 -- Deduplicated! If two docs have the exact same paragraph, we store it once.
-
--- ToDo 1. We need to delete orphan chunks , that is if no docs refer to a chunk clean them up, we can run a cron job for it
--- ToDo 2. Expose an resolver API or guideline framework, that allows the app to navigate to source
 CREATE TABLE chunk (
     id INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     content_text TEXT NOT NULL,     -- The chunk content
@@ -155,13 +167,19 @@ CREATE TABLE doc_chunk_ref (
     FOREIGN KEY (chunk_id) REFERENCES chunk(id) ON DELETE CASCADE
     );
 
+CREATE TABLE semantic_spaces (
+    name TEXT NOT NULL PRIMARY KEY,
+    config BLOB NOT NULL,       -- JSON stored SemanticSpaceConfig
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
     -- Vector Store: The 'sqlite-vec' Virtual Table.
 -- We use scope_id as a PARTITION KEY for fast filtering.
-CREATE VIRTUAL TABLE vec_items USING vec0(
-    chunk_id INTEGER PRIMARY KEY, -- Maps 1:1 to chunk.id
-    embedding FLOAT[384],         -- Dimension depends on your model (384 is common for mobile/all-minilm)
-    scope_id TEXT PARTITION KEY
-);
+-- CREATE VIRTUAL TABLE vec_items USING vec0(
+--    chunk_id INTEGER PRIMARY KEY, -- Maps 1:1 to chunk.id
+--    embedding FLOAT[384],         -- Dimension depends on your model (384 is common for mobile/all-minilm)
+--    scope_id TEXT PARTITION KEY
+--);
 
 )";
 };

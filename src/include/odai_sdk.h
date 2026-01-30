@@ -92,6 +92,21 @@ public:
     /// @return true if chat session was unloaded successfully, false on error
     bool unload_chat(const ChatId& chatId);
 
+    /// Creates a new semantic space.
+    /// @param config The configuration for the semantic space.
+    /// @return true if created successfully, false on error.
+    bool create_semantic_space(const SemanticSpaceConfig& config);
+
+    /// Lists all available semantic spaces.
+    /// @param spaces Output parameter to store list of space names.
+    /// @return true if successful, false on error.
+    bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+
+    /// Deletes a semantic space.
+    /// @param name The name of the semantic space to delete.
+    /// @return true if deleted successfully, false on error.
+    bool delete_semantic_space(const string& name);
+
 private:
     ODAISdk();
     ~ODAISdk();

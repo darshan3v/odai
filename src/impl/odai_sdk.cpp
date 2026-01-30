@@ -362,3 +362,60 @@ bool ODAISdk::unload_chat(const ChatId& chatId)
         return false;
     }
 }
+
+bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->create_semantic_space(config);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->list_semantic_spaces(spaces);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::delete_semantic_space(const string& name)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->delete_semantic_space(name);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}

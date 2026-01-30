@@ -107,6 +107,28 @@ extern "C"
   /// @return true if chat session was unloaded successfully, false on error
   ODAI_API bool odai_unload_chat(const c_ChatId chat_id);
 
+  /// Creates a new semantic space configuration.
+  /// @param config The semantic space configuration to create.
+  /// @return true if created successfully, false on error.
+  ODAI_API bool odai_create_semantic_space(const c_SemanticSpaceConfig *config);
+
+  /// Lists all available semantic spaces.
+  /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
+  /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
+  /// @param spaces_count Output parameter: number of spaces returned.
+  /// @return true if successful, false on error.
+  ODAI_API bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count);
+
+  /// Frees memory allocated by odai_list_semantic_spaces.
+  /// @param spaces Array of c_SemanticSpaceConfig to free.
+  /// @param count Number of items in the array.
+  ODAI_API void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count);
+
+  /// Deletes a semantic space configuration.
+  /// @param name The name of the semantic space to delete.
+  /// @return true if deleted successfully, false on error.
+  ODAI_API bool odai_delete_semantic_space(const char *name);
+
 #ifdef __cplusplus
 }
 #endif

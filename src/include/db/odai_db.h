@@ -75,4 +75,19 @@ public:
 
     /// Closes the database connection and releases resources.
     virtual void close() = 0;
+
+    /// Creates a new semantic space.
+    /// @param config The configuration for the semantic space.
+    /// @return true if created successfully, false on error.
+    virtual bool create_semantic_space(const SemanticSpaceConfig &config) = 0;
+
+    /// Lists all available semantic spaces.
+    /// @param spaces Output parameter to store list of space configs.
+    /// @return true if successful, false on error.
+    virtual bool list_semantic_spaces(vector<SemanticSpaceConfig> &spaces) = 0;
+
+    /// Deletes a semantic space.
+    /// @param name The name of the semantic space to delete.
+    /// @return true if deleted successfully, false on error.
+    virtual bool delete_semantic_space(const string &name) = 0;
 };

@@ -15,6 +15,31 @@ BackendEngineConfig toCpp(const c_BackendEngineConfig &c)
 EmbeddingModelConfig toCpp(const c_EmbeddingModelConfig &c)
 {
     return {string(c.modelPath)};
+    return {string(c.modelPath)};
+}
+
+ChunkingConfig toCpp(const c_ChunkingConfig &c)
+{
+    ChunkingConfig config;
+
+    if (c.strategy == FIXED_SIZE_CHUNKING)
+    {
+        FixedSizeChunkingConfig fcc;
+        fcc.chunkSize = c.config.fixedSizeConfig.chunkSize;
+        fcc.chunkOverlap = c.config.fixedSizeConfig.chunkOverlap;
+        config.config = fcc;
+    }
+    return config;
+}
+
+SemanticSpaceConfig toCpp(const c_SemanticSpaceConfig &c)
+{
+    SemanticSpaceConfig config;
+    config.name = string(c.name);
+    config.embeddingModelConfig = toCpp(c.embeddingModelConfig);
+    config.chunkingConfig = toCpp(c.chunkingConfig);
+    config.dimensions = c.dimensions;
+    return config;
 }
 
 LLMModelConfig toCpp(const c_LLMModelConfig &c)
@@ -36,6 +61,36 @@ ChatConfig toCpp(const c_ChatConfig &c)
     return {c.persistence, c.use_rag, string(c.system_prompt), toCpp(c.llmModelConfig)};
 }
 
+c_EmbeddingModelConfig toC(const EmbeddingModelConfig& cpp)
+{
+    c_EmbeddingModelConfig c;
+    c.modelPath = strdup(cpp.modelPath.c_str());
+    return c;
+}
+
+c_ChunkingConfig toC(const ChunkingConfig& cpp)
+{
+    c_ChunkingConfig c;
+    if (std::holds_alternative<FixedSizeChunkingConfig>(cpp.config))
+    {
+        c.strategy = FIXED_SIZE_CHUNKING;
+        auto& conf = std::get<FixedSizeChunkingConfig>(cpp.config);
+        c.config.fixedSizeConfig.chunkSize = conf.chunkSize;
+        c.config.fixedSizeConfig.chunkOverlap = conf.chunkOverlap;
+    }
+    return c;
+}
+
+c_SemanticSpaceConfig toC(const SemanticSpaceConfig& cpp)
+{
+    c_SemanticSpaceConfig c;
+    c.name = strdup(cpp.name.c_str());
+    c.embeddingModelConfig = toC(cpp.embeddingModelConfig);
+    c.chunkingConfig = toC(cpp.chunkingConfig);
+    c.dimensions = cpp.dimensions;
+    return c;
+}
+
 c_ChatMessage toC(const ChatMessage& cpp)
 {
     c_ChatMessage result;
@@ -54,4 +109,28 @@ c_ChatMessage toC(const ChatMessage& cpp)
     result.created_at = cpp.created_at;
     
     return result;
+}
+
+void to_json(json& j, const ChunkingConfig& p)
+{
+    if (std::holds_alternative<FixedSizeChunkingConfig>(p.config))
+    {
+        j = json{{"strategy", FIXED_SIZE_CHUNKING}};
+        j["config"] = std::get<FixedSizeChunkingConfig>(p.config);
+    }
+}
+
+void from_json(const json& j, ChunkingConfig& p)
+{
+    ChunkingStrategy strategy;
+    j.at("strategy").get_to(strategy);
+    if (strategy == FIXED_SIZE_CHUNKING)
+    {
+        if (j.contains("config"))
+        {
+            FixedSizeChunkingConfig conf;
+            j.at("config").get_to(conf);
+            p.config = conf;
+        }
+    }
 }

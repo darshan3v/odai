@@ -4,6 +4,7 @@
 #include <nlohmann/json.hpp>
 #include <string>
 #include <cstdint>
+#include <variant>
 
 using namespace std;
 using namespace nlohmann;
@@ -20,7 +21,10 @@ typedef string DocumentId;
 /// Provides type safety for scope IDs.
 typedef string ScopeId;
 
-typedef struct
+/// Strong type for semantic space names.
+typedef string SemanticSpaceName;
+
+struct DBConfig
 {
     /// Database type to use (SQLITE_DB, POSTGRES_DB, etc.)
     DBType dbType;
@@ -38,11 +42,11 @@ typedef struct
 
         return true;
     }
-} DBConfig;
+};
 
 /// Configuration structure for backend engine (LLM runtime).
 /// Specifies which LLM backend to use for text generation.
-typedef struct
+struct BackendEngineConfig
 {
     /// Backend engine type (e.g., LLAMA_BACKEND_ENGINE)
     BackendEngineType engineType;
@@ -54,11 +58,11 @@ typedef struct
 
         return true;
     }
-} BackendEngineConfig;
+};
 
 /// Configuration structure for embedding models.
 /// Contains the path to the embedding model file used for generating vector embeddings.
-typedef struct
+struct EmbeddingModelConfig
 {
     /// Path to the embedding model file (e.g., .gguf format).
     /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
@@ -72,11 +76,11 @@ typedef struct
         return true;
     }
 
-} EmbeddingModelConfig;
+};
 
 /// Configuration structure for language models (LLMs).
 /// Contains the path to the language model file used for text generation.
-typedef struct
+struct LLMModelConfig
 {
     /// Path to the language model file (e.g., .gguf format).
     /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
@@ -90,11 +94,74 @@ typedef struct
         return true;
     }
 
-} LLMModelConfig;
+};
+
+/// Configuration for Fixed Size Chunking Strategy
+struct FixedSizeChunkingConfig
+{
+    uint32_t chunkSize = DEFAULT_CHUNKING_SIZE;
+    uint32_t chunkOverlap = DEFAULT_CHUNKING_OVERLAP;
+
+    bool is_sane() const
+    {
+        if (chunkSize == 0)
+            return false;
+        if (chunkOverlap >= chunkSize)
+            return false;
+        return true;
+    }
+};
+
+/// Configuration for Chunking Strategy
+/// Contains the strategy type and union of specific configuration parameters.
+struct ChunkingConfig
+{
+    std::variant<FixedSizeChunkingConfig> config;
+
+    bool is_sane() const
+    {
+        if (std::holds_alternative<FixedSizeChunkingConfig>(config))
+        {
+            const auto& conf = std::get<FixedSizeChunkingConfig>(config);
+            return conf.is_sane();
+        }
+
+        return false;
+    }
+
+    ChunkingConfig()
+    {
+        config = FixedSizeChunkingConfig();
+    }
+    
+};
+
+/// Configuration structure for Semantic Space.
+/// Defines the Embedding Model, Chunking Strategy, and Embedding Dimensions.
+struct SemanticSpaceConfig
+{
+    SemanticSpaceName name;
+    EmbeddingModelConfig embeddingModelConfig;
+    ChunkingConfig chunkingConfig;
+    uint32_t dimensions;
+
+    bool is_sane() const
+    {
+        if (name.empty())
+            return false;
+        if (!embeddingModelConfig.is_sane())
+            return false;
+        if (!chunkingConfig.is_sane())
+            return false;
+        // dimensions == 0 means auto-infer from model
+        
+        return true;
+    }
+};
 
 /// Configuration structure for RAG (Retrieval-Augmented Generation) system.
 /// Combines embedding and language model configurations along with RAG-specific settings.
-typedef struct
+struct RagConfig
 {
     /// Configuration for the embedding model used to generate vector embeddings
     EmbeddingModelConfig embeddingModelConfig;
@@ -117,11 +184,11 @@ typedef struct
         return true;
     }
 
-} RagConfig;
+};
 
 /// Configuration structure for chat sessions.
 /// Defines the behavior and settings for a chat session including persistence, RAG usage, and model configuration.
-typedef struct
+struct ChatConfig
 {
     /// Whether chat messages should be persisted to the database
     bool persistence;
@@ -142,11 +209,11 @@ typedef struct
         return true;
     }
 
-} ChatConfig;
+};
 
 /// Structure representing a chat message.
 /// Contains the message role, content, metadata, and creation timestamp.
-typedef struct
+struct ChatMessage
 {
     /// Role of the message sender ('user', 'assistant', or 'system')
     string role;
@@ -167,7 +234,7 @@ typedef struct
         return true;
     }
 
-} ChatMessage;
+};
 
 enum ModelType
 {

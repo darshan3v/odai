@@ -1,6 +1,7 @@
 #pragma once
 
 #include "odai_common_types.h"
+#include <stdlib.h>
 
 /// Chat session identifier - opaque string type for type safety.
 typedef char* c_ChatId;
@@ -35,7 +36,19 @@ struct c_EmbeddingModelConfig
     /// Path to the embedding model file (e.g., .gguf format).
     /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
     const char *modelPath;
+
 };
+
+
+inline void free_members(c_EmbeddingModelConfig* config)
+{
+    if (config == nullptr) return;
+    if (config->modelPath)
+    {
+        free(const_cast<char *>(config->modelPath));
+        config->modelPath = nullptr;
+    }
+}
 
 /// C-style configuration structure for language models (LLMs).
 /// Used for C API compatibility. Contains the path to the language model file.
@@ -57,6 +70,53 @@ struct c_RagConfig
     /// RAG Profile
     RagProfile profile;
 };
+
+/// C-style configuration for Fixed Size Chunking Strategy
+struct c_FixedSizeChunkingConfig
+{
+    uint32_t chunkSize;
+    uint32_t chunkOverlap;
+};
+
+/// C-style configuration for Chunking Strategy
+struct c_ChunkingConfig
+{
+    ChunkingStrategy strategy;
+    union
+    {
+        struct c_FixedSizeChunkingConfig fixedSizeConfig;
+    } config;
+
+};
+
+
+inline void free_members(c_ChunkingConfig* config)
+{
+    // No dynamic memory currently
+}
+
+/// C-style configuration structure for Semantic Space.
+struct c_SemanticSpaceConfig
+{
+    const char* name;
+    struct c_EmbeddingModelConfig embeddingModelConfig;
+    struct c_ChunkingConfig chunkingConfig;
+    uint32_t dimensions;
+
+};
+
+
+inline void free_members(c_SemanticSpaceConfig* config)
+{
+    if (config == nullptr) return;
+    if (config->name)
+    {
+        free(const_cast<char *>(config->name));
+        config->name = nullptr;
+    }
+    free_members(&config->embeddingModelConfig);
+    free_members(&config->chunkingConfig);
+}
 
 /// C-style configuration structure for chat sessions.
 /// Used for C API compatibility. Defines the behavior and settings for a chat session.
@@ -86,3 +146,20 @@ struct c_ChatMessage
     /// Unix timestamp when the message was created
     uint64_t created_at;
 };
+
+inline void free_members(c_ChatMessage* message)
+{
+    if (message == nullptr) return;
+    
+    if (message->content)
+    {
+        free(message->content);
+        message->content = nullptr;
+    }
+    
+    if (message->message_metadata)
+    {
+        free(message->message_metadata);
+        message->message_metadata = nullptr;
+    }
+}
