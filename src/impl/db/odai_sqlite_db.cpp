@@ -87,6 +87,97 @@ bool ODAISqliteDb::initialize_db()
     }
 }
 
+bool ODAISqliteDb::begin_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        m_transaction_depth++;
+        if (m_transaction_depth == 1)
+        {
+            // Start the physical transaction
+            m_transaction = std::make_unique<SQLite::Transaction>(*db);
+        }
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to begin transaction: {}", e.what());
+        if (m_transaction_depth == 1) 
+        {
+             m_transaction_depth = 0;
+             m_transaction.reset();
+        }
+        else m_transaction_depth--; 
+        return false;
+    }
+}
+
+bool ODAISqliteDb::commit_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        if (m_transaction_depth > 0)
+        {
+            m_transaction_depth--;
+            if (m_transaction_depth == 0)
+            {
+                // Commit the physical transaction
+                if (m_transaction)
+                {
+                    m_transaction->commit();
+                    m_transaction.reset();
+                }
+            }
+            return true;
+        }
+        
+        ODAI_LOG(ODAI_LOG_WARN, "commit_transaction called with no active transaction");
+        return false;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to commit transaction: {}", e.what());
+        // If commit fails, we leave the transaction object (destructor will rollback if reset/destroyed)
+        return false;
+    }
+}
+
+bool ODAISqliteDb::rollback_transaction()
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        // Regardless of depth, we roll back everything
+        // Destroying the Transaction object safely rolls it back if not committed
+        m_transaction.reset();
+        m_transaction_depth = 0;
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
+        m_transaction_depth = 0;
+        return false;
+    }
+}
+
 bool ODAISqliteDb::chat_id_exists(const ChatId &chat_id)
 {
     try
@@ -319,113 +410,6 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId &chat_id, const vector<Chat
     }
 }
 
-void ODAISqliteDb::close()
-{
-    try
-    {
-        if (db != nullptr)
-        {
-            db.reset();
-            ODAI_LOG(ODAI_LOG_INFO, "Database connection closed successfully");
-        }
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Error closing database: {}", e.what());
-    }
-}
-
-bool ODAISqliteDb::begin_transaction()
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        m_transaction_depth++;
-        if (m_transaction_depth == 1)
-        {
-            // Start the physical transaction
-            m_transaction = std::make_unique<SQLite::Transaction>(*db);
-        }
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to begin transaction: {}", e.what());
-        if (m_transaction_depth == 1) 
-        {
-             m_transaction_depth = 0;
-             m_transaction.reset();
-        }
-        else m_transaction_depth--; 
-        return false;
-    }
-}
-
-bool ODAISqliteDb::commit_transaction()
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        if (m_transaction_depth > 0)
-        {
-            m_transaction_depth--;
-            if (m_transaction_depth == 0)
-            {
-                // Commit the physical transaction
-                if (m_transaction)
-                {
-                    m_transaction->commit();
-                    m_transaction.reset();
-                }
-            }
-            return true;
-        }
-        
-        ODAI_LOG(ODAI_LOG_WARN, "commit_transaction called with no active transaction");
-        return false;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to commit transaction: {}", e.what());
-        // If commit fails, we leave the transaction object (destructor will rollback if reset/destroyed)
-        return false;
-    }
-}
-
-bool ODAISqliteDb::rollback_transaction()
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        // Regardless of depth, we roll back everything
-        // Destroying the Transaction object safely rolls it back if not committed
-        m_transaction.reset();
-        m_transaction_depth = 0;
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
-        m_transaction_depth = 0;
-        return false;
-    }
-}
-
 bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig &config)
 {
     try
@@ -460,6 +444,38 @@ bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig &config)
     }
 }
 
+bool ODAISqliteDb::get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config)
+{
+    try
+    {
+        if (db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement query(*db, "SELECT json(config) as config FROM semantic_spaces WHERE name = :name LIMIT 1");
+        query.bind(":name", name);
+
+        if (!query.executeStep())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Semantic space not found: {}", name);
+            return false;
+        }
+
+        SQLite::Column config_col = query.getColumn("config");
+        json config_json = json::parse(config_col.getString());
+        config = config_json.get<SemanticSpaceConfig>();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get semantic space config: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
 bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig> &spaces)
 {
     try
@@ -490,7 +506,7 @@ bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig> &spaces)
     }
 }
 
-bool ODAISqliteDb::delete_semantic_space(const string &name)
+bool ODAISqliteDb::delete_semantic_space(const SemanticSpaceName &name)
 {
     try
     {
@@ -500,9 +516,10 @@ bool ODAISqliteDb::delete_semantic_space(const string &name)
             return false;
         }
 
-        SQLite::Statement remove(*db, "DELETE FROM semantic_spaces WHERE name = :name");
-        remove.bind(":name", name);
-        remove.exec();
+        SQLite::Statement query(*db, "DELETE FROM semantic_spaces WHERE name = :name");
+        query.bind(":name", name);
+
+        query.exec();
 
         return true;
     }
@@ -510,5 +527,21 @@ bool ODAISqliteDb::delete_semantic_space(const string &name)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space: {}, Error: {}", name, e.what());
         return false;
+    }
+}
+
+void ODAISqliteDb::close()
+{
+    try
+    {
+        if (db != nullptr)
+        {
+            db.reset();
+            ODAI_LOG(ODAI_LOG_INFO, "Database connection closed successfully");
+        }
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Error closing database: {}", e.what());
     }
 }

@@ -36,14 +36,15 @@ bool odai_initialize_sdk(const c_DBConfig *c_dbConfig, const c_BackendEngineConf
     return ODAISdk::get_instance().initialize_sdk(toCpp(*c_dbConfig), toCpp(*c_backendEngineConfig));
 }
 
-bool odai_add_document(const char *content, const c_DocumentId document_id, const c_ScopeId scope_id)
+bool odai_add_document(const char *content, const c_DocumentId document_id, const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id)
 {
-    if (content == nullptr || document_id == nullptr || scope_id == nullptr)
+    if (content == nullptr || document_id == nullptr || semantic_space_name == nullptr || scope_id == nullptr)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_add_document");
         return false;
     }
-    return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id), ScopeId(scope_id));
+    
+    return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id), SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
 }
 
 int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *c_query,
@@ -163,7 +164,7 @@ void odai_free_chat_messages(c_ChatMessage *c_messages, size_t count)
     }
 }
 
-bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char *c_query, const c_ScopeId c_scope_id,
+bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char *c_query, const c_SemanticSpaceName semantic_space_name, const c_ScopeId c_scope_id,
                                            odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (c_chat_id == nullptr)
@@ -178,7 +179,7 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char 
         return false;
     }
 
-    return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), string(c_query), (c_scope_id ? ScopeId(c_scope_id) : ScopeId("")), callback, user_data);
+    return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), string(c_query), (semantic_space_name ? SemanticSpaceName(semantic_space_name) : SemanticSpaceName("")), (c_scope_id ? ScopeId(c_scope_id) : ScopeId("")), callback, user_data);
 }
 
 bool odai_unload_chat(const c_ChatId c_chat_id)
@@ -199,6 +200,30 @@ bool odai_create_semantic_space(const c_SemanticSpaceConfig *config)
         return false;
     }
     return ODAISdk::get_instance().create_semantic_space(toCpp(*config));
+}
+
+bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out)
+{
+    if (name == nullptr || config_out == nullptr)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid arguments passed to odai_get_semantic_space");
+        return false;
+    }
+
+    SemanticSpaceConfig config;
+    if (!ODAISdk::get_instance().get_semantic_space_config(SemanticSpaceName(name), config))
+    {
+         return false;
+    }
+
+    *config_out = toC(config);
+    return true;
+}
+
+void odai_free_semantic_space_config(c_SemanticSpaceConfig *config)
+{
+    if (config == nullptr) return;
+    free_members(config);
 }
 
 bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count)
@@ -261,7 +286,7 @@ void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count)
     }
 }
 
-bool odai_delete_semantic_space(const char *name)
+bool odai_delete_semantic_space(const c_SemanticSpaceName name)
 {
     if (name == nullptr)
     {

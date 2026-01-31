@@ -70,7 +70,7 @@ bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
     return true;
 }
 
-int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const ScopeId &scope_id,
+int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SemanticSpaceName &semantic_space_name, const ScopeId &scope_id,
                                                         odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
@@ -88,18 +88,32 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
     }
 
     // Check RAG settings: if RAG is enabled but scope_id is empty, return error
-    if (chat_config.use_rag && scope_id.empty())
+    if (chat_config.use_rag)
     {
-        ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but scope_id is empty", chat_id);
-        return -1;
-    }
-    
-    // If RAG is enabled and scope_id is provided, retrieve and combine context
-    if (chat_config.use_rag && !scope_id.empty())
-    {
-        // ToDo -> Implement context retrieval from knowledge base based on scope_id
-        // string context = retrieve_context_from_knowledge_base(scope_id, prompt);
-        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with scope_id: {}", chat_id, scope_id);
+        if (scope_id.empty())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but scope_id is empty", chat_id);
+            return -1;
+        }
+
+        if (semantic_space_name.empty())
+        {
+             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but semantic_space_name is empty", chat_id);
+            return -1;
+        }
+        
+        // Retrieve and validate Semantic Space Config
+        SemanticSpaceConfig spaceConfig;
+         if (!m_db->get_semantic_space_config(semantic_space_name, spaceConfig))
+        {
+             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but failed to retrieve semantic space config for: {}", semantic_space_name);
+             return -1;
+        }
+        
+        // ToDo -> Implement context retrieval from knowledge base based on scope_id, using embedding model from spaceConfig
+        // Load embedding model from spaceConfig and do similarity check and retrieve according to retrieval strategy
+        // string context = retrieve_context_from_knowledge_base(scope_id, prompt, spaceConfig);
+        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id, semantic_space_name, scope_id);
     }
 
     if (!this->ensure_chat_session_loaded(chat_id, chat_config))

@@ -33,6 +33,10 @@ inline bool is_sane(const c_EmbeddingModelConfig *config)
 /// @return true if the configuration is valid
 inline bool is_sane(const c_ChunkingConfig *config)
 {
+
+    // Here we check strategy is valid because its also structural validation since we are using union
+    // if it was some business logic validation then we would have to do it in cpp type is_sane() not here
+    
     if (config == nullptr)
         return false;
 

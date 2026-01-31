@@ -679,7 +679,7 @@ bool ODAILlamaEngine::unload_chat_context(const ChatId &chat_id)
     return true;
   }
   ODAI_LOG(ODAI_LOG_WARN, "Chat context not found for chat_id: {}, so nothing to unload", chat_id);
-  return false;
+  return true;
 }
 
 ODAILlamaEngine::~ODAILlamaEngine() { llama_backend_free(); }

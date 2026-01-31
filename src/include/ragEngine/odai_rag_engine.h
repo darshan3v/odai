@@ -33,11 +33,12 @@ public:
     /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
     /// @param chat_id Unique identifier for the chat session
     /// @param query The input query/message to generate a response for
+    /// @param semantic_space_name Name of the semantic space to use (ignored if RAG is disabled)
     /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback function
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const ScopeId &scope_id,
+    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SemanticSpaceName &semantic_space_name, const ScopeId &scope_id,
                                             odai_stream_resp_callback_fn callback, void *user_data);
 
     /// Unloads the chat session from memory, freeing up resources.

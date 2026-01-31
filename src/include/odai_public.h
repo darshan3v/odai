@@ -43,9 +43,10 @@ extern "C"
   /// ToDo: Implementation not yet defined.
   /// @param content The text content of the document to add
   /// @param document_id Unique identifier for this document (used for updates/deletion)
+  /// @param semantic_space_name Name of the semantic space to use
   /// @param scope_id Scope identifier to group documents (used for filtering during retrieval)
   /// @return true if document was added successfully, false otherwise
-  ODAI_API bool odai_add_document(const char *content, const c_DocumentId document_id, const c_ScopeId scope_id);
+  ODAI_API bool odai_add_document(const char *content, const c_DocumentId document_id, const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id);
 
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG
@@ -95,11 +96,12 @@ extern "C"
   /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
   /// @param chat_id The unique identifier of the chat session
   /// @param query The input query/message to generate a response for
+  /// @param semantic_space_name Name of the semantic space to use (ignored if RAG is disabled)
   /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
   /// @param callback Function called for each generated token
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return true if response was generated successfully, false on error or if callback returns false to cancel streaming
-  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_ScopeId scope_id,
+  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id,
                                                       odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).
@@ -111,6 +113,16 @@ extern "C"
   /// @param config The semantic space configuration to create.
   /// @return true if created successfully, false on error.
   ODAI_API bool odai_create_semantic_space(const c_SemanticSpaceConfig *config);
+
+  /// Retrieves the configuration for a semantic space.
+  /// @param name The name of the semantic space to retrieve.
+  /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
+  /// @return true if found, false on error.
+  ODAI_API bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out);
+
+  /// Frees members allocated by odai_get_semantic_space
+  /// @param config pointer to c_SemanticSpaceConfig struct to free .
+  ODAI_API void odai_free_semantic_space_config(c_SemanticSpaceConfig *config);
 
   /// Lists all available semantic spaces.
   /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
@@ -127,7 +139,8 @@ extern "C"
   /// Deletes a semantic space configuration.
   /// @param name The name of the semantic space to delete.
   /// @return true if deleted successfully, false on error.
-  ODAI_API bool odai_delete_semantic_space(const char *name);
+  ODAI_API bool odai_delete_semantic_space(const c_SemanticSpaceName name);
+
 
 #ifdef __cplusplus
 }

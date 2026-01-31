@@ -43,6 +43,20 @@ public:
     /// @return true if initialization succeeded, false otherwise
     bool initialize_db() override;
 
+     /// Starts a transaction.
+    /// Supports nested calls by flattening: real SQL transaction starts only on the first call.
+    /// @return true if transaction started successfully (or was already active).
+    bool begin_transaction() override;
+
+    /// Commits a transaction.
+    /// Supports nested calls: real SQL commit happens only when the outermost transaction commits.
+    /// @return true if commit call was successful (or decremented depth).
+    bool commit_transaction() override;
+
+    /// Rolls back the entire transaction.
+    /// This aborts the current transaction completely regardless of nesting depth.
+    bool rollback_transaction() override;
+
     /// Checks if a chat session with the given chat_id exists in the database.
     /// @param chat_id The chat identifier to check
     /// @return true if chat_id exists, false if not found or on error
@@ -76,27 +90,16 @@ public:
     /// @return true if all messages inserted successfully, false on error
     bool insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages) override;
 
-    /// Starts a transaction.
-    /// Supports nested calls by flattening: real SQL transaction starts only on the first call.
-    /// @return true if transaction started successfully (or was already active).
-    bool begin_transaction() override;
-
-    /// Commits a transaction.
-    /// Supports nested calls: real SQL commit happens only when the outermost transaction commits.
-    /// @return true if commit call was successful (or decremented depth).
-    bool commit_transaction() override;
-
-    /// Rolls back the entire transaction.
-    /// This aborts the current transaction completely regardless of nesting depth.
-    bool rollback_transaction() override;
-
-    /// Closes the database connection and releases resources.
-    void close() override;
-
     /// Creates a new semantic space configuration in the database.
     /// @param config The semantic space configuration to store.
     /// @return true if created successfully, false on error.
     bool create_semantic_space(const SemanticSpaceConfig &config) override;
+
+    /// Retrieves the configuration for a semantic space.
+    /// @param name The name of the semantic space to retrieve.
+    /// @param config Output parameter to store the configuration.
+    /// @return true if found, false on error or if not found.
+    bool get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config) override;
 
     /// Lists all available semantic spaces from the database.
     /// @param spaces Vector to be populated with the list of semantic spaces.
@@ -106,7 +109,10 @@ public:
     /// Deletes a semantic space configuration from the database.
     /// @param name The name of the semantic space to delete.
     /// @return true if deleted successfully, false on error.
-    bool delete_semantic_space(const string &name) override;
+    bool delete_semantic_space(const SemanticSpaceName &name) override;
+
+    /// Closes the database connection and releases resources.
+    void close() override;
 
 private:
     int m_transaction_depth = 0;

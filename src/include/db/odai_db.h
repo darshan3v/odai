@@ -26,6 +26,20 @@ public:
     /// @return true if initialization succeeded, false otherwise
     virtual bool initialize_db() = 0;
 
+    /// Starts a transaction.
+    /// Supports nested calls by flattening: real transaction starts only on the first call.
+    /// @return true if transaction started successfully (or was already active).
+    virtual bool begin_transaction() = 0;
+
+    /// Commits a transaction.
+    /// Supports nested calls: real commit happens only when the outermost transaction commits.
+    /// @return true if commit call was successful (or decremented depth).
+    virtual bool commit_transaction() = 0;
+
+    /// Rolls back the entire transaction.
+    /// This aborts the current transaction completely regardless of nesting depth.
+    virtual bool rollback_transaction() = 0;
+
     /// Checks if a chat session with the given chat_id exists in the database.
     /// @param chat_id The chat identifier to check
     /// @return true if chat_id exists, false if not found or on error
@@ -59,27 +73,16 @@ public:
     /// @return true if all messages inserted successfully, false on error
     virtual bool insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages) = 0;
 
-    /// Starts a transaction.
-    /// Supports nested calls by flattening: real transaction starts only on the first call.
-    /// @return true if transaction started successfully (or was already active).
-    virtual bool begin_transaction() = 0;
-
-    /// Commits a transaction.
-    /// Supports nested calls: real commit happens only when the outermost transaction commits.
-    /// @return true if commit call was successful (or decremented depth).
-    virtual bool commit_transaction() = 0;
-
-    /// Rolls back the entire transaction.
-    /// This aborts the current transaction completely regardless of nesting depth.
-    virtual bool rollback_transaction() = 0;
-
-    /// Closes the database connection and releases resources.
-    virtual void close() = 0;
-
     /// Creates a new semantic space.
     /// @param config The configuration for the semantic space.
     /// @return true if created successfully, false on error.
     virtual bool create_semantic_space(const SemanticSpaceConfig &config) = 0;
+
+    /// Retrieves the configuration for a semantic space.
+    /// @param name The name of the semantic space to retrieve.
+    /// @param config Output parameter to store the configuration.
+    /// @return true if found, false on error or if not found.
+    virtual bool get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config) = 0;
 
     /// Lists all available semantic spaces.
     /// @param spaces Output parameter to store list of space configs.
@@ -89,5 +92,8 @@ public:
     /// Deletes a semantic space.
     /// @param name The name of the semantic space to delete.
     /// @return true if deleted successfully, false on error.
-    virtual bool delete_semantic_space(const string &name) = 0;
+    virtual bool delete_semantic_space(const SemanticSpaceName &name) = 0;
+
+    /// Closes the database connection and releases resources.
+    virtual void close() = 0;
 };

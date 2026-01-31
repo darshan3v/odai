@@ -43,9 +43,10 @@ public:
     /// Adds a document to the RAG knowledge base for retrieval during generation.
     /// @param content The text content of the document to add
     /// @param documentId Unique identifier for this document
+    /// @param semanticSpaceName Name of the semantic space to use
     /// @param scopeId Scope identifier to group documents
     /// @return true if document was added successfully, false otherwise
-    bool add_document(const string& content, const DocumentId& documentId, const ScopeId& scopeId);
+    bool add_document(const string& content, const DocumentId& documentId, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId);
 
     /// Generates a streaming response for the given query.
     /// Its like a Completion API, and won't use RAG
@@ -80,11 +81,12 @@ public:
     /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
     /// @param chatId The unique identifier of the chat session
     /// @param query The input query/message
+    /// @param semanticSpaceName Name of the semantic space to use (ignored if RAG is disabled)
     /// @param scopeId Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return true if response was generated successfully, false on error
-    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const ScopeId& scopeId,
+    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId,
                                       odai_stream_resp_callback_fn callback, void *userData);
 
     /// Unloads the chat session from memory, freeing up resources.
@@ -96,6 +98,12 @@ public:
     /// @param config The configuration for the semantic space.
     /// @return true if created successfully, false on error.
     bool create_semantic_space(const SemanticSpaceConfig& config);
+
+    /// Retrieves the configuration for a semantic space.
+    /// @param name The name of the semantic space to retrieve.
+    /// @param config Output parameter to store the configuration.
+    /// @return true if found, false on error or if not found.
+    bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
 
     /// Lists all available semantic spaces.
     /// @param spaces Output parameter to store list of space names.

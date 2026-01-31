@@ -112,10 +112,27 @@ bool ODAISdk::initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig
     }
 }
 
-bool ODAISdk::add_document(const string& content, const DocumentId& documentId, const ScopeId& scopeId)
+bool ODAISdk::add_document(const string& content, const DocumentId& documentId, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId)
 {
-    // TODO: Implementation of add_document
-    return true;
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        //ToDo : call rag engine to add document
+
+        ODAI_LOG(ODAI_LOG_INFO, "Adding document to space: {}", semanticSpaceName);
+        
+        return true;
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
 }
 
 int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_config, const string& query, 
@@ -276,7 +293,7 @@ bool ODAISdk::get_chat_history(const ChatId& chatId, vector<ChatMessage>& messag
     }
 }
 
-bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const ScopeId& scopeId,
+bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId,
                                            odai_stream_resp_callback_fn callback, void *userData)
 {
     try
@@ -313,7 +330,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
         }
 
         // Call the RAG engine's generate_streaming_chat_response method
-        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, scopeId, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, semanticSpaceName, scopeId, callback, userData);
 
         if (total_tokens < 0)
         {
@@ -373,7 +390,34 @@ bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
             return false;
         }
 
+        if(config.is_sane() == false)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
+            return false;
+        }
+
+        // TODO: if dim == 0 then auto infer from model
+
         return m_db->create_semantic_space(config);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->get_semantic_space_config(name, config);
     }
     catch (...)
     {
@@ -401,7 +445,7 @@ bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
     }
 }
 
-bool ODAISdk::delete_semantic_space(const string& name)
+bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
 {
     try
     {

@@ -12,6 +12,9 @@ typedef char* c_DocumentId;
 /// Scope identifier - opaque string type for type safety (used for RAG context grouping).
 typedef char* c_ScopeId;
 
+/// Semantic Space Name - opaque string type for type safety.c
+typedef const char* c_SemanticSpaceName;
+
 struct c_DBConfig
 {
     /// Database type to use (SQLITE_DB, etc.)
@@ -98,7 +101,7 @@ inline void free_members(c_ChunkingConfig* config)
 /// C-style configuration structure for Semantic Space.
 struct c_SemanticSpaceConfig
 {
-    const char* name;
+    c_SemanticSpaceName name;
     struct c_EmbeddingModelConfig embeddingModelConfig;
     struct c_ChunkingConfig chunkingConfig;
     uint32_t dimensions;
