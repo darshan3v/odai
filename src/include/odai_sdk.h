@@ -86,10 +86,11 @@ public:
     /// Its like a Completion API, and won't use RAG
     /// @param llmModelConfig The Language Model and its config to be used for response generation
     /// @param query The input query/prompt
+    /// @param samplerConfig Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return Total number of tokens generated, or -1 on error
-    int32_t generate_streaming_response(const LLMModelConfig& llmModelConfig, const string& query, 
+    int32_t generate_streaming_response(const LLMModelConfig& llmModelConfig, const string& query, const SamplerConfig& samplerConfig,
                                      odai_stream_resp_callback_fn callback, void *userData);
 
     /// Creates a new chat session with the specified configuration.
@@ -115,12 +116,12 @@ public:
     /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
     /// @param chatId The unique identifier of the chat session
     /// @param query The input query/message
-    /// @param semanticSpaceName Name of the semantic space to use (ignored if RAG is disabled)
-    /// @param scopeId Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
+    /// @param generatorConfig Configuration for the generator (Sampler, RAG settings, etc.)
+    /// @param scopeId Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled in config)
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return true if response was generated successfully, false on error
-    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId,
+    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig, const ScopeId& scopeId,
                                       odai_stream_resp_callback_fn callback, void *userData);
 
     /// Unloads the chat session from memory, freeing up resources.

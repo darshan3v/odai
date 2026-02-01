@@ -44,11 +44,25 @@ ChunkingConfig toCpp(const c_ChunkingConfig &c);
 /// @return C++ SemanticSpaceConfig with the converted configuration
 SemanticSpaceConfig toCpp(const c_SemanticSpaceConfig &c);
 
-/// Converts a C-style RAG configuration to C++ style.
-/// Creates a new C++ RagConfig by converting both embedding and LLM model configurations.
-/// @param c C-style RAG configuration to convert
-/// @return C++ RagConfig with the converted configuration
-RagConfig toCpp(const c_RagConfig &c);
+/// Converts a C-style Retrieval configuration to C++ style.
+/// @param c C-style Retrieval configuration to convert
+/// @return C++ RetrievalConfig with the converted configuration
+RetrievalConfig toCpp(const c_RetrievalConfig &c);
+
+/// Converts a C-style Sampler configuration to C++ style.
+/// @param c C-style Sampler configuration to convert
+/// @return C++ SamplerConfig with the converted configuration
+SamplerConfig toCpp(const c_SamplerConfig &c);
+
+/// Converts a C-style Generator Rag configuration to C++ style.
+/// @param c C-style Generator Rag configuration to convert
+/// @return C++ GeneratorRagConfig with the converted configuration
+GeneratorRagConfig toCpp(const c_GeneratorRagConfig& source);
+
+/// Converts a C-style Generator configuration to C++ style.
+/// @param c C-style Generator configuration to convert
+/// @return C++ GeneratorConfig with the converted configuration
+GeneratorConfig toCpp(const c_GeneratorConfig& source);
 
 /// Converts a C-style chat configuration to C++ style.
 /// Creates a new C++ ChatConfig by copying all fields from the C struct.

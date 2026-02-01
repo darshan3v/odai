@@ -100,10 +100,11 @@ extern "C"
   /// This is a synchronous function that calls the callback for chunks of responses.
   /// @param llm_model_config The Language Model and its config to be used for response generation
   /// @param query The input query/prompt to generate a response for
+  /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each generated chunk of response
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel streaming.
-  ODAI_API int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *query,
+  ODAI_API int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *query, const c_SamplerConfig* sampler_config,
                                                     odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Creates a new chat session with the specified configuration.
@@ -140,15 +141,14 @@ extern "C"
 
   /// Generates a streaming chat response for the given query in the specified chat session.
   /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
-  /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
   /// @param chat_id The unique identifier of the chat session
   /// @param query The input query/message to generate a response for
-  /// @param semantic_space_name Name of the semantic space to use (ignored if RAG is disabled)
-  /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
+  /// @param generator_config Configuration for the generator (Sampler, RAG settings, etc.)
+  /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled in config)
   /// @param callback Function called for each generated token
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return true if response was generated successfully, false on error or if callback returns false to cancel streaming
-  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id,
+  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_GeneratorConfig* generator_config, const c_ScopeId scope_id,
                                                       odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).

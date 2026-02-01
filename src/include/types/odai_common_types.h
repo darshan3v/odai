@@ -25,17 +25,25 @@ typedef uint8_t DBType;
 typedef uint8_t BackendEngineType;
 #define LLAMA_BACKEND_ENGINE (BackendEngineType)0
 
-/// Profile for RAG Strategy
-/// Defines pre-configured strategies for chunking and retrieval optimization.
-typedef uint8_t RagProfile;
-#define RAG_PROFILE_GENERAL (RagProfile)0
-#define RAG_PROFILE_CODE (RagProfile)1
-#define RAG_PROFILE_PRECISE (RagProfile)2
-#define RAG_PROFILE_FAST (RagProfile)3
-
 /// Strategy for Chunking
 typedef uint8_t ChunkingStrategy;
 #define FIXED_SIZE_CHUNKING (ChunkingStrategy)0
 
+/// Search Type for Retrieval
+typedef uint8_t SearchType;
+#define SEARCH_TYPE_VECTOR_ONLY (SearchType)0
+#define SEARCH_TYPE_KEYWORD_ONLY (SearchType)1
+#define SEARCH_TYPE_HYBRID (SearchType)2
+
+/// RAG Mode
+typedef uint8_t RagMode;
+#define RAG_MODE_ALWAYS (RagMode)0
+#define RAG_MODE_NEVER (RagMode)1
+#define RAG_MODE_DYNAMIC (RagMode)2
+
 #define DEFAULT_CHUNKING_SIZE 512
 #define DEFAULT_CHUNKING_OVERLAP 50
+
+#define DEFAULT_MAX_TOKENS 4096
+#define DEFAULT_TOP_P 0.95f
+#define DEFAULT_TOP_K 40

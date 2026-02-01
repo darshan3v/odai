@@ -5,6 +5,7 @@
 #include <string>
 #include <cstdint>
 #include <variant>
+#include <optional>
 
 using namespace std;
 using namespace nlohmann;
@@ -169,41 +170,126 @@ struct SemanticSpaceConfig
     }
 };
 
-/// Configuration structure for RAG (Retrieval-Augmented Generation) system.
-/// Combines embedding and language model configurations along with RAG-specific settings.
-struct RagConfig
+/// Configuration structure for Retrieval (RAG) system.
+/// Defines the search strategy and parameters for retrieving context.
+struct RetrievalConfig
 {
-    /// Configuration for the embedding model used to generate vector embeddings
-    EmbeddingModelConfig embeddingModelConfig;
-    /// Configuration for the language model used for text generation
-    LLMModelConfig llmModelConfig;
-    // Additional configuration parameters like strategy etc...
-    RagProfile profile;
+    /// How many maximum final chunks to give the LLM?
+    uint32_t top_k;
+    /// How many maximum candidates to fetch initially (before reranking)?
+    uint32_t fetch_k;
+    /// Minimum similarity score (0.0 to 1.0). Discard irrelevant noise.
+    float score_threshold;
+    /// Search Strategy type (VECTOR_ONLY, KEYWORD_ONLY, or HYBRID).
+    SearchType search_type;
+    /// Should we run a cross-encoder? (Expensive but accurate)
+    bool use_reranker;
+    /// If Chunk 5 is a hit, do we also grab Chunk 4 and 6?
+    uint32_t context_window;
 
     bool is_sane() const
     {
-        if (!embeddingModelConfig.is_sane() || !llmModelConfig.is_sane())
+        if (top_k == 0)
             return false;
-        
-        if (profile != RAG_PROFILE_GENERAL && 
-            profile != RAG_PROFILE_CODE && 
-            profile != RAG_PROFILE_PRECISE && 
-            profile != RAG_PROFILE_FAST)
+        if (score_threshold < 0.0f || score_threshold > 1.0f)
             return false;
-
+            
         return true;
     }
 
 };
 
+/// Configuration for RAG Generation (Runtime/Generator use)
+/// Uses SemanticSpaceName to reference an existing space.
+struct GeneratorRagConfig
+{
+    RetrievalConfig retrievalConfig;
+    SemanticSpaceName semanticSpaceName;
+
+    bool is_sane() const
+    {
+        if (!retrievalConfig.is_sane())
+            return false;
+        if (semanticSpaceName.empty())
+            return false;
+        return true;
+    }
+};
+
+/// Full Configuration for RAG Generation
+/// Includes full SemanticSpaceConfig definition.
+struct RagGenerationConfig
+{
+    RetrievalConfig retrievalConfig;
+    SemanticSpaceConfig semanticSpaceConfig;
+
+    bool is_sane() const
+    {
+        if (!retrievalConfig.is_sane())
+            return false;
+        if (!semanticSpaceConfig.is_sane())
+            return false;
+        return true;
+    }
+};
+
+/// Configuration structure for Sampler (LLM generation parameters).
+/// Defines token limits, and sampling strategies.
+struct SamplerConfig
+{
+    uint32_t max_tokens = DEFAULT_MAX_TOKENS;
+    float top_p = DEFAULT_TOP_P;
+    uint32_t top_k = DEFAULT_TOP_K;
+
+    bool is_sane() const
+    {
+        if (max_tokens == 0)
+            return false;
+        if (top_p < 0.0f || top_p > 1.0f)
+            return false;
+        if (top_k <= 0)
+            return false;
+        
+        return true;
+    }
+};
+
+/// Configuration for Generator
+struct GeneratorConfig
+{
+    SamplerConfig samplerConfig;
+    RagMode ragMode;
+    std::optional<GeneratorRagConfig> ragConfig;
+
+    bool is_sane() const
+    {
+        if (!samplerConfig.is_sane())
+            return false;
+
+        if (ragMode == RAG_MODE_NEVER)
+        {
+            if (ragConfig.has_value())
+                return false;
+        }
+        else // ALWAYS or DYNAMIC
+        {
+            if (!ragConfig.has_value())
+                return false;
+            if (!ragConfig->is_sane())
+                return false;
+        }
+
+        return true;
+    }
+};
+
 /// Configuration structure for chat sessions.
+
 /// Defines the behavior and settings for a chat session including persistence, RAG usage, and model configuration.
 struct ChatConfig
 {
     /// Whether chat messages should be persisted to the database
     bool persistence;
-    /// Whether to use RAG (Retrieval-Augmented Generation) for this chat session
-    bool use_rag;
     /// System prompt that defines the assistant's behavior and instructions
     string system_prompt;
     /// Configuration for the language model used in this chat session

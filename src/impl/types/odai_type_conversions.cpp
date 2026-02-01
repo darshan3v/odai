@@ -58,18 +58,55 @@ SemanticSpaceConfig toCpp(const c_SemanticSpaceConfig &c)
     return config;
 }
 
-RagConfig toCpp(const c_RagConfig &c)
+RetrievalConfig toCpp(const c_RetrievalConfig &c)
 {
-    RagConfig config;
-    config.embeddingModelConfig = toCpp(c.embeddingModelConfig);
-    config.llmModelConfig = toCpp(c.llmModelConfig);
-    config.profile = c.profile;
+    RetrievalConfig config;
+    config.top_k = c.top_k;
+    config.fetch_k = c.fetch_k;
+    config.score_threshold = c.score_threshold;
+    config.search_type = c.search_type;
+    config.use_reranker = c.use_reranker;
+    config.context_window = c.context_window;
+    return config;
+}
+
+SamplerConfig toCpp(const c_SamplerConfig &c)
+{
+    return {c.max_tokens, c.top_p, c.top_k};
+}
+
+GeneratorRagConfig toCpp(const c_GeneratorRagConfig& source)
+{
+    GeneratorRagConfig config;
+    config.retrievalConfig = toCpp(source.retrievalConfig);
+    if (source.semanticSpaceName)
+    {
+        config.semanticSpaceName = string(source.semanticSpaceName);
+    }
+    return config;
+}
+
+GeneratorConfig toCpp(const c_GeneratorConfig& source)
+{
+    GeneratorConfig config;
+    config.samplerConfig = toCpp(source.samplerConfig);
+    config.ragMode = source.ragMode;
+
+    if (source.ragConfig != nullptr)
+    {
+        config.ragConfig = toCpp(*source.ragConfig);
+    }
+    else
+    {
+        config.ragConfig = std::nullopt;
+    }
+
     return config;
 }
 
 ChatConfig toCpp(const c_ChatConfig &c)
 {
-    return {c.persistence, c.use_rag, string(c.system_prompt), toCpp(c.llmModelConfig)};
+    return {c.persistence, string(c.system_prompt), toCpp(c.llmModelConfig)};
 }
 
 c_EmbeddingModelConfig toC(const EmbeddingModelConfig& cpp)

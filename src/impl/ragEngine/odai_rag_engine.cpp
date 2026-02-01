@@ -20,7 +20,7 @@ bool ODAIRagEngine::register_model(const ModelName& name, const ModelPath& path,
             return false;
     }
 
-    if (m_db->register_model(name, path, checksum, type))
+    if (m_db->register_model(name, path, type, checksum))
     {
         // Update cache
         m_modelPathCache[name] = path;
@@ -60,7 +60,7 @@ bool ODAIRagEngine::update_model_path(const ModelName& name, const ModelPath& pa
     return false;
 }
 
-int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config, const string &query, odai_stream_resp_callback_fn callback, void *user_data)
+int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config, const string &query, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
     {
@@ -87,7 +87,7 @@ int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
         return -1;
     }
 
-    return m_backendEngine->generate_streaming_response(query, callback, user_data);
+    return m_backendEngine->generate_streaming_response(query, sampler_config, callback, user_data);
 }
 
 bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
@@ -98,11 +98,6 @@ bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat config, chat_id: {}", chat_id);
         return false;
-    }
-
-    if (chat_config.use_rag)
-    {
-        // ToDo -> Load Embedding model if not already loaded
     }
 
     ModelPath modelPath;
@@ -134,7 +129,7 @@ bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
     return true;
 }
 
-int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SemanticSpaceName &semantic_space_name, const ScopeId &scope_id,
+int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generatorConfig, const ScopeId &scope_id,
                                                         odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
@@ -152,15 +147,24 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
     }
 
     // Check RAG settings: if RAG is enabled but scope_id is empty, return error
-    if (chat_config.use_rag)
+    // Check RAG settings: if RAG is enabled but scope_id is empty, return error
+    if (generatorConfig.ragMode != RAG_MODE_NEVER)
     {
+        if (!generatorConfig.ragConfig.has_value())
+        {
+             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but ragConfig is missing");
+             return -1;
+        }
+
+        const auto& ragConfig = *generatorConfig.ragConfig;
+
         if (scope_id.empty())
         {
             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but scope_id is empty", chat_id);
             return -1;
         }
 
-        if (semantic_space_name.empty())
+        if (ragConfig.semanticSpaceName.empty())
         {
              ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but semantic_space_name is empty", chat_id);
             return -1;
@@ -168,16 +172,16 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
         
         // Retrieve and validate Semantic Space Config
         SemanticSpaceConfig spaceConfig;
-         if (!m_db->get_semantic_space_config(semantic_space_name, spaceConfig))
+         if (!m_db->get_semantic_space_config(ragConfig.semanticSpaceName, spaceConfig))
         {
-             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but failed to retrieve semantic space config for: {}", semantic_space_name);
+             ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but failed to retrieve semantic space config for: {}", ragConfig.semanticSpaceName);
              return -1;
         }
         
         // ToDo -> Implement context retrieval from knowledge base based on scope_id, using embedding model from spaceConfig
         // Load embedding model from spaceConfig and do similarity check and retrieve according to retrieval strategy
         // string context = retrieve_context_from_knowledge_base(scope_id, prompt, spaceConfig);
-        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id, semantic_space_name, scope_id);
+        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id, ragConfig.semanticSpaceName, scope_id);
     }
 
     if (!this->ensure_chat_session_loaded(chat_id, chat_config))
@@ -210,7 +214,7 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
     };
 
     // Generate streaming response with internal buffering callback
-    int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(chat_id, final_prompt, internal_callback, &buffer_ctx);
+    int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(chat_id, final_prompt, generatorConfig.samplerConfig, internal_callback, &buffer_ctx);
 
     if (total_tokens < 0)
     {
@@ -316,12 +320,6 @@ bool ODAIRagEngine::ensure_chat_session_loaded(const ChatId &chat_id, const Chat
     {
         // Context is loaded, we are good to go
         return true;
-    }
-
-    // 3. If not loaded, we need to load it from history
-    if (chat_config.use_rag)
-    {
-        // ToDo -> Load Embedding model if not already loaded
     }
 
     vector<ChatMessage> messages;

@@ -258,12 +258,11 @@ bool ODAISdk::add_document(const string& content, const DocumentId& documentId, 
     }
 }
 
-int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_config, const string& query, 
+int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_config, const string& query, const SamplerConfig& samplerConfig,
                                           odai_stream_resp_callback_fn callback, void *userData)
 {
     try
     {
-
         
         if (!m_sdkInitialized)
         {
@@ -274,6 +273,12 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_con
         if(!llm_model_config.is_sane())
         {
             ODAI_LOG(ODAI_LOG_ERROR, "invalid LLM Model Config passed");
+            return -1;
+        }
+
+        if(!samplerConfig.is_sane())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "invalid Sampler Config passed");
             return -1;
         }
 
@@ -289,7 +294,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig &llm_model_con
             return -1;
         }
 
-        int32_t total_tokens = m_ragEngine->generate_streaming_response(llm_model_config, query, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_response(llm_model_config, query, samplerConfig, callback, userData);
         if (total_tokens < 0)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");
@@ -416,7 +421,7 @@ bool ODAISdk::get_chat_history(const ChatId& chatId, vector<ChatMessage>& messag
     }
 }
 
-bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const SemanticSpaceName& semanticSpaceName, const ScopeId& scopeId,
+bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig, const ScopeId& scopeId,
                                            odai_stream_resp_callback_fn callback, void *userData)
 {
     try
@@ -440,10 +445,18 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
             return false;
         }
 
-        if (scopeId.empty())
+        if (!generatorConfig.is_sane())
         {
-            ODAI_LOG(ODAI_LOG_WARN, "Null / Empty scope_id passed: will be ignored if RAG is disabled");
-            // Assuming this is just a warning and not an error unless strictly required
+            ODAI_LOG(ODAI_LOG_ERROR, "Invalid generator config passed");
+            return false;
+        }
+
+        if (generatorConfig.ragMode != RAG_MODE_NEVER)
+        {
+            if (scopeId.empty())
+            {
+               ODAI_LOG(ODAI_LOG_WARN, "Null / Empty scope_id passed: will be ignored if RAG is disabled");
+            }
         }
 
         if (callback == nullptr)
@@ -453,7 +466,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
         }
 
         // Call the RAG engine's generate_streaming_chat_response method
-        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, semanticSpaceName, scopeId, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, generatorConfig, scopeId, callback, userData);
 
         if (total_tokens < 0)
         {

@@ -84,7 +84,7 @@ ODAILlamaEngine::get_new_llama_context(ModelType model_type)
 }
 
 unique_ptr<llama_sampler, llama_sampler_deleter>
-ODAILlamaEngine::get_new_llm_llama_sampler()
+ODAILlamaEngine::get_new_llm_llama_sampler(const SamplerConfig &config)
 {
   unique_ptr<llama_sampler, llama_sampler_deleter> sampler = nullptr;
 
@@ -99,8 +99,8 @@ ODAILlamaEngine::get_new_llm_llama_sampler()
     return nullptr;
   }
 
-  llama_sampler_chain_add(sampler.get(), llama_sampler_init_top_k(50));
-  llama_sampler_chain_add(sampler.get(), llama_sampler_init_top_p(0.9f, 1));
+  llama_sampler_chain_add(sampler.get(), llama_sampler_init_top_k(config.top_k));
+  llama_sampler_chain_add(sampler.get(), llama_sampler_init_top_p(config.top_p, 1));
   llama_sampler_chain_add(sampler.get(), llama_sampler_init_greedy());
 
   return sampler;
@@ -456,7 +456,7 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(
 }
 
 int32_t ODAILlamaEngine::generate_streaming_response(
-    const string &prompt, odai_stream_resp_callback_fn callback,
+    const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback,
     void *user_data)
 {
   if (this->m_isInitialized == false)
@@ -490,7 +490,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(
   }
 
   unique_ptr<llama_sampler, llama_sampler_deleter> llm_llama_sampler =
-      this->get_new_llm_llama_sampler();
+      this->get_new_llm_llama_sampler(sampler_config);
 
   if (llm_llama_sampler == nullptr)
   {
@@ -596,15 +596,6 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
     return false;
   }
 
-  unique_ptr<llama_sampler, llama_sampler_deleter> llm_llama_sampler =
-      this->get_new_llm_llama_sampler();
-
-  if (llm_llama_sampler == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create sampler");
-    return false;
-  }
-
   // Format the chat messages into a prompt string (without generation prompt)
   string formatted_prompt = this->format_chat_messages_to_prompt(messages, false);
 
@@ -623,13 +614,13 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
   }
 
   // Store the context and sampler for this chat session
-  this->m_chat_context[chat_id] = {move(llm_llama_context), move(llm_llama_sampler)};
+  this->m_chat_context[chat_id] = {move(llm_llama_context)};
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context for chat_id {}", chat_id);
   return true;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data)
+int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data)
 {
   // Find the cached context and sampler for this chat session
   auto chat_ctx_iter = this->m_chat_context.find(chat_id);
@@ -647,10 +638,11 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id,
     return -1;
   }
 
-  if (chat_session.sampler == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Chat sampler is null for chat_id: {}", chat_id);
-    return -1;
+  unique_ptr<llama_sampler, llama_sampler_deleter> sampler = this->get_new_llm_llama_sampler(sampler_config);
+  
+  if (sampler == nullptr) {
+       ODAI_LOG(ODAI_LOG_ERROR, "Failed to create new sampler");
+       return -1;
   }
 
   if (callback == nullptr)
@@ -663,7 +655,7 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id,
   string formatted_prompt = this->format_chat_messages_to_prompt({{"user", prompt}}, true);
 
   // Use the cached context and sampler to generate streaming response
-  return this->generate_streaming_response_impl(*chat_session.context, *chat_session.sampler, formatted_prompt, callback, user_data);
+  return this->generate_streaming_response_impl(*chat_session.context, *sampler, formatted_prompt, callback, user_data);
 }
 
 bool ODAILlamaEngine::is_chat_context_loaded(const ChatId &chat_id)

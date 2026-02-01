@@ -32,10 +32,11 @@ public:
     /// The response is streamed incrementally via the callback function.
     /// @param llm_model_config The Language Model and its config to be used for response generation
     /// @param query The input query/prompt to generate a response for
+    /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each chunk of generated text. Can return false to cancel streaming.
     /// @param user_data User-provided data passed to the callback function
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const string &query, odai_stream_resp_callback_fn callback, void *user_data);
+    int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const string &query, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data);
     
     /// Loads a chat from the database to backend engine using the provided chat ID.
     /// Retrieves the chat configuration and loads the appropriate language model.
@@ -49,12 +50,12 @@ public:
     /// If RAG is enabled for the chat, retrieves relevant context from the knowledge base.
     /// @param chat_id Unique identifier for the chat session
     /// @param query The input query/message to generate a response for
-    /// @param semantic_space_name Name of the semantic space to use (ignored if RAG is disabled)
+    /// @param generator_config (Sampler, RAG settings, etc.)
     /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback function
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SemanticSpaceName &semantic_space_name, const ScopeId &scope_id,
+    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generator_config, const ScopeId &scope_id,
                                             odai_stream_resp_callback_fn callback, void *user_data);
 
     /// Unloads the chat session from memory, freeing up resources.

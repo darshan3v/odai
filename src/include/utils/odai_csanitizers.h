@@ -30,7 +30,7 @@ inline bool is_sane(const c_BackendEngineConfig *config)
 inline bool is_sane(const c_EmbeddingModelConfig *config)
 {
     return config != nullptr &&
-           config->modelPath != nullptr;
+           config->modelName != nullptr;
 }
 
 /// Validates that a language model configuration is sane and usable.
@@ -40,7 +40,7 @@ inline bool is_sane(const c_EmbeddingModelConfig *config)
 inline bool is_sane(const c_LLMModelConfig *config)
 {
     return config != nullptr &&
-           config->modelPath != nullptr;
+           config->modelName != nullptr;
 }
 
 /// Validates that a chunking configuration is sane and usable.
@@ -72,16 +72,51 @@ inline bool is_sane(const c_SemanticSpaceConfig *config)
            is_sane(&config->chunkingConfig);
 }
 
-/// Validates that a RAG configuration is sane and usable.
-/// Checks that both the embedding and LLM model configurations are valid.
-/// @param config The RAG configuration to validate
-/// @return true if the configuration is valid (has valid embedding and LLM configs), false otherwise
-inline bool is_sane(const c_RagConfig *config)
+/// Validates that a Retrieval configuration is sane and usable.
+/// @param config The Retrieval configuration to validate
+/// @return true if the configuration is valid, false otherwise
+inline bool is_sane(const c_RetrievalConfig *config)
 {
-    return config != nullptr &&
-           is_sane(&config->embeddingModelConfig) &&
-           is_sane(&config->llmModelConfig);
+    // Minimal check here, detailed check in C++ type
+    return config != nullptr; 
 }
+
+/// Validates that a Sampler configuration is sane.
+/// @param config The Sampler configuration to validate
+/// @return true if the configuration is valid
+inline bool is_sane(const c_SamplerConfig *config)
+{
+    return config != nullptr;
+}
+
+inline bool is_sane(const struct c_GeneratorRagConfig* config)
+{
+    if (config == nullptr) return false;
+    if (!is_sane(&config->retrievalConfig)) return false;
+    if (config->semanticSpaceName == nullptr) return false;
+    return true;
+}
+
+inline bool is_sane(const struct c_GeneratorConfig* config)
+{
+    if (config == nullptr) return false;
+    // Check sampler config sane? Using standard logic inside types if available, otherwise manual check
+    // c_SamplerConfig manual check:
+
+    if (config->ragMode == RAG_MODE_NEVER)
+    {
+        if (config->ragConfig != nullptr) return false;
+    }
+    else // ALWAYS or DYNAMIC
+    {
+        if (config->ragConfig == nullptr) return false;
+        if (!is_sane(config->ragConfig)) return false;
+    }
+
+    return true;
+}
+
+
 
 /// Validates that a chat configuration is sane and usable.
 /// Checks that the system prompt is not null, and that the LLM model configuration is valid.

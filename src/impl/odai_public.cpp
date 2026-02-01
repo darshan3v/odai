@@ -178,7 +178,7 @@ bool odai_add_document(const char *content, const c_DocumentId document_id, cons
     return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id), SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
 }
 
-int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *c_query,
+int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_config, const char *c_query, const c_SamplerConfig* c_sampler_config,
                                          odai_stream_resp_callback_fn c_callback, void *c_user_data)
 {
 
@@ -188,13 +188,19 @@ int32_t odai_generate_streaming_response(const c_LLMModelConfig* llm_model_confi
         return -1;
     }
 
+    if(!is_sane(c_sampler_config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid sampler_config passed");
+        return -1;
+    }
+
     if (c_query == nullptr)
     {
         ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
         return -1;
     }
 
-    return ODAISdk::get_instance().generate_streaming_response(toCpp(*llm_model_config), string(c_query), c_callback, c_user_data);
+    return ODAISdk::get_instance().generate_streaming_response(toCpp(*llm_model_config), string(c_query), toCpp(*c_sampler_config), c_callback, c_user_data);
 }
 
 bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig *c_chat_config, c_ChatId c_chat_id_out, size_t *chat_id_out_len)
@@ -295,7 +301,7 @@ void odai_free_chat_messages(c_ChatMessage *c_messages, size_t count)
     }
 }
 
-bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char *c_query, const c_SemanticSpaceName semantic_space_name, const c_ScopeId c_scope_id,
+bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char *c_query, const c_GeneratorConfig* c_generator_config, const c_ScopeId c_scope_id,
                                            odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (c_chat_id == nullptr)
@@ -310,7 +316,13 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char 
         return false;
     }
 
-    return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), string(c_query), (semantic_space_name ? SemanticSpaceName(semantic_space_name) : SemanticSpaceName("")), (c_scope_id ? ScopeId(c_scope_id) : ScopeId("")), callback, user_data);
+    if (!is_sane(c_generator_config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Invalid generator config passed");
+        return false;
+    }
+
+    return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), string(c_query), toCpp(*c_generator_config), (c_scope_id ? ScopeId(c_scope_id) : ScopeId("")), callback, user_data);
 }
 
 bool odai_unload_chat(const c_ChatId c_chat_id)

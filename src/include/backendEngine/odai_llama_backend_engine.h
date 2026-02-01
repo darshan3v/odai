@@ -51,8 +51,6 @@ struct ChatSessionLLMContext
 {
     /// Llama context with loaded KV cache for the chat session
     unique_ptr<llama_context, llama_context_deleter> context;
-    /// Sampler chain used for text generation in this chat session
-    unique_ptr<llama_sampler, llama_sampler_deleter> sampler;
 
     LLMModelConfig llm_model_config;
 };
@@ -84,10 +82,11 @@ public:
 
     /// Generates a streaming response for the given prompt using the loaded language model.
     /// @param prompt The input prompt to generate a response for
+    /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
+    int32_t generate_streaming_response(const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data) override;
 
     /// Loads the provided sequence of chat messages into the model's context for the specified chat session, to do this it uses the llm_model_config to load the model.
     /// This will compute the KV cache (key-value memory for transformer inference) and keep it in memory,
@@ -102,10 +101,11 @@ public:
     /// Loads the query into the cached context and then continues generation.
     /// @param chat_id Unique identifier for the chat session whose cached context will be used
     /// @param query The input query/message to generate a response for
+    /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
+    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data) override;
 
     /// Checks if the context for a specific chat session is currently loaded in memory.
     /// @param chat_id Unique identifier for the chat session
@@ -146,9 +146,10 @@ private:
     unique_ptr<llama_context, llama_context_deleter> get_new_llama_context(ModelType model_type);
 
     /// Creates a new sampler chain for language model generation.
-    /// The sampler uses top-k (50), top-p (0.9), and greedy sampling strategies.
+    /// The sampler uses top-k, top-p, and greedy sampling strategies from the config.
+    /// @param config Configuration for the sampler
     /// @return Unique pointer to the sampler, or nullptr on error
-    unique_ptr<llama_sampler, llama_sampler_deleter> get_new_llm_llama_sampler();
+    unique_ptr<llama_sampler, llama_sampler_deleter> get_new_llm_llama_sampler(const SamplerConfig &config);
 
     /// Tokenizes an input string into llama tokens using the appropriate model.
     /// @param input The string to tokenize

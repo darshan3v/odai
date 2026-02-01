@@ -29,10 +29,11 @@ public:
     /// Generates a streaming response for the given prompt using the loaded language model.
     /// The response is streamed incrementally via the callback function.
     /// @param prompt The input prompt to generate a response for
+    /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    virtual int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
+    virtual int32_t generate_streaming_response(const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
     /// Loads the provided sequence of chat messages into the model's context for the specified chat session.
     /// This will compute the KV cache (key-value memory for transformer inference) and keep it in memory,
@@ -46,10 +47,11 @@ public:
     /// Generates a streaming chat response for the given query in the given chat session.
     /// @param chat_id Unique identifier for the chat session whose cached context will be used
     /// @param query The input query/message to generate a response for
+    /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    virtual int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
+    virtual int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const SamplerConfig &sampler_config, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
     /// Checks if the context for a specific chat session is currently loaded in memory.
     /// @param chat_id Unique identifier for the chat session

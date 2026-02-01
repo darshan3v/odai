@@ -199,7 +199,7 @@ target_link_libraries(odai
     sqlite-vec
     SQLiteCpp
     nlohmann_json
-    xxHash
+    xxhash
 )
 
 set(ODAI_JNI_SOURCES

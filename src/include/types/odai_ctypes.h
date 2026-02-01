@@ -89,7 +89,6 @@ struct c_ChunkingConfig
 
 };
 
-
 inline void free_members(c_ChunkingConfig* config)
 {
     // No dynamic memory currently
@@ -118,16 +117,41 @@ inline void free_members(c_SemanticSpaceConfig* config)
     free_members(&config->chunkingConfig);
 }
 
-/// C-style configuration structure for RAG (Retrieval-Augmented Generation) system.
-/// Used for C API compatibility. Combines embedding and language model configurations.
-struct c_RagConfig
+/// C-style configuration structure for Retrieval system.
+/// Used for C API compatibility.
+struct c_RetrievalConfig
 {
-    /// Configuration for the embedding model used to generate vector embeddings
-    struct c_EmbeddingModelConfig embeddingModelConfig;
-    /// Configuration for the language model used for text generation
-    struct c_LLMModelConfig llmModelConfig;
-    /// RAG Profile
-    RagProfile profile;
+    uint32_t top_k;
+    uint32_t fetch_k;
+    float score_threshold;
+    SearchType search_type;
+    bool use_reranker;
+    uint32_t context_window;
+};
+
+/// C-style configuration for RAG Generation (Runtime/Generator use)
+struct c_GeneratorRagConfig
+{
+    struct c_RetrievalConfig retrievalConfig;
+    c_SemanticSpaceName semanticSpaceName;
+};
+
+/// C-style configuration structure for Sampler (LLM generation parameters).
+/// Used for C API compatibility.
+struct c_SamplerConfig
+{
+    uint32_t max_tokens;
+    float top_p;
+    uint32_t top_k;
+};
+
+/// C-style configuration for Generator
+struct c_GeneratorConfig
+{
+    struct c_SamplerConfig samplerConfig;
+    RagMode ragMode;
+    // Optional configuration. Null if not used.
+    struct c_GeneratorRagConfig* ragConfig;
 };
 
 /// C-style configuration structure for chat sessions.
@@ -136,8 +160,6 @@ struct c_ChatConfig
 {
     /// Whether chat messages should be persisted to the database
     bool persistence;
-    /// Whether to use RAG (Retrieval-Augmented Generation) for this chat session
-    bool use_rag;
     /// System prompt that defines the assistant's behavior and instructions.
     const char* system_prompt;
     /// Configuration for the language model used in this chat session
