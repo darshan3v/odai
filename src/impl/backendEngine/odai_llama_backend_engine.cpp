@@ -41,7 +41,7 @@ bool ODAILlamaEngine::initialize_engine()
 
   llama_log_set(llama_log_redirect, nullptr);
 
-  this->isInitialized = true;
+  this->m_isInitialized = true;
 
   return true;
 }
@@ -57,13 +57,13 @@ ODAILlamaEngine::get_new_llama_context(ModelType model_type)
 
   if (model_type == ModelType::LLM)
   {
-    model = this->llmModel.get();
+    model = this->m_llmModel.get();
     context_params.n_ctx = 2048;
     context_params.embeddings = false;
   }
   else if (model_type == ModelType::EMBEDDING)
   {
-    model = this->embeddingModel.get();
+    model = this->m_embeddingModel.get();
     context_params.n_ctx = 512;
     context_params.embeddings = true;
   }
@@ -106,20 +106,20 @@ ODAILlamaEngine::get_new_llm_llama_sampler()
   return sampler;
 }
 
-bool ODAILlamaEngine::load_embedding_model(const EmbeddingModelConfig &config)
+bool ODAILlamaEngine::load_embedding_model(const ModelPath& path, const EmbeddingModelConfig &config)
 {
-  if (this->isInitialized == false)
+  if (this->m_isInitialized == false)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
     return false;
   }
 
-  if (this->embedding_model_config.modelPath == config.modelPath)
+  if (this->m_current_embedding_model_path == path)
   {
     ODAI_LOG(ODAI_LOG_INFO, "embedding model {} is already loaded",
-             config.modelPath);
+             path);
     // update config though, some other params might have changed
-    this->embedding_model_config = config;
+    this->m_embedding_model_config = config;
     return true;
   }
 
@@ -127,68 +127,70 @@ bool ODAILlamaEngine::load_embedding_model(const EmbeddingModelConfig &config)
   embedding_model_params.n_gpu_layers = 0; // Load entire model on CPU
   embedding_model_params.use_mlock = false;
 
-  this->embeddingModel.reset(llama_model_load_from_file(
-      config.modelPath.c_str(), embedding_model_params));
+  this->m_embeddingModel.reset(llama_model_load_from_file(
+      path.c_str(), embedding_model_params));
 
-  if (this->embeddingModel == nullptr)
+  if (this->m_embeddingModel == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load embedding model");
     return false;
   }
 
-  this->embedding_model_config = config;
+  this->m_embedding_model_config = config;
+  this->m_current_embedding_model_path = path;
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded embedding model {}",
-           config.modelPath);
+           path);
   return true;
 }
 
-bool ODAILlamaEngine::load_language_model(const LLMModelConfig &config)
+bool ODAILlamaEngine::load_language_model(const ModelPath& path, const LLMModelConfig &config)
 {
-  if (this->isInitialized == false)
+  if (this->m_isInitialized == false)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized");
     return false;
   }
 
-  if (this->llm_model_config.modelPath == config.modelPath)
+  if (this->m_current_llm_model_path == path)
   {
     ODAI_LOG(ODAI_LOG_INFO, "language model {} is already loaded",
-             config.modelPath);
+             path);
     // update config though, some other params might have changed
-    this->llm_model_config = config;
+    this->m_llm_model_config = config;
     return true;
   }
 
   // Clear all chat contexts since they depend on the old model
-  this->chat_context.clear();
+  this->m_chat_context.clear();
   ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts as new model is being loaded");
 
   llama_model_params llm_model_params = llama_model_default_params();
   llm_model_params.n_gpu_layers = 0; // Load entire model on CPU
   llm_model_params.use_mlock = false;
 
-  this->llmModel.reset(
-      llama_model_load_from_file(config.modelPath.c_str(), llm_model_params));
+  this->m_llmModel.reset(
+      llama_model_load_from_file(path.c_str(), llm_model_params));
 
-  if (this->llmModel == nullptr)
+  if (this->m_llmModel == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model");
     return false;
   }
 
-  this->llmVocab = llama_model_get_vocab(this->llmModel.get());
+  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
 
-  if (this->llmVocab == nullptr)
+  if (this->m_llmVocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
     return false;
   }
 
-  this->llm_model_config = config;
+  this->m_llm_model_config = config;
+  this->m_current_llm_model_path = path;
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}",
-           config.modelPath);
+           path);
   return true;
 }
 
@@ -204,7 +206,7 @@ vector<llama_token> ODAILlamaEngine::tokenize(const string &input, bool is_first
   }
   else if (model_type == LLM)
   {
-    vocab = this->llmVocab;
+    vocab = this->m_llmVocab;
   }
   else
   {
@@ -242,7 +244,7 @@ vector<llama_token> ODAILlamaEngine::tokenize(const string &input, bool is_first
 
 string ODAILlamaEngine::detokenize(const vector<llama_token> &tokens)
 {
-  if (this->llmVocab == nullptr)
+  if (this->m_llmVocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no LLM model loaded yet, so can't detokenize");
     return "";
@@ -254,7 +256,7 @@ string ODAILlamaEngine::detokenize(const vector<llama_token> &tokens)
   {
     char buf[128];
     int32_t n =
-        llama_token_to_piece(this->llmVocab, token, buf, sizeof(buf), 0, false);
+        llama_token_to_piece(this->m_llmVocab, token, buf, sizeof(buf), 0, false);
 
     if (n < 0)
     {
@@ -425,7 +427,7 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(
     }
 
     // Check if model is done
-    if (llama_vocab_is_eog(this->llmVocab, generated_token))
+    if (llama_vocab_is_eog(this->m_llmVocab, generated_token))
     {
       // flush left over tokens
       if (buffered_tokens.size() > 0)
@@ -457,7 +459,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(
     const string &prompt, odai_stream_resp_callback_fn callback,
     void *user_data)
 {
-  if (this->isInitialized == false)
+  if (this->m_isInitialized == false)
   {
     ODAI_LOG(
         ODAI_LOG_ERROR,
@@ -465,7 +467,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(
     return -1;
   }
 
-  if (this->llmModel == nullptr || this->llmVocab == nullptr)
+  if (this->m_llmModel == nullptr || this->m_llmVocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet, so can't generate response");
     return -1;
@@ -503,14 +505,14 @@ int32_t ODAILlamaEngine::generate_streaming_response(
 string
 ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage> &messages, const bool add_generation_prompt)
 {
-  if (this->llmModel == nullptr)
+  if (this->m_llmModel == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet");
     return "";
   }
 
   // Get the chat template from the model
-  const char *tmpl = llama_model_chat_template(this->llmModel.get(), nullptr);
+  const char *tmpl = llama_model_chat_template(this->m_llmModel.get(), nullptr);
 
   if (tmpl == nullptr)
   {
@@ -567,7 +569,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
     const ChatId &chat_id, const vector<ChatMessage> &messages)
 {
 
-  if (this->isInitialized == false)
+  if (this->m_isInitialized == false)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
     return false;
@@ -579,7 +581,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
     return false;
   }
 
-  if (this->chat_context.find(chat_id) != this->chat_context.end())
+  if (this->m_chat_context.find(chat_id) != this->m_chat_context.end())
   {
     ODAI_LOG(ODAI_LOG_INFO, "chat context for chat_id {} is already loaded", chat_id);
     return true;
@@ -621,7 +623,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
   }
 
   // Store the context and sampler for this chat session
-  this->chat_context[chat_id] = {move(llm_llama_context), move(llm_llama_sampler)};
+  this->m_chat_context[chat_id] = {move(llm_llama_context), move(llm_llama_sampler)};
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context for chat_id {}", chat_id);
   return true;
@@ -630,8 +632,8 @@ bool ODAILlamaEngine::load_chat_messages_into_context(
 int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, odai_stream_resp_callback_fn callback, void *user_data)
 {
   // Find the cached context and sampler for this chat session
-  auto chat_ctx_iter = this->chat_context.find(chat_id);
-  if (chat_ctx_iter == this->chat_context.end())
+  auto chat_ctx_iter = this->m_chat_context.find(chat_id);
+  if (chat_ctx_iter == this->m_chat_context.end())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Chat context not found for chat_id: {}", chat_id);
     return -1;
@@ -666,15 +668,15 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId &chat_id,
 
 bool ODAILlamaEngine::is_chat_context_loaded(const ChatId &chat_id)
 {
-  return this->chat_context.find(chat_id) != this->chat_context.end();
+  return this->m_chat_context.find(chat_id) != this->m_chat_context.end();
 }
 
 bool ODAILlamaEngine::unload_chat_context(const ChatId &chat_id)
 {
-  auto it = this->chat_context.find(chat_id);
-  if (it != this->chat_context.end())
+  auto it = this->m_chat_context.find(chat_id);
+  if (it != this->m_chat_context.end())
   {
-    this->chat_context.erase(it);
+    this->m_chat_context.erase(it);
     ODAI_LOG(ODAI_LOG_INFO, "Unloaded chat context for chat_id: {}", chat_id);
     return true;
   }

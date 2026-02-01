@@ -32,12 +32,22 @@ We maintain a strict separation between C types (API boundary) and C++ types (In
     - Modern C++ structs/classes using STL (`std::string`, `std::vector`).
     - Validation logic included via `is_sane()` member functions.
 
-### 2.2 Sanitization & Conversion
+### 2.2 Enums and ABI Stability
+- **Avoid C Enums in Public API**: 
+    - C enums do not have a guaranteed size (can be `int`, `unsigned int`, `char`, etc., depending on compiler/flags). This breaks ABI stability.
+    - **Solution**: Use `typedef uint8_t` or `typedef uint32_t` along with `#define` macros for constants in `odai_ctypes.h`.
+    - Example: `typedef uint32_t c_ModelType; #define ODAI_MODEL_TYPE_LLM (c_ModelType)1`
+
+### 2.3 Sanitization & Conversion
 - **Sanitizers (`src/include/utils/odai_csanitizers.h`)**:
-    - `is_sane(const c_Type*)` functions.
-    - **Purpose**: Low-level safety checks (e.g., null pointer checks, minimal structural validity).
+    - `is_sane(const c_Type*)` / `is_sane(c_ValueType value)`
+    - **Purpose**: Low-level safety checks and **structural validation**.
+        - Pointer validity (not null).
+        - Value expectations (e.g., checking if an int representing an enum is within the valid range of defined macros).
+        - It is acceptable to perform these checks here as they validate the "structure" or "encoding" of the data before it enters the C++ layer.
 - **Converters (`src/include/types/odai_type_conversions.h`)**:
-    - `toCpp(const c_Type&)`: Converts C structs to C++ objects.
+    - `toCpp(const c_Type&)`: Converts C structs/types to C++ objects.
+    - **Expectation**: Converters **assume input data is safe**. They rely on `is_sane()` having been called previously. For example, `toCpp` for a model type assumes the input `uint32_t` corresponds to a valid `ModelType` enum value.
     - `toC(const CppType&)`: Converts C++ objects to C structs (handles memory allocation for C strings).
 
 ## 3. Implementation Patterns
@@ -128,3 +138,21 @@ bool ODAISdk::create_feature(const FeatureConfig& config)
 - `src/impl/`
     - `odai_public.cpp`: C API implementation (Sanitization -> Conversion -> SDK Call).
     - `odai_sdk.cpp`: C++ SDK implementation (Business Logic -> Engine Call).
+
+## 6. Naming Conventions
+
+### 6.1 Member Variables
+- **Prefix with `m_`**: All non-static member variables of a class or struct should be prefixed with `m_`.
+    - **Reasoning**: This makes it immediately obvious when reading code which variables are private members of the class versus local variables or function arguments.
+    - **Example**:
+    ```cpp
+    class MyClass {
+    private:
+        int m_count; // Correct
+        string name; // Incorrect, should be m_name
+    public:
+        void set_count(int count) {
+            m_count = count; // unambiguous
+        }
+    };
+    ```

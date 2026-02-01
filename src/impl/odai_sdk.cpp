@@ -6,6 +6,7 @@
 #include "types/odai_common_types.h"
 #include "types/odai_types.h"
 #include "utils/odai_helpers.h"
+
 #include <memory>
 
 using namespace std;
@@ -108,6 +109,128 @@ bool ODAISdk::initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
         m_sdkInitialized = false;
+        return false;
+    }
+}
+
+bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, ModelType type)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_ragEngine->register_model(name, path, type);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::update_model_path(const ModelName& name, const ModelPath& path)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_ragEngine->update_model_path(name, path);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        if(config.is_sane() == false)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
+            return false;
+        }
+
+        // TODO: if dim == 0 then auto infer from model
+
+        return m_db->create_semantic_space(config);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->get_semantic_space_config(name, config);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->list_semantic_spaces(spaces);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+        return false;
+    }
+}
+
+bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
+{
+    try
+    {
+        if (!m_sdkInitialized)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+            return false;
+        }
+
+        return m_db->delete_semantic_space(name);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
         return false;
     }
 }
@@ -372,90 +495,6 @@ bool ODAISdk::unload_chat(const ChatId& chatId)
         }
 
         return m_ragEngine->unload_chat_session(chatId);
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-        return false;
-    }
-}
-
-bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
-{
-    try
-    {
-        if (!m_sdkInitialized)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-            return false;
-        }
-
-        if(config.is_sane() == false)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
-            return false;
-        }
-
-        // TODO: if dim == 0 then auto infer from model
-
-        return m_db->create_semantic_space(config);
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-        return false;
-    }
-}
-
-bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
-{
-    try
-    {
-        if (!m_sdkInitialized)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-            return false;
-        }
-
-        return m_db->get_semantic_space_config(name, config);
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-        return false;
-    }
-}
-
-bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
-{
-    try
-    {
-        if (!m_sdkInitialized)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-            return false;
-        }
-
-        return m_db->list_semantic_spaces(spaces);
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-        return false;
-    }
-}
-
-bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
-{
-    try
-    {
-        if (!m_sdkInitialized)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-            return false;
-        }
-
-        return m_db->delete_semantic_space(name);
     }
     catch (...)
     {

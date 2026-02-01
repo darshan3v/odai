@@ -20,8 +20,11 @@ class ODAISqliteDb : public ODAIDb
 {
 
 private:
-    string dbPath;
-    unique_ptr<SQLite::Database> db = nullptr;
+    string m_dbPath;
+    unique_ptr<SQLite::Database> m_db = nullptr;
+
+    int m_transaction_depth = 0;
+    std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
 
     /// Registers the sqlite-vec extension and opens the database connection.
     /// The extension is registered before creating the database object to enable vector operations.
@@ -57,6 +60,54 @@ public:
     /// This aborts the current transaction completely regardless of nesting depth.
     bool rollback_transaction() override;
 
+    /// Registers a new model in the database.
+    /// Stores the model name, path, checksum and type in the models table.
+    /// @param name The unique name to assign to the model
+    /// @param path The full file system path to the model file
+    /// @param type The type of the model (LLM or EMBEDDING)
+    /// @param checksum The checksum of the model file for integrity verification
+    /// @return true if registration succeeded, false on error
+    bool register_model(const ModelName& name, const ModelPath& path, ModelType type, const string& checksum) override;
+
+    /// Retrieves the file system path for a registered model.
+    /// @param name The name of the model to look up
+    /// @param path Output parameter to store the model path
+    /// @return true if model found, false if not found or on error
+    bool get_model_path(const ModelName& name, ModelPath& path) override;
+
+    /// Retrieves the stored checksum for a registered model.
+    /// @param name The name of the model to look up
+    /// @param checksum Output parameter to store the model checksum
+    /// @return true if model found, false if not found or on error
+    bool get_model_checksum(const ModelName& name, string& checksum) override;
+
+    /// Updates the path for an existing model record.
+    /// @param name The name of the model to update
+    /// @param new_path The new file system path to store
+    /// @return true if update succeeded, false on error
+    bool update_model_path(const ModelName& name, const ModelPath& new_path) override;
+
+    /// Creates a new semantic space configuration in the database.
+    /// @param config The semantic space configuration to store.
+    /// @return true if created successfully, false on error.
+    bool create_semantic_space(const SemanticSpaceConfig &config) override;
+
+    /// Retrieves the configuration for a semantic space.
+    /// @param name The name of the semantic space to retrieve.
+    /// @param config Output parameter to store the configuration.
+    /// @return true if found, false on error or if not found.
+    bool get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config) override;
+
+    /// Lists all available semantic spaces from the database.
+    /// @param spaces Vector to be populated with the list of semantic spaces.
+    /// @return true if listed successfully, false on error.
+    bool list_semantic_spaces(vector<SemanticSpaceConfig> &spaces) override;
+
+    /// Deletes a semantic space configuration from the database.
+    /// @param name The name of the semantic space to delete.
+    /// @return true if deleted successfully, false on error.
+    bool delete_semantic_space(const SemanticSpaceName &name) override;
+
     /// Checks if a chat session with the given chat_id exists in the database.
     /// @param chat_id The chat identifier to check
     /// @return true if chat_id exists, false if not found or on error
@@ -90,34 +141,10 @@ public:
     /// @return true if all messages inserted successfully, false on error
     bool insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages) override;
 
-    /// Creates a new semantic space configuration in the database.
-    /// @param config The semantic space configuration to store.
-    /// @return true if created successfully, false on error.
-    bool create_semantic_space(const SemanticSpaceConfig &config) override;
-
-    /// Retrieves the configuration for a semantic space.
-    /// @param name The name of the semantic space to retrieve.
-    /// @param config Output parameter to store the configuration.
-    /// @return true if found, false on error or if not found.
-    bool get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config) override;
-
-    /// Lists all available semantic spaces from the database.
-    /// @param spaces Vector to be populated with the list of semantic spaces.
-    /// @return true if listed successfully, false on error.
-    bool list_semantic_spaces(vector<SemanticSpaceConfig> &spaces) override;
-
-    /// Deletes a semantic space configuration from the database.
-    /// @param name The name of the semantic space to delete.
-    /// @return true if deleted successfully, false on error.
-    bool delete_semantic_space(const SemanticSpaceName &name) override;
-
     /// Closes the database connection and releases resources.
     void close() override;
 
 private:
-    int m_transaction_depth = 0;
-    std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
-
     inline static string DB_SCHEMA = R"(
         
 CREATE TABLE chats (
@@ -176,6 +203,14 @@ CREATE TABLE doc_chunk_ref (
 CREATE TABLE semantic_spaces (
     name TEXT NOT NULL PRIMARY KEY,
     config BLOB NOT NULL,       -- JSON stored SemanticSpaceConfig
+    created_at INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE models (
+    name TEXT NOT NULL PRIMARY KEY,
+    path TEXT NOT NULL,
+    checksum TEXT NOT NULL,
+    type TEXT NOT NULL CHECK(type IN ('LLM', 'EMBEDDING')),
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );
 

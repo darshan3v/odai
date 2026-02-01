@@ -14,15 +14,25 @@ public:
 
     /// Loads an embedding model from the specified configuration.
     /// If a model is already loaded, it will be freed and replaced with the new one.
-    /// @param config Configuration containing model path and parameters
+    /// @param path The resolved file system path to the model.
+    /// @param config Configuration containing parameters.
     /// @return true if model loaded successfully, false otherwise
-    virtual bool load_embedding_model(const EmbeddingModelConfig &config) = 0;
+    virtual bool load_embedding_model(const ModelPath& path, const EmbeddingModelConfig &config) = 0;
 
     /// Loads a language model from the specified configuration.
     /// If a model is already loaded, it will be freed and replaced with the new one.
-    /// @param config Configuration containing model path and parameters
+    /// @param path The resolved file system path to the model.
+    /// @param config Configuration containing parameters.
     /// @return true if model loaded successfully, false otherwise
-    virtual bool load_language_model(const LLMModelConfig &config) = 0;
+    virtual bool load_language_model(const ModelPath& path, const LLMModelConfig &config) = 0;
+
+    /// Generates a streaming response for the given prompt using the loaded language model.
+    /// The response is streamed incrementally via the callback function.
+    /// @param prompt The input prompt to generate a response for
+    /// @param callback Function called for each chunk of generated text
+    /// @param user_data User-provided data passed to the callback
+    /// @return Total number of tokens generated (excluding EOG token), or -1 on error
+    virtual int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
     /// Loads the provided sequence of chat messages into the model's context for the specified chat session.
     /// This will compute the KV cache (key-value memory for transformer inference) and keep it in memory,
@@ -32,14 +42,6 @@ public:
     /// @param messages Vector of chat messages (in order) to load into the context
     /// @return true if the context was successfully loaded or already cached, false if there was an error
     virtual bool load_chat_messages_into_context(const ChatId &chat_id, const vector<ChatMessage> &messages) = 0;
-
-    /// Generates a streaming response for the given prompt using the loaded language model.
-    /// The response is streamed incrementally via the callback function.
-    /// @param prompt The input prompt to generate a response for
-    /// @param callback Function called for each chunk of generated text
-    /// @param user_data User-provided data passed to the callback
-    /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    virtual int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) = 0;
 
     /// Generates a streaming chat response for the given query in the given chat session.
     /// @param chat_id Unique identifier for the chat session whose cached context will be used

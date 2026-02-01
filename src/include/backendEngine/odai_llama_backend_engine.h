@@ -70,15 +70,24 @@ public:
 
     /// Loads an embedding model from the specified configuration.
     /// If the same model is already loaded, only updates the configuration.
-    /// @param config Configuration containing model path and parameters
+    /// @param path The resolved file system path to the model.
+    /// @param config Configuration containing parameters.
     /// @return true if model loaded successfully, false otherwise
-    bool load_embedding_model(const EmbeddingModelConfig &config) override;
+    bool load_embedding_model(const ModelPath& path, const EmbeddingModelConfig &config) override;
 
     /// Loads a language model from the specified configuration.
     /// If the same model is already loaded, only updates the configuration.
-    /// @param config Configuration containing model path and parameters
+    /// @param path The resolved file system path to the model.
+    /// @param config Configuration containing parameters.
     /// @return true if model loaded successfully, false otherwise
-    bool load_language_model(const LLMModelConfig &config) override;
+    bool load_language_model(const ModelPath& path, const LLMModelConfig &config) override;
+
+    /// Generates a streaming response for the given prompt using the loaded language model.
+    /// @param prompt The input prompt to generate a response for
+    /// @param callback Function called for each chunk of generated text
+    /// @param user_data User-provided data passed to the callback
+    /// @return Total number of tokens generated (excluding EOG token), or -1 on error
+    int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
 
     /// Loads the provided sequence of chat messages into the model's context for the specified chat session, to do this it uses the llm_model_config to load the model.
     /// This will compute the KV cache (key-value memory for transformer inference) and keep it in memory,
@@ -88,13 +97,6 @@ public:
     /// @param messages Vector of chat messages (in order) to load into the context
     /// @return true if the context was successfully loaded or already cached, false otherwise
     bool load_chat_messages_into_context(const ChatId &chat_id, const vector<ChatMessage> &messages) override;
-
-    /// Generates a streaming response for the given prompt using the loaded language model.
-    /// @param prompt The input prompt to generate a response for
-    /// @param callback Function called for each chunk of generated text
-    /// @param user_data User-provided data passed to the callback
-    /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_response(const string &prompt, odai_stream_resp_callback_fn callback, void *user_data) override;
 
     /// Generates a streaming chat response using the cached context and sampler for the given chat session.
     /// Loads the query into the cached context and then continues generation.
@@ -119,21 +121,24 @@ public:
     ~ODAILlamaEngine() override;
 
 private:
-    bool isInitialized = false;
+    bool m_isInitialized = false;
+    
+    EmbeddingModelConfig m_embedding_model_config;
+    LLMModelConfig m_llm_model_config;
 
-    EmbeddingModelConfig embedding_model_config;
-    LLMModelConfig llm_model_config;
+    ModelPath m_current_embedding_model_path;
+    ModelPath m_current_llm_model_path;
 
-    unique_ptr<llama_model, llama_model_deleter> embeddingModel = nullptr;
-    unique_ptr<llama_model, llama_model_deleter> llmModel = nullptr;
+    unique_ptr<llama_model, llama_model_deleter> m_embeddingModel = nullptr;
+    unique_ptr<llama_model, llama_model_deleter> m_llmModel = nullptr;
 
     // managed automatically by llama.cpp
     // so no need of unique_ptr
-    const llama_vocab *llmVocab = nullptr;
+    const llama_vocab *m_llmVocab = nullptr;
 
     /// Unordered map to store cached chat session data keyed by chat_id
     /// Each entry contains the context with KV cache, sampler, and metadata
-    unordered_map<ChatId, ChatSessionLLMContext> chat_context;
+    unordered_map<ChatId, ChatSessionLLMContext> m_chat_context;
 
     /// Creates a new llama context for the specified model type.
     /// @param model_type Type of model (LLM or EMBEDDING) to create context for

@@ -24,6 +24,18 @@ typedef string ScopeId;
 /// Strong type for semantic space names.
 typedef string SemanticSpaceName;
 
+/// Strong type for model names.
+typedef string ModelName;
+
+/// Strong type for model paths.
+typedef string ModelPath;
+
+enum ModelType
+{
+    EMBEDDING,
+    LLM
+};
+
 struct DBConfig
 {
     /// Database type to use (SQLITE_DB, POSTGRES_DB, etc.)
@@ -64,13 +76,12 @@ struct BackendEngineConfig
 /// Contains the path to the embedding model file used for generating vector embeddings.
 struct EmbeddingModelConfig
 {
-    /// Path to the embedding model file (e.g., .gguf format).
-    /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
-    string modelPath;
+    /// Name of the embedding model to use (must be registered via odai_register_model).
+    ModelName modelName;
 
     bool is_sane() const
     {
-        if (modelPath.empty())
+        if (modelName.empty())
             return false;
 
         return true;
@@ -82,13 +93,12 @@ struct EmbeddingModelConfig
 /// Contains the path to the language model file used for text generation.
 struct LLMModelConfig
 {
-    /// Path to the language model file (e.g., .gguf format).
-    /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
-    string modelPath;
+    /// Name of the language model to use (must be registered via odai_register_model).
+    ModelName modelName;
 
     bool is_sane() const
     {
-        if (modelPath.empty())
+        if (modelName.empty())
             return false;
 
         return true;
@@ -234,12 +244,6 @@ struct ChatMessage
         return true;
     }
 
-};
-
-enum ModelType
-{
-    EMBEDDING,
-    LLM
 };
 
 struct StreamingBufferContext

@@ -2,6 +2,18 @@
 
 #include <cstring>
 
+ModelType toCpp(c_ModelType c)
+{
+    if (c == ODAI_MODEL_TYPE_LLM)
+        return ModelType::LLM;
+    else if (c == ODAI_MODEL_TYPE_EMBEDDING)
+        return ModelType::EMBEDDING;
+    
+    // Default to LLM if unknown, or handle error appropriately. 
+    // Since we can't easily return error here, we assume valid input or handle at caller.
+    return ModelType::LLM; 
+}
+
 DBConfig toCpp(const c_DBConfig &c)
 {
     return {c.dbType, string(c.dbPath)};
@@ -14,8 +26,12 @@ BackendEngineConfig toCpp(const c_BackendEngineConfig &c)
 
 EmbeddingModelConfig toCpp(const c_EmbeddingModelConfig &c)
 {
-    return {string(c.modelPath)};
-    return {string(c.modelPath)};
+    return {string(c.modelName)};
+}
+
+LLMModelConfig toCpp(const c_LLMModelConfig &c)
+{
+    return {string(c.modelName)};
 }
 
 ChunkingConfig toCpp(const c_ChunkingConfig &c)
@@ -42,11 +58,6 @@ SemanticSpaceConfig toCpp(const c_SemanticSpaceConfig &c)
     return config;
 }
 
-LLMModelConfig toCpp(const c_LLMModelConfig &c)
-{
-    return {string(c.modelPath)};
-}
-
 RagConfig toCpp(const c_RagConfig &c)
 {
     RagConfig config;
@@ -64,7 +75,7 @@ ChatConfig toCpp(const c_ChatConfig &c)
 c_EmbeddingModelConfig toC(const EmbeddingModelConfig& cpp)
 {
     c_EmbeddingModelConfig c;
-    c.modelPath = strdup(cpp.modelPath.c_str());
+    c.modelName = strdup(cpp.modelName.c_str());
     return c;
 }
 

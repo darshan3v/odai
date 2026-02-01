@@ -1,5 +1,10 @@
 #include "types/odai_ctypes.h"
 
+inline bool is_sane(c_ModelType type)
+{
+    return (type == ODAI_MODEL_TYPE_EMBEDDING || type == ODAI_MODEL_TYPE_LLM);
+}
+
 /// Validates that a database configuration is sane and usable.
 /// Checks that the database path is not null.
 /// @param config The database configuration to validate
@@ -23,6 +28,16 @@ inline bool is_sane(const c_BackendEngineConfig *config)
 /// @param config The embedding model configuration to validate
 /// @return true if the configuration is valid (has a non-null model path), false otherwise
 inline bool is_sane(const c_EmbeddingModelConfig *config)
+{
+    return config != nullptr &&
+           config->modelPath != nullptr;
+}
+
+/// Validates that a language model configuration is sane and usable.
+/// Checks that the model path is not null.
+/// @param config The language model configuration to validate
+/// @return true if the configuration is valid (has a non-null model path), false otherwise
+inline bool is_sane(const c_LLMModelConfig *config)
 {
     return config != nullptr &&
            config->modelPath != nullptr;
@@ -55,16 +70,6 @@ inline bool is_sane(const c_SemanticSpaceConfig *config)
            config->name != nullptr &&
            is_sane(&config->embeddingModelConfig) &&
            is_sane(&config->chunkingConfig);
-}
-
-/// Validates that a language model configuration is sane and usable.
-/// Checks that the model path is not null.
-/// @param config The language model configuration to validate
-/// @return true if the configuration is valid (has a non-null model path), false otherwise
-inline bool is_sane(const c_LLMModelConfig *config)
-{
-    return config != nullptr &&
-           config->modelPath != nullptr;
 }
 
 /// Validates that a RAG configuration is sane and usable.

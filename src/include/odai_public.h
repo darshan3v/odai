@@ -38,6 +38,53 @@ extern "C"
   /// @return true if initialization succeeded, false otherwise
   ODAI_API bool odai_initialize_sdk(const c_DBConfig *dbConfig, const c_BackendEngineConfig *backendEngineConfig);
 
+    /// Registers a new model in the system with the given name and path.
+  /// The model path is validated and a checksum is computed to ensure integrity.
+  /// @param name The unique name to assign to the model.
+  /// @param path The full file system path to the model file.
+  /// @param type The type of the model ("LLM" or "EMBEDDING").
+  /// @return true if registration succeeded, false if name exists or file is invalid.
+  ODAI_API bool odai_register_model(c_ModelName name, c_ModelPath path, c_ModelType type);
+
+  /// Updates the path for an existing model.
+  /// Validates that the new file has the same checksum as the originally registered model.
+  /// @param name The name of the model to update.
+  /// @param path The new full file system path to the model file.
+  /// @return true if update succeeded, false if validation fails or model not found.
+  ODAI_API bool odai_update_model_path(c_ModelName name, c_ModelPath path);
+
+  /// Creates a new semantic space configuration.
+  /// @param config The semantic space configuration to create.
+  /// @return true if created successfully, false on error.
+  ODAI_API bool odai_create_semantic_space(const c_SemanticSpaceConfig *config);
+
+  /// Retrieves the configuration for a semantic space.
+  /// @param name The name of the semantic space to retrieve.
+  /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
+  /// @return true if found, false on error.
+  ODAI_API bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out);
+
+  /// Frees members allocated by odai_get_semantic_space
+  /// @param config pointer to c_SemanticSpaceConfig struct to free .
+  ODAI_API void odai_free_semantic_space_config(c_SemanticSpaceConfig *config);
+
+  /// Lists all available semantic spaces.
+  /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
+  /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
+  /// @param spaces_count Output parameter: number of spaces returned.
+  /// @return true if successful, false on error.
+  ODAI_API bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count);
+
+  /// Frees memory allocated by odai_list_semantic_spaces.
+  /// @param spaces Array of c_SemanticSpaceConfig to free.
+  /// @param count Number of items in the array.
+  ODAI_API void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count);
+
+  /// Deletes a semantic space configuration.
+  /// @param name The name of the semantic space to delete.
+  /// @return true if deleted successfully, false on error.
+  ODAI_API bool odai_delete_semantic_space(const c_SemanticSpaceName name);
+
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// The document content is embedded and stored in the database for later retrieval.
   /// ToDo: Implementation not yet defined.
@@ -108,39 +155,6 @@ extern "C"
   /// @param chat_id The unique identifier of the chat session to unload
   /// @return true if chat session was unloaded successfully, false on error
   ODAI_API bool odai_unload_chat(const c_ChatId chat_id);
-
-  /// Creates a new semantic space configuration.
-  /// @param config The semantic space configuration to create.
-  /// @return true if created successfully, false on error.
-  ODAI_API bool odai_create_semantic_space(const c_SemanticSpaceConfig *config);
-
-  /// Retrieves the configuration for a semantic space.
-  /// @param name The name of the semantic space to retrieve.
-  /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
-  /// @return true if found, false on error.
-  ODAI_API bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out);
-
-  /// Frees members allocated by odai_get_semantic_space
-  /// @param config pointer to c_SemanticSpaceConfig struct to free .
-  ODAI_API void odai_free_semantic_space_config(c_SemanticSpaceConfig *config);
-
-  /// Lists all available semantic spaces.
-  /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
-  /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
-  /// @param spaces_count Output parameter: number of spaces returned.
-  /// @return true if successful, false on error.
-  ODAI_API bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count);
-
-  /// Frees memory allocated by odai_list_semantic_spaces.
-  /// @param spaces Array of c_SemanticSpaceConfig to free.
-  /// @param count Number of items in the array.
-  ODAI_API void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count);
-
-  /// Deletes a semantic space configuration.
-  /// @param name The name of the semantic space to delete.
-  /// @return true if deleted successfully, false on error.
-  ODAI_API bool odai_delete_semantic_space(const c_SemanticSpaceName name);
-
 
 #ifdef __cplusplus
 }

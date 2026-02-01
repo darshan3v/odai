@@ -6,6 +6,8 @@
 #include <filesystem>
 
 #include "types/odai_type_conversions.h"
+#include "utils/odai_helpers.h"
+
 
 using namespace nlohmann;
 
@@ -17,7 +19,7 @@ extern "C" int sqlite3_vec_init(sqlite3 *db, char **pzErrMsg, const sqlite3_api_
 
 ODAISqliteDb::ODAISqliteDb(const DBConfig &dbConfig)
 {
-    this->dbPath = dbConfig.dbPath;
+    this->m_dbPath = dbConfig.dbPath;
 }
 
 bool ODAISqliteDb::register_vec_extension()
@@ -59,22 +61,22 @@ bool ODAISqliteDb::initialize_db()
         bool initialize_schema = false;
 
         // Check if DB file exists
-        if (!filesystem::exists(dbPath))
+        if (!filesystem::exists(m_dbPath))
         {
             initialize_schema = true;
-            ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", dbPath);
+            ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_dbPath);
         }
 
         // create db object only after registering sqlite-vec extension
-        db = std::make_unique<SQLite::Database>(
-            dbPath,
+        m_db = std::make_unique<SQLite::Database>(
+            m_dbPath,
             SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
-        ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", dbPath);
+        ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_dbPath);
 
         if (initialize_schema)
         {
-        db->exec(DB_SCHEMA);
+        m_db->exec(DB_SCHEMA);
         ODAI_LOG(ODAI_LOG_INFO, "initialized db with schema");
         }
 
@@ -82,7 +84,7 @@ bool ODAISqliteDb::initialize_db()
     }
     catch (const std::exception &e)
     {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", dbPath, e.what());
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_dbPath, e.what());
         return false;
     }
 }
@@ -91,7 +93,7 @@ bool ODAISqliteDb::begin_transaction()
 {
     try
     {
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -101,7 +103,7 @@ bool ODAISqliteDb::begin_transaction()
         if (m_transaction_depth == 1)
         {
             // Start the physical transaction
-            m_transaction = std::make_unique<SQLite::Transaction>(*db);
+            m_transaction = std::make_unique<SQLite::Transaction>(*m_db);
         }
         return true;
     }
@@ -122,7 +124,7 @@ bool ODAISqliteDb::commit_transaction()
 {
     try
     {
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -158,7 +160,7 @@ bool ODAISqliteDb::rollback_transaction()
 {
     try
     {
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -178,12 +180,258 @@ bool ODAISqliteDb::rollback_transaction()
     }
 }
 
+
+bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, ModelType type, const string& checksum)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        if (checksum.empty())
+        {
+             ODAI_LOG(ODAI_LOG_ERROR, "Empty checksum passed for file: {}", path);
+             return false;
+        }
+
+        string typeStr;
+        if (type == ModelType::LLM)
+            typeStr = "LLM";
+        else if (type == ModelType::EMBEDDING)
+            typeStr = "EMBEDDING";
+        else    
+        {
+             ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed");
+             return false;
+        }
+
+        SQLite::Statement insert(*m_db, "INSERT INTO models (name, path, checksum, type) VALUES (:name, :path, :checksum, :type)");
+        insert.bind(":name", name);
+        insert.bind(":path", path);
+        insert.bind(":checksum", checksum);
+        insert.bind(":type", typeStr);
+
+        insert.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to register model: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::get_model_path(const ModelName& name, ModelPath& path)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement query(*m_db, "SELECT path FROM models WHERE name = :name LIMIT 1");
+        query.bind(":name", name);
+
+        if (query.executeStep())
+        {
+            path = query.getColumn("path").getString();
+            return true;
+        }
+
+        return false;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model path: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::get_model_checksum(const ModelName& name, string& checksum)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement query(*m_db, "SELECT checksum FROM models WHERE name = :name LIMIT 1");
+        query.bind(":name", name);
+
+        if (query.executeStep())
+        {
+            checksum = query.getColumn("checksum").getString();
+            return true;
+        }
+
+        return false;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model checksum: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::update_model_path(const ModelName& name, const ModelPath& new_path)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement update(*m_db, "UPDATE models SET path = :path WHERE name = :name");
+        update.bind(":path", new_path);
+        update.bind(":name", name);
+
+        update.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to update model path: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig &config)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        if (!config.is_sane())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
+            return false;
+        }
+
+        json j = config;
+        string config_json = j.dump();
+
+        SQLite::Statement insert(*m_db, "INSERT INTO semantic_spaces (name, config) VALUES (:name, jsonb(:config))");
+        insert.bind(":name", config.name);
+        insert.bind(":config", config_json);
+        
+        insert.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space: {}, Error: {}", config.name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement query(*m_db, "SELECT json(config) as config FROM semantic_spaces WHERE name = :name LIMIT 1");
+        query.bind(":name", name);
+
+        if (!query.executeStep())
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Semantic space not found: {}", name);
+            return false;
+        }
+
+        SQLite::Column config_col = query.getColumn("config");
+        json config_json = json::parse(config_col.getString());
+        config = config_json.get<SemanticSpaceConfig>();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get semantic space config: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig> &spaces)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        spaces.clear();
+
+        SQLite::Statement query(*m_db, "SELECT json(config) as config FROM semantic_spaces ORDER BY name");
+
+        while (query.executeStep())
+        {
+            SQLite::Column config_col = query.getColumn("config");
+            json config_json = json::parse(config_col.getString());
+            spaces.push_back(config_json.get<SemanticSpaceConfig>());
+        }
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to list semantic spaces, Error: {}", e.what());
+        return false;
+    }
+}
+
+bool ODAISqliteDb::delete_semantic_space(const SemanticSpaceName &name)
+{
+    try
+    {
+        if (m_db == nullptr)
+        {
+            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+            return false;
+        }
+
+        SQLite::Statement query(*m_db, "DELETE FROM semantic_spaces WHERE name = :name");
+        query.bind(":name", name);
+
+        query.exec();
+
+        return true;
+    }
+    catch (const std::exception &e)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space: {}, Error: {}", name, e.what());
+        return false;
+    }
+}
+
 bool ODAISqliteDb::chat_id_exists(const ChatId &chat_id)
 {
     try
     {
         // "SELECT 1" is enough. We limit to 1 so the DB stops searching immediately.
-        SQLite::Statement select_chat(*db, "SELECT 1 FROM chats WHERE chat_id = :chat_id LIMIT 1");
+        SQLite::Statement select_chat(*m_db, "SELECT 1 FROM chats WHERE chat_id = :chat_id LIMIT 1");
 
         // Bind the parameter, use named parameters instead of index based to avoid unexpected behaviour due to changes in future
         select_chat.bind(":chat_id", chat_id);
@@ -203,7 +451,7 @@ bool ODAISqliteDb::create_chat(const ChatId &chat_id, const ChatConfig &chat_con
     try
     {
 
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -220,7 +468,7 @@ bool ODAISqliteDb::create_chat(const ChatId &chat_id, const ChatConfig &chat_con
 
         begin_transaction();
 
-        SQLite::Statement insert_chat(*db, "INSERT INTO chats (chat_id, chat_config) VALUES (:chat_id, jsonb(:chat_config))");
+        SQLite::Statement insert_chat(*m_db, "INSERT INTO chats (chat_id, chat_config) VALUES (:chat_id, jsonb(:chat_config))");
 
         insert_chat.bind(":chat_id", chat_id);
         insert_chat.bind(":chat_config", chat_config_json);
@@ -248,14 +496,14 @@ bool ODAISqliteDb::get_chat_config(const ChatId &chat_id, ChatConfig &chat_confi
 {
     try
     {
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
         }
 
         // always use named fields to extract data instead of index
-        SQLite::Statement query(*db, "SELECT title, json(chat_config) as chat_config FROM chats WHERE chat_id = :chat_id LIMIT 1");
+        SQLite::Statement query(*m_db, "SELECT title, json(chat_config) as chat_config FROM chats WHERE chat_id = :chat_id LIMIT 1");
 
         query.bind(":chat_id", chat_id);
 
@@ -291,7 +539,7 @@ bool ODAISqliteDb::get_chat_history(const ChatId &chat_id, vector<ChatMessage> &
     try
     {
 
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -299,7 +547,7 @@ bool ODAISqliteDb::get_chat_history(const ChatId &chat_id, vector<ChatMessage> &
 
         messages.clear();
 
-        SQLite::Statement query(*db,
+        SQLite::Statement query(*m_db,
                                 "SELECT role, content, json(message_metadata) as message_metadata, created_at "
                                 "FROM chat_messages "
                                 "WHERE chat_id = :chat_id "
@@ -353,15 +601,11 @@ bool ODAISqliteDb::get_chat_history(const ChatId &chat_id, vector<ChatMessage> &
     }
 }
 
-ODAISqliteDb::~ODAISqliteDb()
-{
-}
-
 bool ODAISqliteDb::insert_chat_messages(const ChatId &chat_id, const vector<ChatMessage> &messages)
 {
     try
     {
-        if (db == nullptr)
+        if (m_db == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
             return false;
@@ -378,7 +622,7 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId &chat_id, const vector<Chat
 
         try {
             // Prepare statement once, reuse for all messages
-            SQLite::Statement insert_message(*db,
+            SQLite::Statement insert_message(*m_db,
                                              "INSERT INTO chat_messages (chat_id, role, content, message_metadata, sequence_index) "
                                              "VALUES (:chat_id, :role, :content, jsonb(:message_metadata), "
                                              "COALESCE((SELECT MAX(sequence_index) + 1 FROM chat_messages WHERE chat_id = :chat_id), 0))");
@@ -410,133 +654,13 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId &chat_id, const vector<Chat
     }
 }
 
-bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig &config)
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        if (!config.is_sane())
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
-            return false;
-        }
-
-        json j = config;
-        string config_json = j.dump();
-
-        SQLite::Statement insert(*db, "INSERT INTO semantic_spaces (name, config) VALUES (:name, jsonb(:config))");
-        insert.bind(":name", config.name);
-        insert.bind(":config", config_json);
-        
-        insert.exec();
-
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space: {}, Error: {}", config.name, e.what());
-        return false;
-    }
-}
-
-bool ODAISqliteDb::get_semantic_space_config(const SemanticSpaceName &name, SemanticSpaceConfig &config)
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        SQLite::Statement query(*db, "SELECT json(config) as config FROM semantic_spaces WHERE name = :name LIMIT 1");
-        query.bind(":name", name);
-
-        if (!query.executeStep())
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Semantic space not found: {}", name);
-            return false;
-        }
-
-        SQLite::Column config_col = query.getColumn("config");
-        json config_json = json::parse(config_col.getString());
-        config = config_json.get<SemanticSpaceConfig>();
-
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get semantic space config: {}, Error: {}", name, e.what());
-        return false;
-    }
-}
-
-bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig> &spaces)
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        spaces.clear();
-
-        SQLite::Statement query(*db, "SELECT json(config) as config FROM semantic_spaces ORDER BY name");
-
-        while (query.executeStep())
-        {
-            SQLite::Column config_col = query.getColumn("config");
-            json config_json = json::parse(config_col.getString());
-            spaces.push_back(config_json.get<SemanticSpaceConfig>());
-        }
-
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to list semantic spaces, Error: {}", e.what());
-        return false;
-    }
-}
-
-bool ODAISqliteDb::delete_semantic_space(const SemanticSpaceName &name)
-{
-    try
-    {
-        if (db == nullptr)
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-            return false;
-        }
-
-        SQLite::Statement query(*db, "DELETE FROM semantic_spaces WHERE name = :name");
-        query.bind(":name", name);
-
-        query.exec();
-
-        return true;
-    }
-    catch (const std::exception &e)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space: {}, Error: {}", name, e.what());
-        return false;
-    }
-}
-
 void ODAISqliteDb::close()
 {
     try
     {
-        if (db != nullptr)
+        if (m_db != nullptr)
         {
-            db.reset();
+            m_db.reset();
             ODAI_LOG(ODAI_LOG_INFO, "Database connection closed successfully");
         }
     }
@@ -544,4 +668,8 @@ void ODAISqliteDb::close()
     {
         ODAI_LOG(ODAI_LOG_ERROR, "Error closing database: {}", e.what());
     }
+}
+
+ODAISqliteDb::~ODAISqliteDb()
+{
 }

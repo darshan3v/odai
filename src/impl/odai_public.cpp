@@ -36,6 +36,137 @@ bool odai_initialize_sdk(const c_DBConfig *c_dbConfig, const c_BackendEngineConf
     return ODAISdk::get_instance().initialize_sdk(toCpp(*c_dbConfig), toCpp(*c_backendEngineConfig));
 }
 
+bool odai_register_model(c_ModelName name, c_ModelPath path, c_ModelType type)
+{
+    if (name == nullptr || path == nullptr)
+    {
+         ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_register_model");
+         return false;
+    }
+
+    if (!is_sane(type))
+    {
+         ODAI_LOG(ODAI_LOG_ERROR, "Invalid model type passed");
+         return false;
+    }
+
+    return ODAISdk::get_instance().register_model(ModelName(name), ModelPath(path), toCpp(type));
+}
+
+bool odai_update_model_path(c_ModelName name, c_ModelPath path)
+{
+    if (name == nullptr || path == nullptr)
+    {
+         ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_update_model_path");
+         return false;
+    }
+    return ODAISdk::get_instance().update_model_path(ModelName(name), ModelPath(path));
+}
+
+bool odai_create_semantic_space(const c_SemanticSpaceConfig *config)
+{
+    if (!is_sane(config))
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid semantic space config passed");
+        return false;
+    }
+    return ODAISdk::get_instance().create_semantic_space(toCpp(*config));
+}
+
+bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out)
+{
+    if (name == nullptr || config_out == nullptr)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid arguments passed to odai_get_semantic_space");
+        return false;
+    }
+
+    SemanticSpaceConfig config;
+    if (!ODAISdk::get_instance().get_semantic_space_config(SemanticSpaceName(name), config))
+    {
+         return false;
+    }
+
+    *config_out = toC(config);
+    return true;
+}
+
+void odai_free_semantic_space_config(c_SemanticSpaceConfig *config)
+{
+    if (config == nullptr) return;
+    free_members(config);
+}
+
+bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count)
+{
+    if (spaces_out == nullptr || spaces_count == nullptr)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid output parameters passed");
+        return false;
+    }
+
+    vector<SemanticSpaceConfig> spaces;
+    if (!ODAISdk::get_instance().list_semantic_spaces(spaces))
+    {
+        *spaces_out = nullptr;
+        *spaces_count = 0;
+        return false;
+    }
+
+    if (spaces.empty())
+    {
+        *spaces_out = nullptr;
+        *spaces_count = 0;
+        return true;
+    }
+
+    *spaces_count = spaces.size();
+    *spaces_out = static_cast<c_SemanticSpaceConfig *>(malloc(sizeof(c_SemanticSpaceConfig) * (*spaces_count)));
+
+    if (*spaces_out == nullptr)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for spaces list");
+        *spaces_count = 0;
+        return false;
+    }
+
+    for (size_t i = 0; i < spaces.size(); ++i)
+    {
+        (*spaces_out)[i] = toC(spaces[i]);
+    }
+
+    return true;
+}
+
+void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count)
+{
+    if (spaces == nullptr)
+        return;
+
+    try
+    {
+        for (size_t i = 0; i < count; ++i)
+        {
+            free_members(&spaces[i]);
+        }
+        free(spaces);
+    }
+    catch (...)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while freeing semantic spaces");
+    }
+}
+
+bool odai_delete_semantic_space(const c_SemanticSpaceName name)
+{
+    if (name == nullptr)
+    {
+        ODAI_LOG(ODAI_LOG_ERROR, "invalid space name passed");
+        return false;
+    }
+    return ODAISdk::get_instance().delete_semantic_space(string(name));
+}
+
 bool odai_add_document(const char *content, const c_DocumentId document_id, const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id)
 {
     if (content == nullptr || document_id == nullptr || semantic_space_name == nullptr || scope_id == nullptr)
@@ -190,108 +321,4 @@ bool odai_unload_chat(const c_ChatId c_chat_id)
         return false;
     }
     return ODAISdk::get_instance().unload_chat(ChatId(c_chat_id));
-}
-
-bool odai_create_semantic_space(const c_SemanticSpaceConfig *config)
-{
-    if (!is_sane(config))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid semantic space config passed");
-        return false;
-    }
-    return ODAISdk::get_instance().create_semantic_space(toCpp(*config));
-}
-
-bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig *config_out)
-{
-    if (name == nullptr || config_out == nullptr)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid arguments passed to odai_get_semantic_space");
-        return false;
-    }
-
-    SemanticSpaceConfig config;
-    if (!ODAISdk::get_instance().get_semantic_space_config(SemanticSpaceName(name), config))
-    {
-         return false;
-    }
-
-    *config_out = toC(config);
-    return true;
-}
-
-void odai_free_semantic_space_config(c_SemanticSpaceConfig *config)
-{
-    if (config == nullptr) return;
-    free_members(config);
-}
-
-bool odai_list_semantic_spaces(c_SemanticSpaceConfig **spaces_out, size_t *spaces_count)
-{
-    if (spaces_out == nullptr || spaces_count == nullptr)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid output parameters passed");
-        return false;
-    }
-
-    vector<SemanticSpaceConfig> spaces;
-    if (!ODAISdk::get_instance().list_semantic_spaces(spaces))
-    {
-        *spaces_out = nullptr;
-        *spaces_count = 0;
-        return false;
-    }
-
-    if (spaces.empty())
-    {
-        *spaces_out = nullptr;
-        *spaces_count = 0;
-        return true;
-    }
-
-    *spaces_count = spaces.size();
-    *spaces_out = static_cast<c_SemanticSpaceConfig *>(malloc(sizeof(c_SemanticSpaceConfig) * (*spaces_count)));
-
-    if (*spaces_out == nullptr)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for spaces list");
-        *spaces_count = 0;
-        return false;
-    }
-
-    for (size_t i = 0; i < spaces.size(); ++i)
-    {
-        (*spaces_out)[i] = toC(spaces[i]);
-    }
-
-    return true;
-}
-
-void odai_free_semantic_spaces_list(c_SemanticSpaceConfig *spaces, size_t count)
-{
-    if (spaces == nullptr)
-        return;
-
-    try
-    {
-        for (size_t i = 0; i < count; ++i)
-        {
-            free_members(&spaces[i]);
-        }
-        free(spaces);
-    }
-    catch (...)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while freeing semantic spaces");
-    }
-}
-
-bool odai_delete_semantic_space(const c_SemanticSpaceName name)
-{
-    if (name == nullptr)
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "invalid space name passed");
-        return false;
-    }
-    return ODAISdk::get_instance().delete_semantic_space(string(name));
 }

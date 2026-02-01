@@ -15,6 +15,17 @@ typedef char* c_ScopeId;
 /// Semantic Space Name - opaque string type for type safety.c
 typedef const char* c_SemanticSpaceName;
 
+/// Model Name - opaque string type for type safety.
+typedef const char* c_ModelName;
+
+/// Model Path - opaque string type for type safety.
+typedef const char* c_ModelPath;
+
+/// Model Type - opaque type for model classification
+typedef uint32_t c_ModelType;
+#define ODAI_MODEL_TYPE_EMBEDDING (c_ModelType)0
+#define ODAI_MODEL_TYPE_LLM (c_ModelType)1
+
 struct c_DBConfig
 {
     /// Database type to use (SQLITE_DB, etc.)
@@ -36,9 +47,8 @@ struct c_BackendEngineConfig
 /// Used for C API compatibility. Contains the path to the embedding model file.
 struct c_EmbeddingModelConfig
 {
-    /// Path to the embedding model file (e.g., .gguf format).
-    /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
-    const char *modelPath;
+    /// Name of the Embedding model (must be registered).
+    c_ModelName modelName;
 
 };
 
@@ -46,10 +56,10 @@ struct c_EmbeddingModelConfig
 inline void free_members(c_EmbeddingModelConfig* config)
 {
     if (config == nullptr) return;
-    if (config->modelPath)
+    if (config->modelName)
     {
-        free(const_cast<char *>(config->modelPath));
-        config->modelPath = nullptr;
+        free(const_cast<char *>(config->modelName));
+        config->modelName = nullptr;
     }
 }
 
@@ -57,21 +67,8 @@ inline void free_members(c_EmbeddingModelConfig* config)
 /// Used for C API compatibility. Contains the path to the language model file.
 struct c_LLMModelConfig
 {
-    /// Path to the language model file (e.g., .gguf format).
-    /// Must be a full file system path. Content URIs (e.g., Android content:// URIs) are not supported.
-    const char *modelPath;
-};
-
-/// C-style configuration structure for RAG (Retrieval-Augmented Generation) system.
-/// Used for C API compatibility. Combines embedding and language model configurations.
-struct c_RagConfig
-{
-    /// Configuration for the embedding model used to generate vector embeddings
-    struct c_EmbeddingModelConfig embeddingModelConfig;
-    /// Configuration for the language model used for text generation
-    struct c_LLMModelConfig llmModelConfig;
-    /// RAG Profile
-    RagProfile profile;
+    /// Name of the language model (must be registered).
+    c_ModelName modelName;
 };
 
 /// C-style configuration for Fixed Size Chunking Strategy
@@ -121,6 +118,18 @@ inline void free_members(c_SemanticSpaceConfig* config)
     free_members(&config->chunkingConfig);
 }
 
+/// C-style configuration structure for RAG (Retrieval-Augmented Generation) system.
+/// Used for C API compatibility. Combines embedding and language model configurations.
+struct c_RagConfig
+{
+    /// Configuration for the embedding model used to generate vector embeddings
+    struct c_EmbeddingModelConfig embeddingModelConfig;
+    /// Configuration for the language model used for text generation
+    struct c_LLMModelConfig llmModelConfig;
+    /// RAG Profile
+    RagProfile profile;
+};
+
 /// C-style configuration structure for chat sessions.
 /// Used for C API compatibility. Defines the behavior and settings for a chat session.
 struct c_ChatConfig
@@ -166,3 +175,4 @@ inline void free_members(c_ChatMessage* message)
         message->message_metadata = nullptr;
     }
 }
+

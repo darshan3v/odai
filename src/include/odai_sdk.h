@@ -40,6 +40,40 @@ public:
     /// @return true if initialization succeeded, false otherwise
     bool initialize_sdk(const DBConfig& dbConfig, const BackendEngineConfig& backendConfig);
 
+    /// Registers a new model.
+    /// @param name The unique name of the model.
+    /// @param path The file path to the model.
+    /// @param type The type of the model.
+    /// @return true if registered successfully, false otherwise.
+    bool register_model(const ModelName& name, const ModelPath& path, ModelType type);
+
+    /// Updates the path for a model.
+    /// @param name The name of the model.
+    /// @param path The new path.
+    /// @return true if updated successfully, false otherwise.
+    bool update_model_path(const ModelName& name, const ModelPath& path);
+
+    /// Creates a new semantic space.
+    /// @param config The configuration for the semantic space.
+    /// @return true if created successfully, false on error.
+    bool create_semantic_space(const SemanticSpaceConfig& config);
+
+    /// Retrieves the configuration for a semantic space.
+    /// @param name The name of the semantic space to retrieve.
+    /// @param config Output parameter to store the configuration.
+    /// @return true if found, false on error or if not found.
+    bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
+
+    /// Lists all available semantic spaces.
+    /// @param spaces Output parameter to store list of space names.
+    /// @return true if successful, false on error.
+    bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+
+    /// Deletes a semantic space.
+    /// @param name The name of the semantic space to delete.
+    /// @return true if deleted successfully, false on error.
+    bool delete_semantic_space(const string& name);
+
     /// Adds a document to the RAG knowledge base for retrieval during generation.
     /// @param content The text content of the document to add
     /// @param documentId Unique identifier for this document
@@ -93,27 +127,6 @@ public:
     /// @param chatId The unique identifier of the chat session to unload
     /// @return true if chat session was unloaded successfully, false on error
     bool unload_chat(const ChatId& chatId);
-
-    /// Creates a new semantic space.
-    /// @param config The configuration for the semantic space.
-    /// @return true if created successfully, false on error.
-    bool create_semantic_space(const SemanticSpaceConfig& config);
-
-    /// Retrieves the configuration for a semantic space.
-    /// @param name The name of the semantic space to retrieve.
-    /// @param config Output parameter to store the configuration.
-    /// @return true if found, false on error or if not found.
-    bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
-
-    /// Lists all available semantic spaces.
-    /// @param spaces Output parameter to store list of space names.
-    /// @return true if successful, false on error.
-    bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
-
-    /// Deletes a semantic space.
-    /// @param name The name of the semantic space to delete.
-    /// @return true if deleted successfully, false on error.
-    bool delete_semantic_space(const string& name);
 
 private:
     ODAISdk();

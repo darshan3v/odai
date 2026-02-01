@@ -119,6 +119,17 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(nlohmann_json)
 unset(BUILD_SHARED_LIBS)
 
+# --- Setup xxHash ---
+FetchContent_Declare(
+    xxHash
+    GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
+    GIT_TAG        v0.8.2
+)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(xxHash)
+unset(BUILD_SHARED_LIBS)
+
 # -----------------------------------------------------------------
 # 3. Your Library (The Main Target)
 # -----------------------------------------------------------------
@@ -188,6 +199,7 @@ target_link_libraries(odai
     sqlite-vec
     SQLiteCpp
     nlohmann_json
+    xxHash
 )
 
 set(ODAI_JNI_SOURCES
