@@ -83,6 +83,10 @@ GeneratorRagConfig toCpp(const c_GeneratorRagConfig& source)
     {
         config.semanticSpaceName = string(source.semanticSpaceName);
     }
+    if (source.scopeId)
+    {
+        config.scopeId = string(source.scopeId);
+    }
     return config;
 }
 

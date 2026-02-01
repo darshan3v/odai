@@ -421,7 +421,7 @@ bool ODAISdk::get_chat_history(const ChatId& chatId, vector<ChatMessage>& messag
     }
 }
 
-bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig, const ScopeId& scopeId,
+bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig,
                                            odai_stream_resp_callback_fn callback, void *userData)
 {
     try
@@ -451,14 +451,6 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
             return false;
         }
 
-        if (generatorConfig.ragMode != RAG_MODE_NEVER)
-        {
-            if (scopeId.empty())
-            {
-               ODAI_LOG(ODAI_LOG_WARN, "Null / Empty scope_id passed: will be ignored if RAG is disabled");
-            }
-        }
-
         if (callback == nullptr)
         {
             ODAI_LOG(ODAI_LOG_ERROR, "Invalid callback passed");
@@ -466,7 +458,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chatId, const strin
         }
 
         // Call the RAG engine's generate_streaming_chat_response method
-        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, generatorConfig, scopeId, callback, userData);
+        int32_t total_tokens = m_ragEngine->generate_streaming_chat_response(chatId, query, generatorConfig, callback, userData);
 
         if (total_tokens < 0)
         {

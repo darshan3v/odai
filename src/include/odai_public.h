@@ -33,10 +33,10 @@ extern "C"
 
   /// Initializes the SDK with database and backend engine configurations.
   /// Must be called before using any other SDK functions. Creates or opens the database at the specified path.
-  /// @param dbConfig Configuration structure containing the database type and path
-  /// @param backendEngineConfig Configuration structure specifying which backend engine to use
+  /// @param db_config Configuration structure containing the database type and path
+  /// @param backend_ engine_config Configuration structure specifying which backend engine to use
   /// @return true if initialization succeeded, false otherwise
-  ODAI_API bool odai_initialize_sdk(const c_DBConfig *dbConfig, const c_BackendEngineConfig *backendEngineConfig);
+  ODAI_API bool odai_initialize_sdk(const c_DBConfig *db_config, const c_BackendEngineConfig *backend_engine_config);
 
     /// Registers a new model in the system with the given name and path.
   /// The model path is validated and a checksum is computed to ensure integrity.
@@ -143,12 +143,11 @@ extern "C"
   /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the query and generate response
   /// @param chat_id The unique identifier of the chat session
   /// @param query The input query/message to generate a response for
-  /// @param generator_config Configuration for the generator (Sampler, RAG settings, etc.)
-  /// @param scope_id Scope identifier to filter documents during RAG retrieval (ignored if RAG is disabled in config)
+  /// @param generator_config Configuration for the generator (Sampler, RAG settings including scope_id, etc.)
   /// @param callback Function called for each generated token
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return true if response was generated successfully, false on error or if callback returns false to cancel streaming
-  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_GeneratorConfig* generator_config, const c_ScopeId scope_id,
+  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char *query, const c_GeneratorConfig* generator_config,
                                                       odai_stream_resp_callback_fn callback, void *user_data);
 
   /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).

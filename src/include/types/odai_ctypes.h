@@ -134,6 +134,7 @@ struct c_GeneratorRagConfig
 {
     struct c_RetrievalConfig retrievalConfig;
     c_SemanticSpaceName semanticSpaceName;
+    c_ScopeId scopeId;
 };
 
 /// C-style configuration structure for Sampler (LLM generation parameters).
@@ -164,7 +165,6 @@ struct c_ChatConfig
     const char* system_prompt;
     /// Configuration for the language model used in this chat session
     struct c_LLMModelConfig llmModelConfig;
-    // sampler params and scopeid can probably be here but also be overidable during chat 
 };
 
 /// C-style structure for chat messages.

@@ -55,7 +55,7 @@ public:
     /// @param callback Function called for each chunk of generated text
     /// @param user_data User-provided data passed to the callback function
     /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generator_config, const ScopeId &scope_id,
+    int32_t generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generator_config,
                                             odai_stream_resp_callback_fn callback, void *user_data);
 
     /// Unloads the chat session from memory, freeing up resources.

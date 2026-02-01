@@ -94,6 +94,7 @@ inline bool is_sane(const struct c_GeneratorRagConfig* config)
     if (config == nullptr) return false;
     if (!is_sane(&config->retrievalConfig)) return false;
     if (config->semanticSpaceName == nullptr) return false;
+    if (config->scopeId == nullptr) return false;
     return true;
 }
 

@@ -205,6 +205,8 @@ struct GeneratorRagConfig
 {
     RetrievalConfig retrievalConfig;
     SemanticSpaceName semanticSpaceName;
+    ScopeId scopeId;
+
 
     bool is_sane() const
     {
@@ -212,7 +214,10 @@ struct GeneratorRagConfig
             return false;
         if (semanticSpaceName.empty())
             return false;
+        if (scopeId.empty())
+            return false;
         return true;
+
     }
 };
 

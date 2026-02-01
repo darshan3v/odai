@@ -121,7 +121,7 @@ public:
     /// @param callback Function called for each generated token
     /// @param userData User-provided data pointer passed to the callback function
     /// @return true if response was generated successfully, false on error
-    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig, const ScopeId& scopeId,
+    bool generate_streaming_chat_response(const ChatId& chatId, const string& query, const GeneratorConfig& generatorConfig,
                                       odai_stream_resp_callback_fn callback, void *userData);
 
     /// Unloads the chat session from memory, freeing up resources.

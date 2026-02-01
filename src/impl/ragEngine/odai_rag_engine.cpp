@@ -100,36 +100,10 @@ bool ODAIRagEngine::load_chat_session(const ChatId &chat_id)
         return false;
     }
 
-    ModelPath modelPath;
-    if(!resolve_model_path(chat_config.llmModelConfig.modelName, modelPath))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to resolve model path for chat {}", chat_id);
-        return false;
-    }
-
-    if (!m_backendEngine->load_language_model(modelPath, chat_config.llmModelConfig))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat {}, error : failed to load language Model", chat_id);
-        return false;
-    }
-
-    vector<ChatMessage> messages;
-    if (!m_db->get_chat_history(chat_id, messages))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat history for chat_id: {}", chat_id);
-        return false;
-    }
-
-    if (!m_backendEngine->load_chat_messages_into_context(chat_id, messages))
-    {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat history into context for chat_id: {}", chat_id);
-        return false;
-    }
-
-    return true;
+    return this->ensure_chat_session_loaded(chat_id, chat_config);
 }
 
-int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generatorConfig, const ScopeId &scope_id,
+int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, const string &prompt, const GeneratorConfig &generatorConfig,
                                                         odai_stream_resp_callback_fn callback, void *user_data)
 {
     if (callback == nullptr)
@@ -158,12 +132,6 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
 
         const auto& ragConfig = *generatorConfig.ragConfig;
 
-        if (scope_id.empty())
-        {
-            ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but scope_id is empty", chat_id);
-            return -1;
-        }
-
         if (ragConfig.semanticSpaceName.empty())
         {
              ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but semantic_space_name is empty", chat_id);
@@ -181,7 +149,7 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId &chat_id, c
         // ToDo -> Implement context retrieval from knowledge base based on scope_id, using embedding model from spaceConfig
         // Load embedding model from spaceConfig and do similarity check and retrieve according to retrieval strategy
         // string context = retrieve_context_from_knowledge_base(scope_id, prompt, spaceConfig);
-        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id, ragConfig.semanticSpaceName, scope_id);
+        ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id, ragConfig.semanticSpaceName, ragConfig.scopeId);
     }
 
     if (!this->ensure_chat_session_loaded(chat_id, chat_config))
