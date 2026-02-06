@@ -78,9 +78,9 @@ int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
   }
 
   ModelPath model_path;
-  if (!this->resolve_model_path(llm_model_config.m_model_name, model_path))
+  if (!this->resolve_model_path(llm_model_config.m_modelName, model_path))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve path for model: {}", llm_model_config.m_model_name);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve path for model: {}", llm_model_config.m_modelName);
     return -1;
   }
 
@@ -126,17 +126,17 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   // Check RAG settings: if RAG is enabled but scope_id is empty, return error
   // Check RAG settings: if RAG is enabled but scope_id is empty, return error
-  if (generator_config.m_rag_mode != RAG_MODE_NEVER)
+  if (generator_config.m_ragMode != RAG_MODE_NEVER)
   {
-    if (!generator_config.m_rag_config.has_value())
+    if (!generator_config.m_ragConfig.has_value())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but ragConfig is missing");
       return -1;
     }
 
-    const auto& rag_config = *generator_config.m_rag_config;
+    const auto& rag_config = *generator_config.m_ragConfig;
 
-    if (rag_config.m_semantic_space_name.empty())
+    if (rag_config.m_semanticSpaceName.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled for chat_id: {} but semantic_space_name is empty", chat_id);
       return -1;
@@ -144,10 +144,10 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
     // Retrieve and validate Semantic Space Config
     SemanticSpaceConfig space_config;
-    if (!m_db->get_semantic_space_config(rag_config.m_semantic_space_name, space_config))
+    if (!m_db->get_semantic_space_config(rag_config.m_semanticSpaceName, space_config))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "RAG is enabled but failed to retrieve semantic space config for: {}",
-               rag_config.m_semantic_space_name);
+               rag_config.m_semanticSpaceName);
       return -1;
     }
 
@@ -157,7 +157,7 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     // retrieval strategy string context =
     // retrieve_context_from_knowledge_base(scope_id, prompt, spaceConfig);
     ODAI_LOG(ODAI_LOG_DEBUG, "RAG is enabled for chat_id: {} with space: {} and scope_id: {}", chat_id,
-             rag_config.m_semantic_space_name, rag_config.m_scope_id);
+             rag_config.m_semanticSpaceName, rag_config.m_scopeId);
   }
 
   if (!this->ensure_chat_session_loaded(chat_id, chat_config))
@@ -170,9 +170,9 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   string final_prompt = prompt; // Placeholder until context retrieval is implemented
 
   StreamingBufferContext buffer_ctx;
-  buffer_ctx.m_user_callback = callback;
-  buffer_ctx.m_user_data = user_data;
-  buffer_ctx.m_buffered_response = "";
+  buffer_ctx.m_userCallback = callback;
+  buffer_ctx.m_userData = user_data;
+  buffer_ctx.m_bufferedResponse = "";
 
   // Internal callback that buffers output and forwards to user callback
   auto internal_callback = [](const char* token, void* user_data) -> bool
@@ -183,15 +183,15 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     StreamingBufferContext* ctx = static_cast<StreamingBufferContext*>(user_data);
 
     // Buffer the token
-    ctx->m_buffered_response += string(token);
+    ctx->m_bufferedResponse += string(token);
 
     // Forward to user callback for streaming
-    return ctx->m_user_callback(token, ctx->m_user_data);
+    return ctx->m_userCallback(token, ctx->m_userData);
   };
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      chat_id, final_prompt, generator_config.m_sampler_config, internal_callback, &buffer_ctx);
+      chat_id, final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {
@@ -205,15 +205,15 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   ChatMessage user_msg;
   user_msg.m_role = "user";
   user_msg.m_content = prompt;
-  user_msg.m_message_metadata = json::object();
+  user_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(user_msg);
 
   // ToDo in message_metadata add citations if any from RAG context
 
   ChatMessage assistant_msg;
   assistant_msg.m_role = "assistant";
-  assistant_msg.m_content = buffer_ctx.m_buffered_response;
-  assistant_msg.m_message_metadata = json::object();
+  assistant_msg.m_content = buffer_ctx.m_bufferedResponse;
+  assistant_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(assistant_msg);
 
   if (!m_db->begin_transaction())
@@ -280,13 +280,13 @@ bool ODAIRagEngine::ensure_chat_session_loaded(const ChatId& chat_id, const Chat
   // This call handles checking if the model is already loaded (fast path),
   // and if not, it loads it and CLEARS existing contexts (slow path).
   ModelPath model_path;
-  if (!resolve_model_path(chat_config.m_llm_model_config.m_model_name, model_path))
+  if (!resolve_model_path(chat_config.m_llmModelConfig.m_modelName, model_path))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to resolve model path for chat {}", chat_id);
     return false;
   }
 
-  if (!m_backendEngine->load_language_model(model_path, chat_config.m_llm_model_config))
+  if (!m_backendEngine->load_language_model(model_path, chat_config.m_llmModelConfig))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat {}, error : failed to load language Model", chat_id);
     return false;

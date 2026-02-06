@@ -97,13 +97,12 @@ c_ChatMessage to_c(const ChatMessage& cpp);
 /// Defines JSON serialization for LLMModelConfig.
 /// Enables automatic conversion between LLMModelConfig and JSON using
 /// nlohmann/json.
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LLMModelConfig, m_model_name)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(EmbeddingModelConfig, m_model_name)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FixedSizeChunkingConfig, m_chunk_size, m_chunk_overlap)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LLMModelConfig, m_modelName)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(EmbeddingModelConfig, m_modelName)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FixedSizeChunkingConfig, m_chunkSize, m_chunkOverlap)
 
 void to_json(json& j, const ChunkingConfig& p);
 void from_json(const json& j, ChunkingConfig& p);
 
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, m_name, m_embedding_model_config, m_chunking_config,
-                                   m_dimensions)
-NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ChatConfig, m_persistence, m_system_prompt, m_llm_model_config)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, m_name, m_embeddingModelConfig, m_chunkingConfig, m_dimensions)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ChatConfig, m_persistence, m_systemPrompt, m_llmModelConfig)

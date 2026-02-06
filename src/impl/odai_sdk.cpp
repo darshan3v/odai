@@ -62,7 +62,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
       return false;
     }
 
-    if (db_config.m_db_type == SQLITE_DB)
+    if (db_config.m_dbType == SQLITE_DB)
     {
       m_db = std::make_unique<ODAISqliteDb>(db_config);
     }
@@ -70,7 +70,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
     if ((m_db.get() == nullptr) || (!m_db->initialize_db()))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize db");
-      m_sdk_initialized = false;
+      m_sdkInitialized = false;
       return false;
     }
 
@@ -81,34 +81,34 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
     }
 
     // Initialize the backend engine based on engineType
-    if (backend_config.m_engine_type == LLAMA_BACKEND_ENGINE)
-      m_backend_engine = std::make_unique<ODAILlamaEngine>(backend_config);
+    if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
+      m_backendEngine = std::make_unique<ODAILlamaEngine>(backend_config);
 
-    if ((m_backend_engine.get() == nullptr) || (!m_backend_engine->initialize_engine()))
+    if ((m_backendEngine.get() == nullptr) || (!m_backendEngine->initialize_engine()))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize backend engine");
-      m_sdk_initialized = false;
+      m_sdkInitialized = false;
       return false;
     }
 
     // Initalize the RAGEngine
-    m_rag_engine = make_unique<ODAIRagEngine>(m_db.get(), m_backend_engine.get());
+    m_ragEngine = make_unique<ODAIRagEngine>(m_db.get(), m_backendEngine.get());
 
-    if ((m_rag_engine.get() == nullptr))
+    if ((m_ragEngine.get() == nullptr))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine");
-      m_sdk_initialized = false;
+      m_sdkInitialized = false;
       return false;
     }
 
-    m_sdk_initialized = true;
+    m_sdkInitialized = true;
     ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK Initialized successfully");
     return true;
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    m_sdk_initialized = false;
+    m_sdkInitialized = false;
     return false;
   }
 }
@@ -117,13 +117,13 @@ bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, Model
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
     }
 
-    return m_rag_engine->register_model(name, path, type);
+    return m_ragEngine->register_model(name, path, type);
   }
   catch (...)
   {
@@ -136,13 +136,13 @@ bool ODAISdk::update_model_path(const ModelName& name, const ModelPath& path)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
     }
 
-    return m_rag_engine->update_model_path(name, path);
+    return m_ragEngine->update_model_path(name, path);
   }
   catch (...)
   {
@@ -155,7 +155,7 @@ bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -182,7 +182,7 @@ bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticS
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -201,7 +201,7 @@ bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -220,7 +220,7 @@ bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -240,7 +240,7 @@ bool ODAISdk::add_document(const string& content, const DocumentId& document_id,
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -266,7 +266,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_con
   try
   {
 
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return -1;
@@ -297,7 +297,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_con
     }
 
     int32_t total_tokens =
-        m_rag_engine->generate_streaming_response(llm_model_config, query, sampler_config, callback, user_data);
+        m_ragEngine->generate_streaming_response(llm_model_config, query, sampler_config, callback, user_data);
     if (total_tokens < 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");
@@ -317,7 +317,7 @@ bool ODAISdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -368,7 +368,7 @@ bool ODAISdk::load_chat(const ChatId& chat_id)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -380,7 +380,7 @@ bool ODAISdk::load_chat(const ChatId& chat_id)
       return false;
     }
 
-    if (!m_rag_engine->load_chat_session(chat_id))
+    if (!m_ragEngine->load_chat_session(chat_id))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat session, chat_id: {}", chat_id);
       return false;
@@ -399,7 +399,7 @@ bool ODAISdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messa
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -432,7 +432,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const stri
   try
   {
     // Sanity check: SDK initialization
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -464,7 +464,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const stri
 
     // Call the RAG engine's generate_streaming_chat_response method
     int32_t total_tokens =
-        m_rag_engine->generate_streaming_chat_response(chat_id, query, generator_config, callback, user_data);
+        m_ragEngine->generate_streaming_chat_response(chat_id, query, generator_config, callback, user_data);
 
     if (total_tokens < 0)
     {
@@ -495,7 +495,7 @@ bool ODAISdk::unload_chat(const ChatId& chat_id)
 {
   try
   {
-    if (!m_sdk_initialized)
+    if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
       return false;
@@ -507,7 +507,7 @@ bool ODAISdk::unload_chat(const ChatId& chat_id)
       return false;
     }
 
-    return m_rag_engine->unload_chat_session(chat_id);
+    return m_ragEngine->unload_chat_session(chat_id);
   }
   catch (...)
   {

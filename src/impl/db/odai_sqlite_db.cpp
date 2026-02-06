@@ -17,7 +17,7 @@ extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_ap
 
 ODAISqliteDb::ODAISqliteDb(const DBConfig& db_config)
 {
-  this->m_db_path = db_config.m_db_path;
+  this->m_dbPath = db_config.m_dbPath;
 }
 
 bool ODAISqliteDb::register_vec_extension()
@@ -59,16 +59,16 @@ bool ODAISqliteDb::initialize_db()
     bool initialize_schema = false;
 
     // Check if DB file exists
-    if (!filesystem::exists(m_db_path))
+    if (!filesystem::exists(m_dbPath))
     {
       initialize_schema = true;
-      ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_db_path);
+      ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_dbPath);
     }
 
     // create db object only after registering sqlite-vec extension
-    m_db = std::make_unique<SQLite::Database>(m_db_path, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+    m_db = std::make_unique<SQLite::Database>(m_dbPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
-    ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_db_path);
+    ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_dbPath);
 
     if (initialize_schema)
     {
@@ -80,7 +80,7 @@ bool ODAISqliteDb::initialize_db()
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_db_path, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_dbPath, e.what());
     return false;
   }
 }
@@ -95,8 +95,8 @@ bool ODAISqliteDb::begin_transaction()
       return false;
     }
 
-    m_transaction_depth++;
-    if (m_transaction_depth == 1)
+    m_transactionDepth++;
+    if (m_transactionDepth == 1)
     {
       // Start the physical transaction
       m_transaction = std::make_unique<SQLite::Transaction>(*m_db);
@@ -106,13 +106,13 @@ bool ODAISqliteDb::begin_transaction()
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to begin transaction: {}", e.what());
-    if (m_transaction_depth == 1)
+    if (m_transactionDepth == 1)
     {
-      m_transaction_depth = 0;
+      m_transactionDepth = 0;
       m_transaction.reset();
     }
     else
-      m_transaction_depth--;
+      m_transactionDepth--;
     return false;
   }
 }
@@ -127,10 +127,10 @@ bool ODAISqliteDb::commit_transaction()
       return false;
     }
 
-    if (m_transaction_depth > 0)
+    if (m_transactionDepth > 0)
     {
-      m_transaction_depth--;
-      if (m_transaction_depth == 0)
+      m_transactionDepth--;
+      if (m_transactionDepth == 0)
       {
         // Commit the physical transaction
         if (m_transaction)
@@ -166,13 +166,13 @@ bool ODAISqliteDb::rollback_transaction()
     // Regardless of depth, we roll back everything
     // Destroying the Transaction object safely rolls it back if not committed
     m_transaction.reset();
-    m_transaction_depth = 0;
+    m_transactionDepth = 0;
     return true;
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
-    m_transaction_depth = 0;
+    m_transactionDepth = 0;
     return false;
   }
 }
@@ -476,8 +476,8 @@ bool ODAISqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_con
     // Insert system prompt as initial message
     ChatMessage system_msg;
     system_msg.m_role = "system";
-    system_msg.m_content = chat_config.m_system_prompt;
-    system_msg.m_message_metadata = {};
+    system_msg.m_content = chat_config.m_systemPrompt;
+    system_msg.m_messageMetadata = {};
     insert_chat_messages(chat_id, {system_msg});
 
     commit_transaction();
@@ -572,15 +572,15 @@ bool ODAISqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
       // Handle NULL message_metadata by defaulting to empty JSON object
       if (metadata_col.isNull())
       {
-        msg.m_message_metadata = {};
+        msg.m_messageMetadata = {};
       }
       else
       {
-        msg.m_message_metadata = json::parse(metadata_col.getString());
+        msg.m_messageMetadata = json::parse(metadata_col.getString());
       }
 
       // Cast to uint64_t since Unix timestamps are always non-negative
-      msg.m_created_at = static_cast<uint64_t>(created_at_col.getInt64());
+      msg.m_createdAt = static_cast<uint64_t>(created_at_col.getInt64());
 
       messages.push_back(msg);
     }
@@ -632,7 +632,7 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
         insert_message.bind(":chat_id", chat_id);
         insert_message.bind(":role", msg.m_role);
         insert_message.bind(":content", msg.m_content);
-        insert_message.bind(":message_metadata", msg.m_message_metadata.dump());
+        insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
         insert_message.exec();
         insert_message.reset(); // Reset for next iteration
         insert_message.clearBindings();

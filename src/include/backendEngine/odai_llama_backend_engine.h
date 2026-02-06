@@ -52,7 +52,7 @@ struct ChatSessionLLMContext
   /// Llama context with loaded KV cache for the chat session
   unique_ptr<llama_context, LlamaContextDeleter> m_context;
 
-  LLMModelConfig m_llm_model_config;
+  LLMModelConfig m_llmModelConfig;
 };
 
 /// Llama.cpp-based implementation of the backend engine for model loading and
@@ -136,24 +136,24 @@ public:
   ~ODAILlamaEngine() override;
 
 private:
-  bool m_is_initialized = false;
+  bool m_isInitialized = false;
 
-  EmbeddingModelConfig m_embedding_model_config;
-  LLMModelConfig m_llm_model_config;
+  EmbeddingModelConfig m_embeddingModelConfig;
+  LLMModelConfig m_llmModelConfig;
 
-  ModelPath m_current_embedding_model_path;
-  ModelPath m_current_llm_model_path;
+  ModelPath m_currentEmbeddingModelPath;
+  ModelPath m_currentLlmModelPath;
 
-  unique_ptr<llama_model, LlamaModelDeleter> m_embedding_model = nullptr;
-  unique_ptr<llama_model, LlamaModelDeleter> m_llm_model = nullptr;
+  unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
+  unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
 
   // managed automatically by llama.cpp
   // so no need of unique_ptr
-  const llama_vocab* m_llm_vocab = nullptr;
+  const llama_vocab* m_llmVocab = nullptr;
 
   /// Unordered map to store cached chat session data keyed by chat_id
   /// Each entry contains the context with KV cache, sampler, and metadata
-  unordered_map<ChatId, ChatSessionLLMContext> m_chat_context;
+  unordered_map<ChatId, ChatSessionLLMContext> m_chatContext;
 
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for

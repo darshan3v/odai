@@ -14,8 +14,8 @@ class ODAILogger
 
 private:
   OdaiLogCallbackFn m_callback = nullptr;
-  void* m_user_data = nullptr;
-  OdaiLogLevel m_log_level = ODAI_LOG_INFO;
+  void* m_userData = nullptr;
+  OdaiLogLevel m_logLevel = ODAI_LOG_INFO;
 
 public:
   /// Sets the logging callback function and user data pointer.
@@ -48,14 +48,14 @@ public:
       if (!this->m_callback)
         return;
 
-      if (level > this->m_log_level)
+      if (level > this->m_logLevel)
         return;
 
       std::string msg = format(fmt, std::forward<Args>(args)...);
 
       msg.insert(0, "[odai] ");
 
-      this->m_callback(level, msg.c_str(), this->m_user_data);
+      this->m_callback(level, msg.c_str(), this->m_userData);
     }
     catch (...)
     {

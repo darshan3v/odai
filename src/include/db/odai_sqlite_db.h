@@ -21,10 +21,10 @@ class ODAISqliteDb : public ODAIDb
 {
 
 private:
-  string m_db_path;
+  string m_dbPath;
   unique_ptr<SQLite::Database> m_db = nullptr;
 
-  int m_transaction_depth = 0;
+  int m_transactionDepth = 0;
   std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
 
   /// Registers the sqlite-vec extension and opens the database connection.

@@ -40,18 +40,18 @@ enum ModelType
 struct DBConfig
 {
   /// Database type to use (SQLITE_DB, POSTGRES_DB, etc.)
-  DBType m_db_type;
+  DBType m_dbType;
   /// Path to the database file (for SQLite) or connection string (for other
   /// backends). Must be a full file system path for SQLite. Content URIs (e.g.,
   /// Android content:// URIs) are not supported.
-  string m_db_path;
+  string m_dbPath;
 
   bool is_sane() const
   {
-    if (m_db_path.empty())
+    if (m_dbPath.empty())
       return false;
 
-    if (m_db_type != SQLITE_DB)
+    if (m_dbType != SQLITE_DB)
       return false;
 
     return true;
@@ -63,11 +63,11 @@ struct DBConfig
 struct BackendEngineConfig
 {
   /// Backend engine type (e.g., LLAMA_BACKEND_ENGINE)
-  BackendEngineType m_engine_type;
+  BackendEngineType m_engineType;
 
   bool is_sane() const
   {
-    if (m_engine_type != LLAMA_BACKEND_ENGINE)
+    if (m_engineType != LLAMA_BACKEND_ENGINE)
       return false;
 
     return true;
@@ -81,11 +81,11 @@ struct EmbeddingModelConfig
 {
   /// Name of the embedding model to use (must be registered via
   /// odai_register_model).
-  ModelName m_model_name;
+  ModelName m_modelName;
 
   bool is_sane() const
   {
-    if (m_model_name.empty())
+    if (m_modelName.empty())
       return false;
 
     return true;
@@ -98,11 +98,11 @@ struct LLMModelConfig
 {
   /// Name of the language model to use (must be registered via
   /// odai_register_model).
-  ModelName m_model_name;
+  ModelName m_modelName;
 
   bool is_sane() const
   {
-    if (m_model_name.empty())
+    if (m_modelName.empty())
       return false;
 
     return true;
@@ -112,14 +112,14 @@ struct LLMModelConfig
 /// Configuration for Fixed Size Chunking Strategy
 struct FixedSizeChunkingConfig
 {
-  uint32_t m_chunk_size = DEFAULT_CHUNKING_SIZE;
-  uint32_t m_chunk_overlap = DEFAULT_CHUNKING_OVERLAP;
+  uint32_t m_chunkSize = DEFAULT_CHUNKING_SIZE;
+  uint32_t m_chunkOverlap = DEFAULT_CHUNKING_OVERLAP;
 
   bool is_sane() const
   {
-    if (m_chunk_size == 0)
+    if (m_chunkSize == 0)
       return false;
-    if (m_chunk_overlap >= m_chunk_size)
+    if (m_chunkOverlap >= m_chunkSize)
       return false;
     return true;
   }
@@ -150,17 +150,17 @@ struct ChunkingConfig
 struct SemanticSpaceConfig
 {
   SemanticSpaceName m_name;
-  EmbeddingModelConfig m_embedding_model_config;
-  ChunkingConfig m_chunking_config;
+  EmbeddingModelConfig m_embeddingModelConfig;
+  ChunkingConfig m_chunkingConfig;
   uint32_t m_dimensions;
 
   bool is_sane() const
   {
     if (m_name.empty())
       return false;
-    if (!m_embedding_model_config.is_sane())
+    if (!m_embeddingModelConfig.is_sane())
       return false;
-    if (!m_chunking_config.is_sane())
+    if (!m_chunkingConfig.is_sane())
       return false;
     // dimensions == 0 means auto-infer from model
 
@@ -173,23 +173,23 @@ struct SemanticSpaceConfig
 struct RetrievalConfig
 {
   /// How many maximum final chunks to give the LLM?
-  uint32_t m_top_k;
+  uint32_t m_topK;
   /// How many maximum candidates to fetch initially (before reranking)?
-  uint32_t m_fetch_k;
+  uint32_t m_fetchK;
   /// Minimum similarity score (0.0 to 1.0). Discard irrelevant noise.
-  float m_score_threshold;
+  float m_scoreThreshold;
   /// Search Strategy type (VECTOR_ONLY, KEYWORD_ONLY, or HYBRID).
-  SearchType m_search_type;
+  SearchType m_searchType;
   /// Should we run a cross-encoder? (Expensive but accurate)
-  bool m_use_reranker;
+  bool m_useReranker;
   /// If Chunk 5 is a hit, do we also grab Chunk 4 and 6?
-  uint32_t m_context_window;
+  uint32_t m_contextWindow;
 
   bool is_sane() const
   {
-    if (m_top_k == 0)
+    if (m_topK == 0)
       return false;
-    if (m_score_threshold < 0.0f || m_score_threshold > 1.0f)
+    if (m_scoreThreshold < 0.0f || m_scoreThreshold > 1.0f)
       return false;
 
     return true;
@@ -200,17 +200,17 @@ struct RetrievalConfig
 /// Uses SemanticSpaceName to reference an existing space.
 struct GeneratorRagConfig
 {
-  RetrievalConfig m_retrieval_config;
-  SemanticSpaceName m_semantic_space_name;
-  ScopeId m_scope_id;
+  RetrievalConfig m_retrievalConfig;
+  SemanticSpaceName m_semanticSpaceName;
+  ScopeId m_scopeId;
 
   bool is_sane() const
   {
-    if (!m_retrieval_config.is_sane())
+    if (!m_retrievalConfig.is_sane())
       return false;
-    if (m_semantic_space_name.empty())
+    if (m_semanticSpaceName.empty())
       return false;
-    if (m_scope_id.empty())
+    if (m_scopeId.empty())
       return false;
     return true;
   }
@@ -220,14 +220,14 @@ struct GeneratorRagConfig
 /// Includes full SemanticSpaceConfig definition.
 struct RagGenerationConfig
 {
-  RetrievalConfig m_retrieval_config;
-  SemanticSpaceConfig m_semantic_space_config;
+  RetrievalConfig m_retrievalConfig;
+  SemanticSpaceConfig m_semanticSpaceConfig;
 
   bool is_sane() const
   {
-    if (!m_retrieval_config.is_sane())
+    if (!m_retrievalConfig.is_sane())
       return false;
-    if (!m_semantic_space_config.is_sane())
+    if (!m_semanticSpaceConfig.is_sane())
       return false;
     return true;
   }
@@ -237,17 +237,17 @@ struct RagGenerationConfig
 /// Defines token limits, and sampling strategies.
 struct SamplerConfig
 {
-  uint32_t m_max_tokens = DEFAULT_MAX_TOKENS;
-  float m_top_p = DEFAULT_TOP_P;
-  uint32_t m_top_k = DEFAULT_TOP_K;
+  uint32_t m_maxTokens = DEFAULT_MAX_TOKENS;
+  float m_topP = DEFAULT_TOP_P;
+  uint32_t m_topK = DEFAULT_TOP_K;
 
   bool is_sane() const
   {
-    if (m_max_tokens == 0)
+    if (m_maxTokens == 0)
       return false;
-    if (m_top_p < 0.0f || m_top_p > 1.0f)
+    if (m_topP < 0.0f || m_topP > 1.0f)
       return false;
-    if (m_top_k <= 0)
+    if (m_topK <= 0)
       return false;
 
     return true;
@@ -257,25 +257,25 @@ struct SamplerConfig
 /// Configuration for Generator
 struct GeneratorConfig
 {
-  SamplerConfig m_sampler_config;
-  RagMode m_rag_mode;
-  std::optional<GeneratorRagConfig> m_rag_config;
+  SamplerConfig m_samplerConfig;
+  RagMode m_ragMode;
+  std::optional<GeneratorRagConfig> m_ragConfig;
 
   bool is_sane() const
   {
-    if (!m_sampler_config.is_sane())
+    if (!m_samplerConfig.is_sane())
       return false;
 
-    if (m_rag_mode == RAG_MODE_NEVER)
+    if (m_ragMode == RAG_MODE_NEVER)
     {
-      if (m_rag_config.has_value())
+      if (m_ragConfig.has_value())
         return false;
     }
     else // ALWAYS or DYNAMIC
     {
-      if (!m_rag_config.has_value())
+      if (!m_ragConfig.has_value())
         return false;
-      if (!m_rag_config->is_sane())
+      if (!m_ragConfig->is_sane())
         return false;
     }
 
@@ -292,15 +292,15 @@ struct ChatConfig
   /// Whether chat messages should be persisted to the database
   bool m_persistence;
   /// System prompt that defines the assistant's behavior and instructions
-  string m_system_prompt;
+  string m_systemPrompt;
   /// Configuration for the language model used in this chat session
-  LLMModelConfig m_llm_model_config;
+  LLMModelConfig m_llmModelConfig;
 
   bool is_sane() const
   {
-    if (m_system_prompt.empty())
+    if (m_systemPrompt.empty())
       return false;
-    if (!m_llm_model_config.is_sane())
+    if (!m_llmModelConfig.is_sane())
       return false;
 
     return true;
@@ -316,9 +316,9 @@ struct ChatMessage
   /// The message content text
   string m_content;
   /// JSON object for additional metadata (citations, context, etc.)
-  json m_message_metadata;
+  json m_messageMetadata;
   /// Unix timestamp when the message was created
-  uint64_t m_created_at;
+  uint64_t m_createdAt;
 
   bool is_sane() const
   {
@@ -333,7 +333,7 @@ struct ChatMessage
 
 struct StreamingBufferContext
 {
-  string m_buffered_response;
-  OdaiStreamRespCallbackFn m_user_callback;
-  void* m_user_data;
+  string m_bufferedResponse;
+  OdaiStreamRespCallbackFn m_userCallback;
+  void* m_userData;
 };

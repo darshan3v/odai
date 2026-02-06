@@ -63,7 +63,7 @@ extern "C"
   /// @param name The name of the semantic space to retrieve.
   /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
   /// @return true if found, false on error.
-  ODAI_API bool odai_get_semantic_space(const c_SemanticSpaceName name, c_SemanticSpaceConfig* config_out);
+  ODAI_API bool odai_get_semantic_space(const c_SemanticSpaceName NAME, c_SemanticSpaceConfig* config_out);
 
   /// Frees members allocated by odai_get_semantic_space
   /// @param config pointer to c_SemanticSpaceConfig struct to free .
@@ -84,7 +84,7 @@ extern "C"
   /// Deletes a semantic space configuration.
   /// @param name The name of the semantic space to delete.
   /// @return true if deleted successfully, false on error.
-  ODAI_API bool odai_delete_semantic_space(const c_SemanticSpaceName name);
+  ODAI_API bool odai_delete_semantic_space(const c_SemanticSpaceName NAME);
 
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// The document content is embedded and stored in the database for later retrieval.
@@ -94,8 +94,8 @@ extern "C"
   /// @param semantic_space_name Name of the semantic space to use
   /// @param scope_id Scope identifier to group documents (used for filtering during retrieval)
   /// @return true if document was added successfully, false otherwise
-  ODAI_API bool odai_add_document(const char* content, const c_DocumentId document_id,
-                                  const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id);
+  ODAI_API bool odai_add_document(const char* content, const c_DocumentId DOCUMENT_ID,
+                                  const c_SemanticSpaceName SEMANTIC_SPACE_NAME, const c_ScopeId SCOPE_ID);
 
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG
@@ -121,14 +121,14 @@ extern "C"
   /// @param chat_id_out_len Pointer to the size of chat_id_out buffer (input), updated with actual length written
   /// (output)
   /// @return true if chat session was created successfully, false otherwise
-  ODAI_API bool odai_create_chat(const c_ChatId chat_id_in, const c_ChatConfig* chat_config, c_ChatId chat_id_out,
+  ODAI_API bool odai_create_chat(const c_ChatId CHAT_ID_IN, const c_ChatConfig* chat_config, c_ChatId chat_id_out,
                                  size_t* chat_id_out_len);
 
   /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
   /// Its only purpose is to pre-load a existing chat
   /// @param chat_id The unique identifier of the chat session to load
   /// @return true if chat session was loaded successfully, false if chat_id not found or on error
-  ODAI_API bool odai_load_chat(const c_ChatId chat_id);
+  ODAI_API bool odai_load_chat(const c_ChatId CHAT_ID);
 
   /// Retrieves all chat messages for the specified chat session.
   /// Messages are returned in chronological order.
@@ -137,7 +137,7 @@ extern "C"
   /// @param messages_out Output parameter: pointer to array of i_ChatMessage (allocated by this function)
   /// @param messages_count Output parameter: number of messages retrieved
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error
-  ODAI_API bool odai_get_chat_history(const c_ChatId chat_id, c_ChatMessage** messages_out, size_t* messages_count);
+  ODAI_API bool odai_get_chat_history(const c_ChatId CHAT_ID, c_ChatMessage** messages_out, size_t* messages_count);
 
   /// Frees memory allocated for an array of i_ChatMessage structures.
   /// Should be called after odai_get_chat_history to free allocated strings.
@@ -155,14 +155,14 @@ extern "C"
   /// @param user_data User-provided data pointer passed to the callback function
   /// @return true if response was generated successfully, false on error or if callback returns false to cancel
   /// streaming
-  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId chat_id, const char* query,
+  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId CHAT_ID, const char* query,
                                                       const c_GeneratorConfig* generator_config,
                                                       OdaiStreamRespCallbackFn callback, void* user_data);
 
   /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).
   /// @param chat_id The unique identifier of the chat session to unload
   /// @return true if chat session was unloaded successfully, false on error
-  ODAI_API bool odai_unload_chat(const c_ChatId chat_id);
+  ODAI_API bool odai_unload_chat(const c_ChatId CHAT_ID);
 
 #ifdef __cplusplus
 }

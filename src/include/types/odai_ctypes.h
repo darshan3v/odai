@@ -29,10 +29,10 @@ typedef uint32_t c_ModelType;
 struct c_DbConfig
 {
   /// Database type to use (SQLITE_DB, etc.)
-  DBType m_db_type;
+  DBType m_dbType;
   /// Path to the database file (for SQLite) or connection string (for other backends).
   /// Must be a full file system path for SQLite. Content URIs (e.g., Android content:// URIs) are not supported.
-  const char* m_db_path;
+  const char* m_dbPath;
 };
 
 /// C-style configuration for backend engine (LLM runtime).
@@ -40,7 +40,7 @@ struct c_DbConfig
 struct c_BackendEngineConfig
 {
   /// Backend engine type to use (e.g., LLAMA_BACKEND_ENGINE)
-  BackendEngineType m_engine_type;
+  BackendEngineType m_engineType;
 };
 
 /// C-style configuration structure for embedding models.
@@ -48,17 +48,17 @@ struct c_BackendEngineConfig
 struct c_EmbeddingModelConfig
 {
   /// Name of the Embedding model (must be registered).
-  c_ModelName m_model_name;
+  c_ModelName m_modelName;
 };
 
 inline void free_members(c_EmbeddingModelConfig* config)
 {
   if (config == nullptr)
     return;
-  if (config->m_model_name)
+  if (config->m_modelName)
   {
-    free(const_cast<char*>(config->m_model_name));
-    config->m_model_name = nullptr;
+    free(const_cast<char*>(config->m_modelName));
+    config->m_modelName = nullptr;
   }
 }
 
@@ -67,14 +67,14 @@ inline void free_members(c_EmbeddingModelConfig* config)
 struct c_LlmModelConfig
 {
   /// Name of the language model (must be registered).
-  c_ModelName m_model_name;
+  c_ModelName m_modelName;
 };
 
 /// C-style configuration for Fixed Size Chunking Strategy
 struct c_FixedSizeChunkingConfig
 {
-  uint32_t m_chunk_size;
-  uint32_t m_chunk_overlap;
+  uint32_t m_chunkSize;
+  uint32_t m_chunkOverlap;
 };
 
 /// C-style configuration for Chunking Strategy
@@ -83,7 +83,7 @@ struct c_ChunkingConfig
   ChunkingStrategy m_strategy;
   union
   {
-    struct c_FixedSizeChunkingConfig m_fixed_size_config;
+    struct c_FixedSizeChunkingConfig m_fixedSizeConfig;
   } m_config;
 };
 
@@ -96,8 +96,8 @@ inline void free_members(c_ChunkingConfig* config)
 struct c_SemanticSpaceConfig
 {
   c_SemanticSpaceName m_name;
-  struct c_EmbeddingModelConfig m_embedding_model_config;
-  struct c_ChunkingConfig m_chunking_config;
+  struct c_EmbeddingModelConfig m_embeddingModelConfig;
+  struct c_ChunkingConfig m_chunkingConfig;
   uint32_t m_dimensions;
 };
 
@@ -110,46 +110,46 @@ inline void free_members(c_SemanticSpaceConfig* config)
     free(const_cast<char*>(config->m_name));
     config->m_name = nullptr;
   }
-  free_members(&config->m_embedding_model_config);
-  free_members(&config->m_chunking_config);
+  free_members(&config->m_embeddingModelConfig);
+  free_members(&config->m_chunkingConfig);
 }
 
 /// C-style configuration structure for Retrieval system.
 /// Used for C API compatibility.
 struct c_RetrievalConfig
 {
-  uint32_t m_top_k;
-  uint32_t m_fetch_k;
-  float m_score_threshold;
-  SearchType m_search_type;
-  bool m_use_reranker;
-  uint32_t m_context_window;
+  uint32_t m_topK;
+  uint32_t m_fetchK;
+  float m_scoreThreshold;
+  SearchType m_searchType;
+  bool m_useReranker;
+  uint32_t m_contextWindow;
 };
 
 /// C-style configuration for RAG Generation (Runtime/Generator use)
 struct c_GeneratorRagConfig
 {
-  struct c_RetrievalConfig m_retrieval_config;
-  c_SemanticSpaceName m_semantic_space_name;
-  c_ScopeId m_scope_id;
+  struct c_RetrievalConfig m_retrievalConfig;
+  c_SemanticSpaceName m_semanticSpaceName;
+  c_ScopeId m_scopeId;
 };
 
 /// C-style configuration structure for Sampler (LLM generation parameters).
 /// Used for C API compatibility.
 struct c_SamplerConfig
 {
-  uint32_t m_max_tokens;
-  float m_top_p;
-  uint32_t m_top_k;
+  uint32_t m_maxTokens;
+  float m_topP;
+  uint32_t m_topK;
 };
 
 /// C-style configuration for Generator
 struct c_GeneratorConfig
 {
-  struct c_SamplerConfig m_sampler_config;
-  RagMode m_rag_mode;
+  struct c_SamplerConfig m_samplerConfig;
+  RagMode m_ragMode;
   // Optional configuration. Null if not used.
-  struct c_GeneratorRagConfig* m_rag_config;
+  struct c_GeneratorRagConfig* m_ragConfig;
 };
 
 /// C-style configuration structure for chat sessions.
@@ -159,9 +159,9 @@ struct c_ChatConfig
   /// Whether chat messages should be persisted to the database
   bool m_persistence;
   /// System prompt that defines the assistant's behavior and instructions.
-  const char* m_system_prompt;
+  const char* m_systemPrompt;
   /// Configuration for the language model used in this chat session
-  struct c_LlmModelConfig m_llm_model_config;
+  struct c_LlmModelConfig m_llmModelConfig;
 };
 
 /// C-style structure for chat messages.
@@ -173,9 +173,9 @@ struct c_ChatMessage
   /// The message content text (dynamically allocated, caller must free)
   char* m_content;
   /// JSON string containing additional metadata (citations, context, etc.) (dynamically allocated, caller must free)
-  char* m_message_metadata;
+  char* m_messageMetadata;
   /// Unix timestamp when the message was created
-  uint64_t m_created_at;
+  uint64_t m_createdAt;
 };
 
 inline void free_members(c_ChatMessage* message)
@@ -189,9 +189,9 @@ inline void free_members(c_ChatMessage* message)
     message->m_content = nullptr;
   }
 
-  if (message->m_message_metadata)
+  if (message->m_messageMetadata)
   {
-    free(message->m_message_metadata);
-    message->m_message_metadata = nullptr;
+    free(message->m_messageMetadata);
+    message->m_messageMetadata = nullptr;
   }
 }

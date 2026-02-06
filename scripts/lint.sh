@@ -94,7 +94,7 @@ if [ "$FIX_MODE" = true ]; then
     # -format: Formats changed code
     # -style=file: Uses .clang-format
     # -p: Compilation database path
-    clang-apply-replacements -format -style=file -p "$PROJECT_ROOT" "$FIX_DIR"
+    clang-apply-replacements -format -style=file "$FIX_DIR"
     
 else
     echo "Linting ${#FILES[@]} file(s)..."
