@@ -12,33 +12,24 @@ show_help() {
 ODAI Code Linter - Lint C/C++ source files using clang-tidy
 
 USAGE:
-    lint.sh [OPTIONS] [FILES...]
+    lint.sh [OPTIONS]
 
 OPTIONS:
-    --all       Lint all project source files (src/)
     --fix       Auto-fix issues where possible
     --help      Show this help message
 
 EXAMPLES:
-    lint.sh --all                       # Lint all project files
-    lint.sh --all --fix                 # Lint and auto-fix all files
-    lint.sh src/impl/odai_sdk.cpp       # Lint specific file
-    lint.sh --fix src/include/odai_sdk.h  # Lint and fix specific file
+    lint.sh                       # Lint all project files
+    lint.sh --fix                 # Lint and auto-fix all files
 
 REQUIREMENTS:
     - compile_commands.json must exist in build/
     - Run CMake first: cmake --preset debug
-
-FILES:
-    If no --all flag and no files specified, shows this help.
-    Only project files (src/) are processed.
 EOF
 }
 
 # Parse arguments
 FIX_MODE=false
-ALL_MODE=false
-FILES=()
 
 for arg in "$@"; do
     case $arg in
@@ -49,54 +40,75 @@ for arg in "$@"; do
         --fix)
             FIX_MODE=true
             ;;
-        --all)
-            ALL_MODE=true
-            ;;
         *)
-            FILES+=("$arg")
+            echo "Error: Unknown argument '$arg'"
+            show_help
+            exit 1
             ;;
     esac
 done
 
 # run cmake so that compile_commands.json is generated
-cmake --preset linux-release
+cmake --preset linux-release >/dev/null
 
 # Symlink compile_commands.json to project root if not exists
 ln -sf "$PROJECT_ROOT/build/compile_commands.json" "$PROJECT_ROOT/compile_commands.json"
 
 # Determine files to process
-if [ "$ALL_MODE" = true ]; then
-    # Only grab source files to ensure we have valid compilation database entries
-    FILES=$(find "$PROJECT_ROOT/src" -type f \( -name "*.cpp" -o -name "*.c" -o -name "*.cc" \) 2>/dev/null)
-elif [ ${#FILES[@]} -gt 0 ]; then
-    # If user passed specific files, filter them to keep only source files
-    VALID_SOURCES=""
-    for f in "${FILES[@]}"; do
-        if [[ "$f" =~ \.(cpp|c|cc)$ ]]; then
-            VALID_SOURCES="$VALID_SOURCES $f"
-        else
-            # Optional: Warn the user why the header isn't being passed directly
-            echo "Note: Skipping direct processing of $f (it will be checked via included source files)"
-        fi
-    done
-    FILES="$VALID_SOURCES"
-fi
+# Always grab source files
+FILES=($(find "$PROJECT_ROOT/src" -type f \( -name "*.cpp" -o -name "*.c" -o -name "*.cc" \) 2>/dev/null))
 
 if [ ${#FILES[@]} -eq 0 ]; then
-    echo "No files found to lint."
+    echo "No files found to lint in src/"
     exit 0
 fi
 
-# Build clang-tidy command
+# Build basic clang-tidy args
 # --header-filter: Only check headers in src/ (ignore dependencies)
 TIDY_ARGS=(-p "$PROJECT_ROOT" "--header-filter=$PROJECT_ROOT/src/.*")
 
 if [ "$FIX_MODE" = true ]; then
-    TIDY_ARGS+=(--fix --fix-notes)
     echo "Linting and fixing ${#FILES[@]} file(s)..."
+    
+    # Create temp directory for fixes
+    FIX_DIR="$PROJECT_ROOT/.clang-tidy-fixes"
+    mkdir -p "$FIX_DIR"
+    # Ensure cleanup on exit
+    trap 'rm -rf "$FIX_DIR"' EXIT
+
+    # Process files individually
+    for f in "${FILES[@]}"; do
+        # Generate a unique yaml filename based on the source path
+        REL_PATH="${f#$PROJECT_ROOT/}"
+        SAFE_NAME=$(echo "$REL_PATH" | sed 's/[^a-zA-Z0-9]/_/g').yaml
+        
+        # Run clang-tidy
+        # We use || true because clang-tidy returns non-zero if issues are found, 
+        # but we want to continue processing other files.
+        echo "Checking $REL_PATH..."
+        clang-tidy "${TIDY_ARGS[@]}" -export-fixes="$FIX_DIR/$SAFE_NAME" "$f" || true
+    done
+
+    echo "Applying fixes..."
+    # Apply replacements
+    # -format: Formats changed code
+    # -style=file: Uses .clang-format
+    # -p: Compilation database path
+    clang-apply-replacements -format -style=file -p "$PROJECT_ROOT" "$FIX_DIR"
+    
 else
     echo "Linting ${#FILES[@]} file(s)..."
+    # In non-fix mode, we can just run them all at once or individually. 
+    # Running individually gives better progress feedback but might be slower due to startup process? 
+    # Actually, clang-tidy usually takes multiple files fine. 
+    # Let's run all at once for speed in read-only mode, or keep it consistent?
+    # The existing script ran them all at once. Let's stick to that for read-only mode for now unless user asked otherwise.
+    # Wait, user said "apply clang tidy to file individually ... and apply the fixes then".
+    # This implies the individual processing is for the FIX workflow primarily to handle export-fixes safely.
+    # But for consistency, let's keep the existing bulk behavior for non-fix mode OR change it.
+    # Actually, `clang-tidy [files...]` is standard.
+    
+    clang-tidy "${TIDY_ARGS[@]}" "${FILES[@]}"
 fi
 
-clang-tidy "${TIDY_ARGS[@]}" "${FILES[@]}"
 echo "✓ Done!"

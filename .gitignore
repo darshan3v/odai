@@ -2,8 +2,10 @@
 build/
 out/
 *.gguf
+compile_commands.json
+main
 main.cpp
-odai_bin
+odai_jni.cpp
 odai.log
 odaisample.db
 ToDo.md

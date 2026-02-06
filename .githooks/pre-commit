@@ -1,0 +1,52 @@
+#!/bin/bash
+# ODAI SDK Pre-commit Hook
+# Runs clang-format on staged files and clang-tidy on all files.
+
+set -e
+
+# visual separator
+echo "--- ODAI Pre-commit Hook ---"
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+STAGED_FILES=$(git diff --cached --name-only --diff-filter=ACMR | grep -E "\.(c|cpp|cc|h|hpp)$" || true)
+
+if [ -z "$STAGED_FILES" ]; then
+    echo "No C/C++ files staged. Skipping checks."
+    exit 0
+fi
+
+# 1. Format staged files
+echo "Formatting staged files..."
+# Convert newlines to spaces for arguments
+# Use bash array for safety with spaces in filenames
+IFS=$'\n' read -rd '' -a FILE_ARRAY <<< "$STAGED_FILES" || true
+# Depending on bash version mapfile might be preferred
+if command -v mapfile >/dev/null 2>&1; then
+    mapfile -t FILE_ARRAY <<< "$STAGED_FILES"
+fi
+
+# Call format.sh with the files
+"$PROJECT_ROOT/scripts/format.sh" "${FILE_ARRAY[@]}"
+
+# 2. Lint and Fix ALL files
+# As requested, we run full lint to ensure holistic consistency (e.g. header changes affecting cpp)
+echo "Linting and fixing all files..."
+"$PROJECT_ROOT/scripts/lint.sh" --fix
+
+# 3. Check for unstaged changes
+# If the tools made any changes, they will appear as unstaged changes.
+# We must fail the commit so the user can review and explicitly stage the fixes.
+UNSTAGED=$(git diff --name-only | grep -E "\.(c|cpp|cc|h|hpp)$" || true)
+
+if [ -n "$UNSTAGED" ]; then
+    echo ""
+    echo "❌ Pre-commit checks made changes to the following files:"
+    echo "$UNSTAGED"
+    echo ""
+    echo "⚠️  The commit was blocked because code was automatically formatted or fixed."
+    echo "   Please review the changes, 'git add' them, and try committing again."
+    exit 1
+fi
+
+echo "✅ All checks passed."
+exit 0

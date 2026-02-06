@@ -147,18 +147,26 @@ bool ODAISdk::create_feature(const FeatureConfig& config)
 ## 6. Naming Conventions
 
 ### 6.1 Member Variables
-- **Prefix with `m_`**: All non-static member variables of a class or struct should be prefixed with `m_`.
-    - **Reasoning**: This makes it immediately obvious when reading code which variables are private members of the class versus local variables or function arguments.
+- **Classes**: All non-static member variables of a **class** should be prefixed with `m_`.
+    - **Reasoning**: Distinguishes private state from local variables.
     - **Example**:
     ```cpp
     class MyClass {
     private:
         int m_itemCount; // Correct
-        string name; // Incorrect, should be m_name
     public:
         void set_count(int count) {
-            m_itemCount = count; // unambiguous
+            m_itemCount = count;
         }
+    };
+    ```
+- **Structs**: Member variables of a **struct** (POD types) should use `camelBack` *without* a prefix.
+    - **Reasoning**: Structs are often simple data containers; `m_` is unnecessary noise. Matches `clang-tidy` config.
+    - **Example**:
+    ```cpp
+    struct Vector2 {
+        float x;
+        float y;
     };
     ```
 
@@ -176,21 +184,38 @@ To ensure consistency between the C API and C++ implementation, and to maintain 
     - *Incorrect*: `chat_config`, `backend_engine`.
 - **Constants & Macros**: Use `UPPER_SNAKE_CASE`.
     - *Examples*: `ODAI_MAX_PATH`, `DEFAULT_CHUNK_SIZE`.
-- **Member Variables**: Prefix with `m_` followed by `camelBack`.
+- **Member Variables (Classes)**: Prefix with `m_` followed by `camelBack`.
     - *Examples*: `m_dbPath`, `m_isInitialized`.
+- **Member Variables (Structs)**: Use `camelBack` (no prefix).
+    - *Examples*: `width`, `creationDate`.
 
-### 7.2 File Headers
+### 7.2 Code Formatting
+Enforced by `clang-format` (`.clang-format`):
+- **Indentation**: 2 spaces (no tabs).
+- **Line Length**: 120 columns.
+- **Braces**: Allman style (break before braces).
+    ```cpp
+    void function()
+    {
+        if (condition)
+        {
+            // code
+        }
+    }
+    ```
+- **Includes**: Sorted case-sensitively.
+
+### 7.3 File Headers
 - **Pragma Once**: Use `#pragma once` at the top of all header files.
 
-### 7.3 Comments
+### 7.4 Comments
 - **Doxygen**: Use `///` for documentation comments on public APIs (classes, methods, functions).
 - **Implementation**: Use `//` for logic explanations inside functions.
 
-### 7.4 Code Style Tooling
+### 7.5 Code Style Tooling
 
 Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 - **`format.sh`** - Format code using clang-format (`--help` for usage)
-- **`lint.sh`** - Enforce naming conventions using clang-tidy (`--help` for usage)
-- **`pre-commit`** - Git hook (install with: `ln -sf ../../scripts/pre-commit .git/hooks/pre-commit`)
+- **`lint.sh`** - Enforce naming conventions using clang-tidy (`lint.sh [OPTIONS]`)
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
