@@ -1,0 +1,71 @@
+# ODAI SDK Clang-Tidy Configuration
+# Enforces naming conventions per style guide
+
+Checks: >
+  -*, 
+  readability-identifier-naming
+
+CheckOptions:
+  # Functions: snake_case
+  - key: readability-identifier-naming.FunctionCase
+    value: lower_case
+
+  # Variables: snake_case  
+  - key: readability-identifier-naming.VariableCase
+    value: lower_case
+
+  # Parameters: snake_case
+  - key: readability-identifier-naming.ParameterCase
+    value: lower_case
+
+  # Classes: PascalCase
+  - key: readability-identifier-naming.ClassCase
+    value: CamelCase
+
+  # Structs: PascalCase (or c_ prefix for C types)
+  - key: readability-identifier-naming.StructCase
+    value: CamelCase
+  - key: readability-identifier-naming.StructIgnoredRegexp
+    value: "^c_.*"
+
+  # Enums: PascalCase
+  - key: readability-identifier-naming.EnumCase
+    value: CamelCase
+
+  # Enum constants: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+
+  # Type aliases: PascalCase (or c_ prefix for C types)
+  - key: readability-identifier-naming.TypedefCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypedefIgnoredRegexp
+    value: "^c_.*"
+  - key: readability-identifier-naming.TypeAliasCase
+    value: CamelCase
+  - key: readability-identifier-naming.TypeAliasIgnoredRegexp
+    value: "^c_.*"
+
+  # Member variables: m_ prefix + camelBack
+  - key: readability-identifier-naming.MemberCase
+    value: camelBack
+  - key: readability-identifier-naming.MemberPrefix
+    value: m_
+
+  # Struct Members: camelBack (overrides MemberCase for structs)
+  - key: readability-identifier-naming.StructMemberCase
+    value: camelBack
+  - key: readability-identifier-naming.StructMemberPrefix
+    value: ''
+
+  # Constants: UPPER_CASE
+  - key: readability-identifier-naming.ConstantCase
+    value: UPPER_CASE
+
+  # Macros: UPPER_CASE
+  - key: readability-identifier-naming.MacroDefinitionCase
+    value: UPPER_CASE
+
+  # Namespaces: snake_case
+  - key: readability-identifier-naming.NamespaceCase
+    value: lower_case

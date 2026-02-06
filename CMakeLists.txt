@@ -22,6 +22,12 @@ else()
     set(TARGET_PLATFORM "generic")
 endif()
 
+# --- Size Optimization (Critical for On-Device RAG) ---
+# -Oz: Aggressive size optimization (Clang specific)
+if(CMAKE_BUILD_TYPE STREQUAL "Release")
+    add_compile_options(-O3) 
+endif()
+
 message(STATUS ">>> Configuring for Platform: ${TARGET_PLATFORM}")  
 message(STATUS ">>> Build Type: ${CMAKE_BUILD_TYPE}")
 
@@ -202,11 +208,12 @@ target_link_libraries(odai
     xxhash
 )
 
+if(ANDROID)
+
 set(ODAI_JNI_SOURCES
     src/impl/odai_jni.cpp
 )
 
-if(ANDROID)
 add_library(odaiAndroid SHARED ${ODAI_JNI_SOURCES})
 # set_target_properties(odaiAndroid PROPERTIES INTERPROCEDURAL_OPTIMIZATION TRUE)
     target_include_directories(odaiAndroid PUBLIC src/include)

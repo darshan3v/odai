@@ -1,3 +1,8 @@
+---
+name: ODAI Development Guidelines
+description: Architectural patterns, type systems, and development workflows for the ODAI SDK.
+---
+
 # ODAI SDK Development Guidelines
 
 This document outlines the architectural patterns, type systems, and development workflows for the ODAI SDK. It serves as a reference for maintaining consistency across the codebase.
@@ -148,11 +153,44 @@ bool ODAISdk::create_feature(const FeatureConfig& config)
     ```cpp
     class MyClass {
     private:
-        int m_count; // Correct
+        int m_itemCount; // Correct
         string name; // Incorrect, should be m_name
     public:
         void set_count(int count) {
-            m_count = count; // unambiguous
+            m_itemCount = count; // unambiguous
         }
     };
     ```
+
+## 7. Code Style & Conventions
+
+To ensure consistency between the C API and C++ implementation, and to maintain a clean codebase, the following style rules are strictly enforced.
+
+### 7.1 Naming Conventions
+- **Variables & Functions**: Use `snake_case`.
+    - *Reasoning*: Matches the stable C API style and standard C++ STL conventions.
+    - *Examples*: `db_path`, `odai_register_model`, `is_sane`, `user_data`.
+    - *Incorrect*: `dbPath`, `registerModel`, `userData`.
+- **Types (Classes, Structs, Enums, Typedefs)**: Use `PascalCase`.
+    - *Examples*: `ChatConfig`, `BackendEngineInternal`, `OAIModelType`.
+    - *Incorrect*: `chat_config`, `backend_engine`.
+- **Constants & Macros**: Use `UPPER_SNAKE_CASE`.
+    - *Examples*: `ODAI_MAX_PATH`, `DEFAULT_CHUNK_SIZE`.
+- **Member Variables**: Prefix with `m_` followed by `camelBack`.
+    - *Examples*: `m_dbPath`, `m_isInitialized`.
+
+### 7.2 File Headers
+- **Pragma Once**: Use `#pragma once` at the top of all header files.
+
+### 7.3 Comments
+- **Doxygen**: Use `///` for documentation comments on public APIs (classes, methods, functions).
+- **Implementation**: Use `//` for logic explanations inside functions.
+
+### 7.4 Code Style Tooling
+
+Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
+- **`format.sh`** - Format code using clang-format (`--help` for usage)
+- **`lint.sh`** - Enforce naming conventions using clang-tidy (`--help` for usage)
+- **`pre-commit`** - Git hook (install with: `ln -sf ../../scripts/pre-commit .git/hooks/pre-commit`)
+
+> **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.

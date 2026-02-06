@@ -1,0 +1,29 @@
+# ODAI SDK Clang Format Configuration
+# Run: clang-format -i <file> or use scripts/format-all.sh
+
+BasedOnStyle: LLVM
+
+# Indentation
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+
+# Column limit
+ColumnLimit: 120
+
+# Braces
+BreakBeforeBraces: Allman
+
+# Pointer/Reference alignment
+PointerAlignment: Left
+ReferenceAlignment: Left
+
+# Include sorting
+SortIncludes: CaseSensitive
+IncludeBlocks: Preserve
+
+# Other
+AllowShortFunctionsOnASingleLine: Inline
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+AlwaysBreakTemplateDeclarations: Yes

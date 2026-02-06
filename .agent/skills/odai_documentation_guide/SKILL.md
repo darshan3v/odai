@@ -1,6 +1,7 @@
-# Documentation Style Rules
-
-Based on the documentation style used in `src/include/backendEngine/odai_llama_backend_engine.h`, follow these rules when writing documentation:
+---
+name: ODAI Documentation Guidelines
+description: Documentation style rules and checklist for the ODAI SDK.
+---
 
 ## General Format
 

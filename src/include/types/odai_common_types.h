@@ -7,7 +7,7 @@
 /// @param token The generated utf-8 resp string to append to the response
 /// @param user_data User-provided data pointer passed when calling the streaming function
 /// @return true to continue streaming, false to cancel or suspend the streaming output
-typedef bool (*odai_stream_resp_callback_fn)(const char *token, void *user_data);
+typedef bool (*OdaiStreamRespCallbackFn)(const char* token, void* user_data);
 
 typedef uint8_t OdaiLogLevel;
 #define ODAI_LOG_ERROR (OdaiLogLevel)0
