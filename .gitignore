@@ -6,6 +6,6 @@ compile_commands.json
 main
 main.cpp
 odai_jni.cpp
-odai.log
-odaisample.db
+*.log
+*.db
 ToDo.md
