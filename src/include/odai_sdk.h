@@ -49,7 +49,7 @@ public:
   /// @param path The file path to the model.
   /// @param type The type of the model.
   /// @return true if registered successfully, false otherwise.
-  bool register_model(const ModelName& name, const ModelPath& path, ModelType type);
+  bool register_model(const ModelName& name, const ModelPath& path, const ModelType type);
 
   /// Updates the path for a model.
   /// @param name The name of the model.

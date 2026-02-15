@@ -269,7 +269,7 @@ string ODAILlamaEngine::flush_utf8_safe_output(vector<llama_token>& buffered_tok
 }
 
 void ODAILlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
-                                          const llama_seq_id SEQ_ID, const bool SET_LOGIT_REQUEST_FOR_LAST_TOKEN)
+                                          const llama_seq_id seq_id, const bool set_logit_request_for_last_token)
 {
   for (llama_token token : tokens)
   {
@@ -277,17 +277,17 @@ void ODAILlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, lla
     batch.token[i] = token;
     batch.pos[i] = start_pos;
     batch.n_seq_id[i] = 1;       // single sequence
-    batch.seq_id[i][0] = SEQ_ID; // only one sequence that is sequence seq_id
+    batch.seq_id[i][0] = seq_id; // only one sequence that is sequence seq_id
     batch.logits[i] = 0;         // no logits output for input tokens
     start_pos++;
     batch.n_tokens++;
   }
 
-  batch.logits[batch.n_tokens - 1] = SET_LOGIT_REQUEST_FOR_LAST_TOKEN ? 1 : 0; // request logits for the last token
+  batch.logits[batch.n_tokens - 1] = set_logit_request_for_last_token ? 1 : 0; // request logits for the last token
 }
 
 bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
-                                                    uint32_t& next_pos, const bool REQUEST_LOGITS_FOR_LAST_TOKEN)
+                                                    uint32_t& next_pos, const bool request_logits_for_last_token)
 {
   if (tokens.size() == 0)
   {
@@ -295,13 +295,13 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
     return true;
   }
 
-  const uint32_t N_CTX = llama_n_ctx(&model_context);
+  const uint32_t n_ctx = llama_n_ctx(&model_context);
   uint32_t n_ctx_used = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) + 1;
 
-  if (n_ctx_used + tokens.size() > N_CTX)
+  if (n_ctx_used + tokens.size() > n_ctx)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "token sequence length {} exceeds model context window (used {}/{}).", tokens.size(),
-             n_ctx_used, N_CTX);
+             n_ctx_used, n_ctx);
     return false;
   }
 
@@ -311,7 +311,7 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
 
   batch.reset(new llama_batch(llama_batch_init(tokens.size(), 0, 1)));
 
-  this->add_tokens_to_batch(tokens, *batch, next_pos, 0, REQUEST_LOGITS_FOR_LAST_TOKEN);
+  this->add_tokens_to_batch(tokens, *batch, next_pos, 0, request_logits_for_last_token);
 
   if (llama_decode(&model_context, *batch) != 0)
   {
@@ -323,11 +323,11 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
 }
 
 bool ODAILlamaEngine::load_into_context(llama_context& model_context, const string& prompt, uint32_t& next_pos,
-                                        const bool REQUEST_LOGITS_FOR_LAST_TOKEN)
+                                        const bool request_logits_for_last_token)
 {
-  const bool IS_FIRST = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
+  const bool is_first = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
 
-  vector<llama_token> prompt_tokens = this->tokenize(prompt, IS_FIRST, ModelType::LLM);
+  vector<llama_token> prompt_tokens = this->tokenize(prompt, is_first, ModelType::LLM);
 
   if (prompt_tokens.size() == 0)
   {
@@ -335,17 +335,17 @@ bool ODAILlamaEngine::load_into_context(llama_context& model_context, const stri
     return false;
   }
 
-  return this->load_tokens_into_context_impl(model_context, prompt_tokens, next_pos, REQUEST_LOGITS_FOR_LAST_TOKEN);
+  return this->load_tokens_into_context_impl(model_context, prompt_tokens, next_pos, request_logits_for_last_token);
 }
 
 bool ODAILlamaEngine::load_into_context(llama_context& model_context, const vector<llama_token>& tokens,
-                                        uint32_t& next_pos, const bool REQUEST_LOGITS_FOR_LAST_TOKEN)
+                                        uint32_t& next_pos, const bool request_logits_for_last_token)
 {
-  return this->load_tokens_into_context_impl(model_context, tokens, next_pos, REQUEST_LOGITS_FOR_LAST_TOKEN);
+  return this->load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
 }
 
 bool ODAILlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
-                                          const bool APPEND_TO_CONTEXT)
+                                          const bool append_to_context)
 {
 
   llama_token generated_token = llama_sampler_sample(&sampler, &model_context, -1);
@@ -360,7 +360,7 @@ bool ODAILlamaEngine::generate_next_token(llama_context& model_context, llama_sa
 
   uint32_t next_pos = 0;
 
-  if (APPEND_TO_CONTEXT)
+  if (append_to_context)
   {
     vector<llama_token> token_vec = {generated_token};
     if (!load_into_context(model_context, token_vec, next_pos, true))
@@ -466,7 +466,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(const string& prompt, const
 }
 
 string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>& messages,
-                                                       const bool ADD_GENERATION_PROMPT)
+                                                       const bool add_generation_prompt)
 {
   if (this->m_llmModel == nullptr)
   {
@@ -504,7 +504,7 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
 
   // Estimate needed buffer size first
   int32_t needed_size =
-      llama_chat_apply_template(tmpl, llama_messages.data(), llama_messages.size(), ADD_GENERATION_PROMPT,
+      llama_chat_apply_template(tmpl, llama_messages.data(), llama_messages.size(), add_generation_prompt,
                                 formatted_buffer.data(), formatted_buffer.size());
 
   if (needed_size <= 0)
@@ -518,7 +518,7 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
     // Allocate buffer and apply template
     formatted_buffer.resize(needed_size);
     int32_t actual_size =
-        llama_chat_apply_template(tmpl, llama_messages.data(), llama_messages.size(), ADD_GENERATION_PROMPT,
+        llama_chat_apply_template(tmpl, llama_messages.data(), llama_messages.size(), add_generation_prompt,
                                   formatted_buffer.data(), formatted_buffer.size());
     if (actual_size <= 0)
     {

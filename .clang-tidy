@@ -6,29 +6,35 @@ Checks: >
   readability-identifier-naming
 
 CheckOptions:
-  # Functions: snake_case
+  # Functions: lower_case
   - key: readability-identifier-naming.FunctionCase
     value: lower_case
 
-  # Variables: snake_case  
+  # Variables: lower_case  
   - key: readability-identifier-naming.VariableCase
     value: lower_case
 
-  # Parameters: snake_case
+  # Parameters: lower_case
   - key: readability-identifier-naming.ParameterCase
     value: lower_case
 
-  # Classes: PascalCase
+  - key: readability-identifier-naming.ConstantParameterCase
+    value: lower_case
+
+  - key: readability-identifier-naming.ConstantPointerParameterCase
+    value: lower_case
+
+  # Classes: CamelCase
   - key: readability-identifier-naming.ClassCase
     value: CamelCase
 
-  # Structs: PascalCase (or c_ prefix for C types)
+  # Structs: CamelCase (or c_ prefix for C types)
   - key: readability-identifier-naming.StructCase
     value: CamelCase
   - key: readability-identifier-naming.StructIgnoredRegexp
     value: "^c_.*"
 
-  # Enums: PascalCase
+  # Enums: CamelCase
   - key: readability-identifier-naming.EnumCase
     value: CamelCase
 
@@ -36,7 +42,7 @@ CheckOptions:
   - key: readability-identifier-naming.EnumConstantCase
     value: UPPER_CASE
 
-  # Type aliases: PascalCase (or c_ prefix for C types)
+  # Type aliases: CamelCase (or c_ prefix for C types)
   - key: readability-identifier-naming.TypedefCase
     value: CamelCase
   - key: readability-identifier-naming.TypedefIgnoredRegexp
@@ -59,13 +65,24 @@ CheckOptions:
     value: ''
 
   # Constants: UPPER_CASE
-  - key: readability-identifier-naming.ConstantCase
+
+  - key: readability-identifier-naming.ClassConstantCase
     value: UPPER_CASE
+  - key: readability-identifier-naming.GlobalConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.EnumConstantCase
+    value: UPPER_CASE
+  - key: readability-identifier-naming.ConstexprVariableCase
+    value: UPPER_CASE
+
+  # Fallback Constants : lower_case (for any constants not covered by the above)
+  - key: readability-identifier-naming.ConstantCase
+    value: lower_case
 
   # Macros: UPPER_CASE
   - key: readability-identifier-naming.MacroDefinitionCase
     value: UPPER_CASE
 
-  # Namespaces: snake_case
+  # Namespaces: lower_case
   - key: readability-identifier-naming.NamespaceCase
     value: lower_case

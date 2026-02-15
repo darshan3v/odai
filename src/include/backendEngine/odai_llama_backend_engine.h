@@ -184,7 +184,7 @@ private:
   /// @param set_logit_request_for_last_token Whether to request logits for the
   /// last token added
   void add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
-                           const llama_seq_id SEQ_ID, const bool SET_LOGIT_REQUEST_FOR_LAST_TOKEN);
+                           const llama_seq_id seq_id, const bool set_logit_request_for_last_token);
 
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize
@@ -203,7 +203,7 @@ private:
   /// this)
   /// @return true if loading succeeded, false otherwise
   bool load_into_context(llama_context& model_context, const string& prompt, uint32_t& next_pos,
-                         const bool REQUEST_LOGITS_FOR_LAST_TOKEN);
+                         const bool request_logits_for_last_token);
 
   /// Loads the given tokens into the provided llama context.
   /// If the context already has some other context (Eg: some message hisotry)
@@ -216,7 +216,7 @@ private:
   /// last token, (do it if you are generating next token after this)
   /// @return true if loading succeeded, false otherwise
   bool load_into_context(llama_context& model_context, const vector<llama_token>& tokens, uint32_t& next_pos,
-                         const bool REQUEST_LOGITS_FOR_LAST_TOKEN);
+                         const bool request_logits_for_last_token);
 
   /// Helper function that performs the common logic for loading tokens into
   /// context.
@@ -227,7 +227,7 @@ private:
   /// last token
   /// @return true if loading succeeded, false otherwise
   bool load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
-                                     uint32_t& next_pos, const bool REQUEST_LOGITS_FOR_LAST_TOKEN);
+                                     uint32_t& next_pos, const bool request_logits_for_last_token);
 
   /// Generates the next token using the provided llama context and sampler.
   /// @param model_context Language Model context (has KV cache of old tokens
@@ -239,7 +239,7 @@ private:
   /// @return false if token generation failed or if appending to context is set
   /// and failed, true otherwise
   bool generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
-                           const bool APPEND_TO_CONTEXT);
+                           const bool append_to_context);
 
   /// Processes buffered tokens into a UTF-8 safe string for streaming.
   /// Detokenizes tokens, appends to output buffer, then splits at a safe UTF-8
@@ -257,7 +257,7 @@ private:
   /// @param add_generation_prompt Whether to add generation prompt (set to true
   /// when expecting model response)
   /// @return Formatted prompt string, or empty string on error
-  string format_chat_messages_to_prompt(const vector<ChatMessage>& messages, const bool ADD_GENERATION_PROMPT);
+  string format_chat_messages_to_prompt(const vector<ChatMessage>& messages, const bool add_generation_prompt);
 
   /// Core implementation of streaming response generation that handles token
   /// generation and buffering. Takes an already-initialized context and sampler

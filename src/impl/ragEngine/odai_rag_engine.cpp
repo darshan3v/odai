@@ -32,8 +32,8 @@ bool ODAIRagEngine::register_model(const ModelName& name, const ModelPath& path,
 
 bool ODAIRagEngine::update_model_path(const ModelName& name, const ModelPath& path)
 {
-  const string CHECKSUM = calculate_file_checksum(path);
-  if (CHECKSUM.empty())
+  const string checksum = calculate_file_checksum(path);
+  if (checksum.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksum for file: {}", path);
     return false;
@@ -46,9 +46,9 @@ bool ODAIRagEngine::update_model_path(const ModelName& name, const ModelPath& pa
     return false;
   }
 
-  if (CHECKSUM != old_checksum)
+  if (checksum != old_checksum)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {}. Expected: {}, Got: {}", name, old_checksum, CHECKSUM);
+    ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {}. Expected: {}, Got: {}", name, old_checksum, checksum);
     return false;
   }
 

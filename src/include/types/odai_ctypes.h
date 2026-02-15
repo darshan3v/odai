@@ -13,13 +13,13 @@ typedef char* c_DocumentId;
 typedef char* c_ScopeId;
 
 /// Semantic Space Name - opaque string type for type safety.c
-typedef const char* c_SemanticSpaceName;
+typedef char* c_SemanticSpaceName;
 
 /// Model Name - opaque string type for type safety.
-typedef const char* c_ModelName;
+typedef char* c_ModelName;
 
 /// Model Path - opaque string type for type safety.
-typedef const char* c_ModelPath;
+typedef char* c_ModelPath;
 
 /// Model Type - opaque type for model classification
 typedef uint32_t c_ModelType;

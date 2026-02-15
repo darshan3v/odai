@@ -113,7 +113,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
   }
 }
 
-bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, ModelType type)
+bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, const ModelType type)
 {
   try
   {
