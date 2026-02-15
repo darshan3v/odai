@@ -119,12 +119,15 @@ extern "C"
   /// @param c_chat_id_in Input chat ID (nullptr to auto-generate, or a unique string to use a specific ID)
   /// @param c_chat_config Configuration structure defining chat behavior (persistence, RAG usage, system prompt, model
   /// config, etc..)
-  /// @param c_chat_id_out Buffer to receive the chat ID (must be pre-allocated)
-  /// @param chat_id_out_len Pointer to the size of chat_id_out buffer (input), updated with actual length written
-  /// (output)
+  /// @param c_chat_id_out Output parameter: pointer to the chat ID string (allocated by this function, caller must free
+  /// using odai_free_chat_id)
   /// @return true if chat session was created successfully, false otherwise
-  ODAI_API bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId c_chat_id_out,
-                                 size_t* chat_id_out_len);
+  ODAI_API bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config,
+                                 c_ChatId* c_chat_id_out);
+
+  /// Frees the chat ID string allocated by odai_create_chat.
+  /// @param chat_id The chat ID string to free
+  ODAI_API void odai_free_chat_id(c_ChatId chat_id);
 
   /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
   /// Its only purpose is to pre-load a existing chat

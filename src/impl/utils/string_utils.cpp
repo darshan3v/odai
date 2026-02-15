@@ -31,9 +31,3 @@ size_t get_safe_utf8_length(const string& buffer)
   }
   return len;
 }
-
-void set_cstr_and_len(string& string_data, char* c_str, size_t* cstr_len)
-{
-  *cstr_len = string_data.size() + 1;
-  strncpy(c_str, string_data.c_str(), *cstr_len);
-}

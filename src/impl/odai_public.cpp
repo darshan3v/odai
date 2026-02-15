@@ -4,7 +4,6 @@
 #include "types/odai_ctypes.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_csanitizers.h"
-#include "utils/string_utils.h"
 
 using namespace std;
 
@@ -207,12 +206,17 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
                                                              to_cpp(*c_sampler_config), c_callback, c_user_data);
 }
 
-bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId c_chat_id_out,
-                      size_t* chat_id_out_len)
+bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out)
 {
   if (!is_sane(c_chat_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_config passed");
+    return false;
+  }
+
+  if (c_chat_id_out == nullptr && c_chat_id_in == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "invalid parameters passed: c_chat_id_out and c_chat_id_in are null");
     return false;
   }
 
@@ -223,10 +227,27 @@ bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_co
 
   if (result)
   {
-    set_cstr_and_len(chat_id_out, c_chat_id_out, chat_id_out_len);
+    *c_chat_id_out = strdup(chat_id_out.c_str());
+    if (*c_chat_id_out == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for chat_id_out");
+      return false;
+    }
+  }
+  else
+  {
+    *c_chat_id_out = nullptr;
   }
 
   return result;
+}
+
+void odai_free_chat_id(c_ChatId chat_id)
+{
+  if (chat_id)
+  {
+    free(chat_id);
+  }
 }
 
 bool odai_load_chat(const c_ChatId c_chat_id)
