@@ -62,37 +62,14 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
       return false;
     }
 
-    if (db_config.m_dbType == SQLITE_DB)
-    {
-      m_db = std::make_unique<ODAISqliteDb>(db_config);
-    }
-
-    if ((m_db.get() == nullptr) || (!m_db->initialize_db()))
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize db");
-      m_sdkInitialized = false;
-      return false;
-    }
-
     if (!backend_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid backend engine config passed");
       return false;
     }
 
-    // Initialize the backend engine based on engineType
-    if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
-      m_backendEngine = std::make_unique<ODAILlamaEngine>(backend_config);
-
-    if ((m_backendEngine.get() == nullptr) || (!m_backendEngine->initialize_engine()))
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize backend engine");
-      m_sdkInitialized = false;
-      return false;
-    }
-
     // Initalize the RAGEngine
-    m_ragEngine = make_unique<ODAIRagEngine>(m_db.get(), m_backendEngine.get());
+    m_ragEngine = make_unique<ODAIRagEngine>(db_config, backend_config);
 
     if ((m_ragEngine.get() == nullptr))
     {
@@ -169,7 +146,7 @@ bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
 
     // TODO: if dim == 0 then auto infer from model
 
-    return m_db->create_semantic_space(config);
+    return m_ragEngine->create_semantic_space(config);
   }
   catch (...)
   {
@@ -188,7 +165,7 @@ bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticS
       return false;
     }
 
-    return m_db->get_semantic_space_config(name, config);
+    return m_ragEngine->get_semantic_space_config(name, config);
   }
   catch (...)
   {
@@ -207,7 +184,7 @@ bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
       return false;
     }
 
-    return m_db->list_semantic_spaces(spaces);
+    return m_ragEngine->list_semantic_spaces(spaces);
   }
   catch (...)
   {
@@ -226,7 +203,7 @@ bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
       return false;
     }
 
-    return m_db->delete_semantic_space(name);
+    return m_ragEngine->delete_semantic_space(name);
   }
   catch (...)
   {
@@ -342,14 +319,14 @@ bool ODAISdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
     {
       chat_id = chat_id_in;
       chat_id_out = chat_id; // Set output to input in this case
-      if (m_db->chat_id_exists(chat_id))
+      if (m_ragEngine->chat_id_exists(chat_id))
       {
         ODAI_LOG(ODAI_LOG_ERROR, "chat_id {} already exists", chat_id_in);
         return false;
       }
     }
 
-    if (!m_db->create_chat(chat_id, chat_config))
+    if (!m_ragEngine->create_chat(chat_id, chat_config))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to create chat");
       return false;
@@ -411,7 +388,7 @@ bool ODAISdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messa
       return false;
     }
 
-    if (!m_db->get_chat_history(chat_id, messages))
+    if (!m_ragEngine->get_chat_history(chat_id, messages))
     {
       return false;
     }

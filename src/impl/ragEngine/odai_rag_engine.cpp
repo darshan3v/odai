@@ -1,13 +1,33 @@
 #include "ragEngine/odai_rag_engine.h"
 #include "backendEngine/odai_backend_engine.h"
+#include "backendEngine/odai_llama_backend_engine.h"
+#include "db/odai_sqlite_db.h"
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
 #include "utils/odai_helpers.h"
+#include <stdexcept>
 
-ODAIRagEngine::ODAIRagEngine(ODAIDb* db, ODAIBackendEngine* backend_engine)
+ODAIRagEngine::ODAIRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
-  this->m_db = db;
-  this->m_backendEngine = backend_engine;
+  if (db_config.m_dbType == SQLITE_DB)
+  {
+    m_db = std::make_unique<ODAISqliteDb>(db_config);
+  }
+
+  if (!m_db || !m_db->initialize_db())
+  {
+    throw std::runtime_error("Failed to initialize db in RAG engine");
+  }
+
+  if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
+  {
+    m_backendEngine = std::make_unique<ODAILlamaEngine>(backend_config);
+  }
+
+  if (!m_backendEngine || !m_backendEngine->initialize_engine())
+  {
+    throw std::runtime_error("Failed to initialize backend engine in RAG engine");
+  }
 
   ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
 }
@@ -313,4 +333,39 @@ bool ODAIRagEngine::ensure_chat_session_loaded(const ChatId& chat_id, const Chat
   }
 
   return true;
+}
+
+bool ODAIRagEngine::create_semantic_space(const SemanticSpaceConfig& config)
+{
+  return m_db->create_semantic_space(config);
+}
+
+bool ODAIRagEngine::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
+{
+  return m_db->get_semantic_space_config(name, config);
+}
+
+bool ODAIRagEngine::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+{
+  return m_db->list_semantic_spaces(spaces);
+}
+
+bool ODAIRagEngine::delete_semantic_space(const SemanticSpaceName& name)
+{
+  return m_db->delete_semantic_space(name);
+}
+
+bool ODAIRagEngine::create_chat(const ChatId& chat_id, const ChatConfig& chat_config)
+{
+  return m_db->create_chat(chat_id, chat_config);
+}
+
+bool ODAIRagEngine::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
+{
+  return m_db->get_chat_history(chat_id, messages);
+}
+
+bool ODAIRagEngine::chat_id_exists(const ChatId& chat_id)
+{
+  return m_db->chat_id_exists(chat_id);
 }

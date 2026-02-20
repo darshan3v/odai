@@ -15,14 +15,14 @@ The SDK follows a layered architecture designed to expose a stable C API while l
 graph TD
     UserApp[User Application] --> C_API[C Public API (odai_public.h)]
     C_API --> CPP_SDK[C++ SDK Singleton (odai_sdk.h)]
-    CPP_SDK --> DB[Database Layer]
-    CPP_SDK --> Backend[Backend Engine (LLM)]
     CPP_SDK --> RAG[RAG Engine]
+    RAG --> DB[Database Layer]
+    RAG --> Backend[Backend Engine (LLM)]
 ```
 
 - **C Public API (`src/include/odai_public.h`)**: The external interface. Pure C functions with C-compatible types. Stable ABI.
-- **C++ SDK (`src/include/odai_sdk.h`)**: The internal entry point. A singleton class (`ODAISdk`) that orchestrates components.
-- **Internal Components**: `ODAIDb`, `ODAIBackendEngine`, `ODAIRagEngine` handle specific logic.
+- **C++ SDK (`src/include/odai_sdk.h`)**: The internal entry point. A singleton class (`ODAISdk`) that focuses mainly on configuration validation (`is_sane()`) and orchestrating. It delegates most of the actual operations to the internal engines.
+- **Internal Components**: `ODAIRagEngine` handles the specific logic for RAG and it directly owns `ODAIDb` and `ODAIBackendEngine`. All actual DB or Backend calls are forwarded to it.
 
 ## 2. Type System & Data Flow
 
@@ -104,8 +104,8 @@ bool ODAISdk::create_feature(const FeatureConfig& config)
             return false;
         }
 
-        // 2. Implementation
-        return m_backend->process(config);
+        // 2. Implementation forwarded to RagEngine
+        return m_ragEngine->process(config);
     }
     catch (...) {
         ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");

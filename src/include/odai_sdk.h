@@ -152,14 +152,10 @@ private:
   bool m_sdkInitialized = false;
 
   std::unique_ptr<ODAILogger> m_logger;
-  std::unique_ptr<ODAIDb> m_db;
-  std::unique_ptr<ODAIBackendEngine> m_backendEngine;
   std::unique_ptr<ODAIRagEngine> m_ragEngine;
 
 public:
   ODAILogger* get_logger() { return m_logger.get(); }
-  ODAIBackendEngine* get_backend_engine() { return m_backendEngine.get(); }
-  ODAIDb* get_db() { return m_db.get(); }
 };
 
 #define ODAI_LOG(level, fmt, ...)                                                                                      \

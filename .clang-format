@@ -1,5 +1,5 @@
 # ODAI SDK Clang Format Configuration
-# Run: clang-format -i <file> or use scripts/format-all.sh
+# Run: clang-format -i <file> or use scripts/format.sh
 
 BasedOnStyle: LLVM
 

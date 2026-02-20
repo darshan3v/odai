@@ -12,7 +12,7 @@
 class ODAIRagEngine
 {
 public:
-  ODAIRagEngine(ODAIDb* db, ODAIBackendEngine* backend_engine);
+  ODAIRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
   /// Registers a new model in the system with the given name and path.
   /// The model path is validated and a checksum is computed to ensure
@@ -78,6 +78,17 @@ public:
   /// @return true if unloaded successfully, false on error
   bool unload_chat_session(const ChatId& chat_id);
 
+  bool create_semantic_space(const SemanticSpaceConfig& config);
+  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
+  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+  bool delete_semantic_space(const SemanticSpaceName& name);
+  bool create_chat(const ChatId& chat_id, const ChatConfig& chat_config);
+  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages);
+  bool chat_id_exists(const ChatId& chat_id);
+
+  ODAIDb* get_db() const { return m_db.get(); }
+  ODAIBackendEngine* get_backend_engine() const { return m_backendEngine.get(); }
+
 private:
   /// Resolves the file system path for a given model name using cache or
   /// database.
@@ -93,8 +104,8 @@ private:
   /// @return true if session is loaded (or was already loaded), false on error
   bool ensure_chat_session_loaded(const ChatId& chat_id, const ChatConfig& chat_config);
 
-  ODAIDb* m_db = nullptr;
-  ODAIBackendEngine* m_backendEngine = nullptr;
+  std::unique_ptr<ODAIDb> m_db;
+  std::unique_ptr<ODAIBackendEngine> m_backendEngine;
 
   unordered_map<string, string> m_modelPathCache;
 };
