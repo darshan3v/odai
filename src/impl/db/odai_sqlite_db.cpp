@@ -476,7 +476,9 @@ bool ODAISqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_con
     // Insert system prompt as initial message
     ChatMessage system_msg;
     system_msg.m_role = "system";
-    system_msg.m_content = chat_config.m_systemPrompt;
+    system_msg.m_contentItems.push_back(
+        {InputItemType::TEXT, vector<uint8_t>(chat_config.m_systemPrompt.begin(), chat_config.m_systemPrompt.end()),
+         "text/plain"});
     system_msg.m_messageMetadata = {};
     insert_chat_messages(chat_id, {system_msg});
 
@@ -567,7 +569,9 @@ bool ODAISqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
       SQLite::Column created_at_col = query.getColumn("created_at");
 
       msg.m_role = role_col.getString();
-      msg.m_content = content_col.getString();
+
+      json content_json = json::parse(content_col.getString());
+      msg.m_contentItems = content_json.get<vector<InputItem>>();
 
       // Handle NULL message_metadata by defaulting to empty JSON object
       if (metadata_col.isNull())
@@ -631,7 +635,8 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
       {
         insert_message.bind(":chat_id", chat_id);
         insert_message.bind(":role", msg.m_role);
-        insert_message.bind(":content", msg.m_content);
+        json content_json = msg.m_contentItems;
+        insert_message.bind(":content", content_json.dump());
         insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
         insert_message.exec();
         insert_message.reset(); // Reset for next iteration

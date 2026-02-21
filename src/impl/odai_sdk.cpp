@@ -1,8 +1,6 @@
 #include "odai_sdk.h"
 #include "ragEngine/odai_rag_engine.h"
 
-#include "backendEngine/odai_llama_backend_engine.h"
-#include "db/odai_sqlite_db.h"
 #include "types/odai_common_types.h"
 #include "types/odai_types.h"
 #include "utils/odai_helpers.h"
@@ -236,7 +234,7 @@ bool ODAISdk::add_document(const string& content, const DocumentId& document_id,
   }
 }
 
-int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_config, const string& query,
+int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
                                              const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                              void* user_data)
 {
@@ -261,7 +259,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_con
       return -1;
     }
 
-    if (query.empty())
+    if (prompt.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
       return -1;
@@ -274,7 +272,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_con
     }
 
     int32_t total_tokens =
-        m_ragEngine->generate_streaming_response(llm_model_config, query, sampler_config, callback, user_data);
+        m_ragEngine->generate_streaming_response(llm_model_config, prompt, sampler_config, callback, user_data);
     if (total_tokens < 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");
@@ -402,7 +400,7 @@ bool ODAISdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messa
   }
 }
 
-bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const string& query,
+bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                const GeneratorConfig& generator_config,
                                                OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -421,7 +419,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const stri
       return false;
     }
 
-    if (query.empty())
+    if (prompt.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid query passed");
       return false;
@@ -441,7 +439,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const stri
 
     // Call the RAG engine's generate_streaming_chat_response method
     int32_t total_tokens =
-        m_ragEngine->generate_streaming_chat_response(chat_id, query, generator_config, callback, user_data);
+        m_ragEngine->generate_streaming_chat_response(chat_id, prompt, generator_config, callback, user_data);
 
     if (total_tokens < 0)
     {

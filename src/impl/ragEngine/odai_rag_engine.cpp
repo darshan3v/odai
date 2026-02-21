@@ -81,8 +81,8 @@ bool ODAIRagEngine::update_model_path(const ModelName& name, const ModelPath& pa
   return false;
 }
 
-int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config, const string& query,
-                                                   const SamplerConfig& sampler_config,
+int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config,
+                                                   const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
                                                    OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (callback == nullptr)
@@ -91,7 +91,7 @@ int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  if (query.empty())
+  if (prompt.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Query is empty");
     return -1;
@@ -110,7 +110,7 @@ int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  return m_backendEngine->generate_streaming_response(query, sampler_config, callback, user_data);
+  return m_backendEngine->generate_streaming_response(prompt, sampler_config, callback, user_data);
 }
 
 bool ODAIRagEngine::load_chat_session(const ChatId& chat_id)
@@ -126,7 +126,7 @@ bool ODAIRagEngine::load_chat_session(const ChatId& chat_id)
   return this->ensure_chat_session_loaded(chat_id, chat_config);
 }
 
-int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, const string& prompt,
+int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                         const GeneratorConfig& generator_config,
                                                         OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -187,7 +187,7 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   }
 
   // final_prompt = combine_context_and_query(context, prompt);
-  string final_prompt = prompt; // Placeholder until context retrieval is implemented
+  vector<InputItem> final_prompt = prompt; // Placeholder until context retrieval is implemented
 
   StreamingBufferContext buffer_ctx;
   buffer_ctx.m_userCallback = callback;
@@ -224,15 +224,19 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   ChatMessage user_msg;
   user_msg.m_role = "user";
-  user_msg.m_content = prompt;
+  user_msg.m_contentItems = prompt;
   user_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(user_msg);
 
   // ToDo in message_metadata add citations if any from RAG context
 
+  InputItem assistant_item;
+  assistant_item.m_type = TEXT;
+  assistant_item.m_data.assign(buffer_ctx.m_bufferedResponse.begin(), buffer_ctx.m_bufferedResponse.end());
+
   ChatMessage assistant_msg;
   assistant_msg.m_role = "assistant";
-  assistant_msg.m_content = buffer_ctx.m_bufferedResponse;
+  assistant_msg.m_contentItems = {assistant_item};
   assistant_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(assistant_msg);
 

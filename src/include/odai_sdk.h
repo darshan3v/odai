@@ -4,8 +4,6 @@
 #include <string>
 #include <vector>
 
-#include "backendEngine/odai_backend_engine.h"
-#include "db/odai_db.h"
 #include "odai_logger.h"
 #include "ragEngine/odai_rag_engine.h"
 #include "types/odai_export.h"
@@ -96,7 +94,7 @@ public:
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const string& query,
+  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
                                       const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                       void* user_data);
 
@@ -136,7 +134,7 @@ public:
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
   /// @return true if response was generated successfully, false on error
-  bool generate_streaming_chat_response(const ChatId& chat_id, const string& query,
+  bool generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                         const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
                                         void* user_data);
 

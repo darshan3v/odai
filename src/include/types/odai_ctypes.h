@@ -26,6 +26,44 @@ typedef uint32_t c_ModelType;
 #define ODAI_MODEL_TYPE_EMBEDDING (c_ModelType)0
 #define ODAI_MODEL_TYPE_LLM (c_ModelType)1
 
+/// Input Item Type for Multimodal Support
+typedef uint32_t c_InputItemType;
+#define ODAI_INPUT_ITEM_TYPE_TEXT (c_InputItemType)0
+#define ODAI_INPUT_ITEM_TYPE_IMAGE_FILE (c_InputItemType)1
+#define ODAI_INPUT_ITEM_TYPE_AUDIO_FILE (c_InputItemType)2
+#define ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64 (c_InputItemType)5
+#define ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64 (c_InputItemType)6
+
+/// C-style structure representing a single input item for generation or chat.
+struct c_InputItem
+{
+  c_InputItemType m_type;
+  /// Pointer to the data buffer. For text, it's a character string. For binary, it's bytes.
+  void* m_data;
+  /// Size of the data in bytes.
+  size_t m_dataSize;
+  /// Optional MIME type (e.g., "image/jpeg"). Dynamically allocated if present, caller frees.
+  char* m_mimeType;
+};
+
+inline void free_members(c_InputItem* item)
+{
+  if (item == nullptr)
+    return;
+
+  if (item->m_data)
+  {
+    free(item->m_data);
+    item->m_data = nullptr;
+  }
+
+  if (item->m_mimeType)
+  {
+    free(item->m_mimeType);
+    item->m_mimeType = nullptr;
+  }
+}
+
 struct c_DbConfig
 {
   /// Database type to use (SQLITE_DB, etc.)
@@ -170,8 +208,10 @@ struct c_ChatMessage
 {
   /// Role of the message sender ('user', 'assistant', or 'system')
   char m_role[32];
-  /// The message content text (dynamically allocated, caller must free)
-  char* m_content;
+  /// Array of input items making up the message content (dynamically allocated, caller must free)
+  struct c_InputItem* m_contentItems;
+  /// Number of items in the array
+  size_t m_contentItemsCount;
   /// JSON string containing additional metadata (citations, context, etc.) (dynamically allocated, caller must free)
   char* m_messageMetadata;
   /// Unix timestamp when the message was created
@@ -183,10 +223,14 @@ inline void free_members(c_ChatMessage* message)
   if (message == nullptr)
     return;
 
-  if (message->m_content)
+  if (message->m_contentItems)
   {
-    free(message->m_content);
-    message->m_content = nullptr;
+    for (size_t i = 0; i < message->m_contentItemsCount; ++i)
+    {
+      free_members(&message->m_contentItems[i]);
+    }
+    free(message->m_contentItems);
+    message->m_contentItems = nullptr;
   }
 
   if (message->m_messageMetadata)

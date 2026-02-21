@@ -5,6 +5,17 @@ inline bool is_sane(c_ModelType type)
   return (type == ODAI_MODEL_TYPE_EMBEDDING || type == ODAI_MODEL_TYPE_LLM);
 }
 
+inline bool is_sane(const c_InputItem* item)
+{
+  if (item == nullptr)
+    return false;
+  if (item->m_data == nullptr || item->m_dataSize == 0)
+    return false;
+  if (item->m_type > ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64)
+    return false;
+  return true;
+}
+
 /// Validates that a database configuration is sane and usable.
 /// Checks that the database path is not null.
 /// @param config The database configuration to validate

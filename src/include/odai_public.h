@@ -99,17 +99,17 @@ extern "C"
   ODAI_API bool odai_add_document(const char* content, const c_DocumentId document_id,
                                   const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id);
 
-  /// Generates a streaming response for the given query.
-  /// Its like a Completion API, and won't use RAG
-  /// This is a synchronous function that calls the callback for chunks of responses.
-  /// @param llm_model_config The Language Model and its config to be used for response generation
-  /// @param c_query The input query/prompt to generate a response for
-  /// @param c_sampler_config Configuration for the sampler (top_k, top_p, etc.)
-  /// @param c_callback Function called for each generated chunk of response
+  /// Generates a streaming response for a single query using the specified LLM Model.
+  /// @param llm_model_config Configuration of the LLM model to use
+  /// @param c_prompt_items Array of input items forming the query (text, images, etc.)
+  /// @param prompt_items_count Number of input items in the array
+  /// @param c_sampler_config Sampling parameters for generation (temperature, top_p, etc.)
+  /// @param c_callback Function to be called for each generated chunk
   /// @param c_user_data User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel
   /// streaming.
-  ODAI_API int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const char* c_query,
+  ODAI_API int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config,
+                                                    const c_InputItem* c_prompt_items, size_t prompt_items_count,
                                                     const c_SamplerConfig* c_sampler_config,
                                                     OdaiStreamRespCallbackFn c_callback, void* c_user_data);
 
@@ -150,17 +150,16 @@ extern "C"
   /// @param count Number of messages in the array
   ODAI_API void odai_free_chat_messages(c_ChatMessage* messages, size_t count);
 
-  /// Generates a streaming chat response for the given query in the specified chat session.
-  /// It will load  languagde model mentioned in chat config and load the chat history into context and then input the
-  /// query and generate response
+  /// Generates a streaming response for an existing chat session.
   /// @param c_chat_id The unique identifier of the chat session
-  /// @param c_query The input query/message to generate a response for
-  /// @param c_generator_config Configuration for the generator (Sampler, RAG settings including scope_id, etc.)
-  /// @param callback Function called for each generated token
-  /// @param user_data User-provided data pointer passed to the callback function
-  /// @return true if response was generated successfully, false on error or if callback returns false to cancel
-  /// streaming
-  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char* c_query,
+  /// @param c_prompt_items Array of input items forming the query (text, images, etc.)
+  /// @param prompt_items_count Number of input items in the array
+  /// @param c_generator_config Configuration governing both RAG (if used) and generation sampling
+  /// @param callback Function to be called for each generated text chunk
+  /// @param user_data Opaque pointer passed back to the callback
+  /// @return true if generation starts successfully, false if chat not found or on error
+  ODAI_API bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
+                                                      size_t prompt_items_count,
                                                       const c_GeneratorConfig* c_generator_config,
                                                       OdaiStreamRespCallbackFn callback, void* user_data);
 

@@ -48,7 +48,8 @@ bool odai_register_model(const c_ModelName model_name, const c_ModelPath model_p
     return false;
   }
 
-  return ODAISdk::get_instance().register_model(ModelName(model_name), ModelPath(model_path), to_cpp(model_type));
+  return ODAISdk::get_instance().register_model(ModelName(model_name), ModelPath(model_path),
+                                                to_cpp_model_type(model_type));
 }
 
 bool odai_update_model_path(const c_ModelName model_name, const c_ModelPath model_path)
@@ -179,9 +180,9 @@ bool odai_add_document(const char* content, const c_DocumentId document_id,
                                               SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
 }
 
-int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const char* c_query,
-                                         const c_SamplerConfig* c_sampler_config, OdaiStreamRespCallbackFn c_callback,
-                                         void* c_user_data)
+int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const c_InputItem* c_prompt_items,
+                                         size_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
+                                         OdaiStreamRespCallbackFn c_callback, void* c_user_data)
 {
 
   if (!is_sane(llm_model_config))
@@ -196,13 +197,24 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
     return -1;
   }
 
-  if (c_query == nullptr)
+  if (c_prompt_items == nullptr || prompt_items_count == 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
     return -1;
   }
 
-  return ODAISdk::get_instance().generate_streaming_response(to_cpp(*llm_model_config), string(c_query),
+  vector<InputItem> prompt_items;
+  for (size_t i = 0; i < prompt_items_count; ++i)
+  {
+    if (!is_sane(&c_prompt_items[i]))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid input item at index {}", i);
+      return -1;
+    }
+    prompt_items.push_back(to_cpp(c_prompt_items[i]));
+  }
+
+  return ODAISdk::get_instance().generate_streaming_response(to_cpp(*llm_model_config), prompt_items,
                                                              to_cpp(*c_sampler_config), c_callback, c_user_data);
 }
 
@@ -327,8 +339,8 @@ void odai_free_chat_messages(c_ChatMessage* c_messages, size_t count)
   }
 }
 
-bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char* c_query,
-                                           const c_GeneratorConfig* c_generator_config,
+bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
+                                           size_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
                                            OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (c_chat_id == nullptr)
@@ -337,7 +349,7 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char*
     return false;
   }
 
-  if (c_query == nullptr)
+  if (c_prompt_items == nullptr || prompt_items_count == 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid query passed");
     return false;
@@ -349,7 +361,18 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const char*
     return false;
   }
 
-  return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), string(c_query),
+  vector<InputItem> prompt_items;
+  for (size_t i = 0; i < prompt_items_count; ++i)
+  {
+    if (!is_sane(&c_prompt_items[i]))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid input item at index {}", i);
+      return false;
+    }
+    prompt_items.push_back(to_cpp(c_prompt_items[i]));
+  }
+
+  return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), prompt_items,
                                                                   to_cpp(*c_generator_config), callback, user_data);
 }
 

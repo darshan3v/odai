@@ -33,7 +33,7 @@ public:
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-  virtual int32_t generate_streaming_response(const string& prompt, const SamplerConfig& sampler_config,
+  virtual int32_t generate_streaming_response(const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
                                               OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 
   /// Loads the provided sequence of chat messages into the model's context for the specified chat session.
@@ -52,7 +52,7 @@ public:
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-  virtual int32_t generate_streaming_chat_response(const ChatId& chat_id, const string& prompt,
+  virtual int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                    const SamplerConfig& sampler_config,
                                                    OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 

@@ -9,7 +9,13 @@
 /// Converts c_ModelType to C++ ModelType enum
 /// @param c The C-style model type identifier
 /// @return Corresponding C++ ModelType enum
-ModelType to_cpp(c_ModelType c);
+ModelType to_cpp_model_type(c_ModelType c);
+
+/// Converts c_InputItemType to C++ InputItemType enum
+InputItemType to_cpp_input_item_type(c_InputItemType c);
+
+/// Converts a C-style input item to C++ style
+InputItem to_cpp(const c_InputItem& c);
 
 /// Converts a C-style database configuration to C++ style.
 /// Creates a new C++ DBConfig by copying the database type and path from the C
@@ -79,6 +85,12 @@ ChatConfig to_cpp(const c_ChatConfig& c);
 /// Allocates memory for string fields that must be freed by the caller.
 c_EmbeddingModelConfig to_c(const EmbeddingModelConfig& cpp);
 
+/// Converts C++ InputItemType to C-style c_InputItemType
+c_InputItemType to_c(const InputItemType& cpp);
+
+/// Converts a C++ InputItem to C-style c_InputItem
+c_InputItem to_c(const InputItem& cpp);
+
 /// Converts a C++ ChunkingConfig to C-style c_ChunkingConfig.
 c_ChunkingConfig to_c(const ChunkingConfig& cpp);
 
@@ -104,5 +116,6 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FixedSizeChunkingConfig, m_chunkSize, m_chunk
 void to_json(json& j, const ChunkingConfig& p);
 void from_json(const json& j, ChunkingConfig& p);
 
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(InputItem, m_type, m_data, m_mimeType)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, m_name, m_embeddingModelConfig, m_chunkingConfig, m_dimensions)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ChatConfig, m_persistence, m_systemPrompt, m_llmModelConfig)

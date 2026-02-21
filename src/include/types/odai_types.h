@@ -1,5 +1,6 @@
 #pragma once
 
+#include "odai_ctypes.h"
 #include "types/odai_common_types.h"
 #include <cstdint>
 #include <nlohmann/json.hpp>
@@ -35,6 +36,37 @@ enum ModelType
 {
   EMBEDDING,
   LLM
+};
+
+enum InputItemType
+{
+  TEXT = ODAI_INPUT_ITEM_TYPE_TEXT,
+  IMAGE_FILE = ODAI_INPUT_ITEM_TYPE_IMAGE_FILE,
+  AUDIO_FILE = ODAI_INPUT_ITEM_TYPE_AUDIO_FILE,
+  IMAGE_BASE64 = ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64,
+  AUDIO_BASE64 = ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64
+};
+
+struct InputItem
+{
+  InputItemType m_type;
+  std::vector<uint8_t> m_data;
+  std::string m_mimeType;
+
+  // Helper to get as string
+  std::string get_text() const
+  {
+    if (m_data.empty())
+      return "";
+    return std::string(reinterpret_cast<const char*>(m_data.data()), m_data.size());
+  }
+
+  bool is_sane() const
+  {
+    if (m_data.empty())
+      return false;
+    return true;
+  }
 };
 
 struct DBConfig
@@ -313,8 +345,8 @@ struct ChatMessage
 {
   /// Role of the message sender ('user', 'assistant', or 'system')
   string m_role;
-  /// The message content text
-  string m_content;
+  /// The message content items
+  vector<InputItem> m_contentItems;
   /// JSON object for additional metadata (citations, context, etc.)
   json m_messageMetadata;
   /// Unix timestamp when the message was created
@@ -324,8 +356,14 @@ struct ChatMessage
   {
     if (m_role != "user" && m_role != "assistant" && m_role != "system")
       return false;
-    if (m_content.empty())
+    if (m_contentItems.empty())
       return false;
+
+    for (const auto& item : m_contentItems)
+    {
+      if (!item.is_sane())
+        return false;
+    }
 
     return true;
   }

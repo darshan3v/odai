@@ -88,7 +88,7 @@ public:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response(const string& prompt, const SamplerConfig& sampler_config,
+  int32_t generate_streaming_response(const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
                                       OdaiStreamRespCallbackFn callback, void* user_data) override;
 
   /// Loads the provided sequence of chat messages into the model's context for
@@ -116,7 +116,7 @@ public:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const string& prompt,
+  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                            const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data) override;
 

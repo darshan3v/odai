@@ -44,7 +44,7 @@ public:
   /// @param user_data User-provided data passed to the callback function
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const string& query,
+  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
                                       const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                       void* user_data);
 
@@ -69,7 +69,7 @@ public:
   /// @param user_data User-provided data passed to the callback function
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const string& prompt,
+  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                            const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data);
 

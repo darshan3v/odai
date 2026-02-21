@@ -425,7 +425,8 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
   return total_tokens;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_response(const string& prompt, const SamplerConfig& sampler_config,
+int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& prompt,
+                                                     const SamplerConfig& sampler_config,
                                                      OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (this->m_isInitialized == false)
@@ -454,6 +455,15 @@ int32_t ODAILlamaEngine::generate_streaming_response(const string& prompt, const
     return -1;
   }
 
+  string text_prompt;
+  for (const auto& item : prompt)
+  {
+    if (item.m_type == TEXT)
+    {
+      text_prompt.append(item.m_data.begin(), item.m_data.end());
+    }
+  }
+
   unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler = this->get_new_llm_llama_sampler(sampler_config);
 
   if (llm_llama_sampler == nullptr)
@@ -462,7 +472,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(const string& prompt, const
     return -1;
   }
 
-  return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, prompt, callback, user_data);
+  return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, text_prompt, callback, user_data);
 }
 
 string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>& messages,
@@ -486,10 +496,24 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
   ODAI_LOG(ODAI_LOG_TRACE, "Got chat template from model: {}", tmpl);
 
   // Convert ChatMessage vector to llama_chat_message vector
-  vector<llama_chat_message> llama_messages;
+  vector<string> formatted_contents;
   for (const auto& msg : messages)
   {
-    llama_messages.push_back({msg.m_role.c_str(), msg.m_content.c_str()});
+    string text_content;
+    for (const auto& item : msg.m_contentItems)
+    {
+      if (item.m_type == TEXT)
+      {
+        text_content.append(item.m_data.begin(), item.m_data.end());
+      }
+    }
+    formatted_contents.push_back(text_content);
+  }
+
+  vector<llama_chat_message> llama_messages;
+  for (size_t i = 0; i < messages.size(); ++i)
+  {
+    llama_messages.push_back({messages[i].m_role.c_str(), formatted_contents[i].c_str()});
   }
 
   if (messages.size() == 1 && messages[0].m_role == "system")
@@ -584,7 +608,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   return true;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id, const string& prompt,
+int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                           const SamplerConfig& sampler_config,
                                                           OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -619,7 +643,10 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
   }
 
   // turn prompt into formatted prompt using chat template
-  string formatted_prompt = this->format_chat_messages_to_prompt({{"user", prompt}}, true);
+  ChatMessage user_msg;
+  user_msg.m_role = "user";
+  user_msg.m_contentItems = prompt;
+  string formatted_prompt = this->format_chat_messages_to_prompt({user_msg}, true);
 
   // Use the cached context and sampler to generate streaming response
   return this->generate_streaming_response_impl(*chat_session.m_context, *sampler, formatted_prompt, callback,
