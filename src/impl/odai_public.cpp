@@ -34,32 +34,26 @@ bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineCon
   return ODAISdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
 }
 
-bool odai_register_model(const c_ModelName model_name, const c_ModelPath model_path, const c_ModelType model_type)
+bool odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
 {
-  if (model_name == nullptr || model_path == nullptr)
+  if (model_name == nullptr || files == nullptr || !is_sane(files))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_register_model");
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_register_model_files");
     return false;
   }
 
-  if (!is_sane(model_type))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid model type passed");
-    return false;
-  }
-
-  return ODAISdk::get_instance().register_model(ModelName(model_name), ModelPath(model_path),
-                                                to_cpp_model_type(model_type));
+  return ODAISdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
 }
 
-bool odai_update_model_path(const c_ModelName model_name, const c_ModelPath model_path)
+bool odai_update_model_files(const c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag)
 {
-  if (model_name == nullptr || model_path == nullptr)
+  if (model_name == nullptr || files == nullptr || !is_sane(files))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_update_model_path");
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_update_model_files");
     return false;
   }
-  return ODAISdk::get_instance().update_model_path(ModelName(model_name), ModelPath(model_path));
+  return ODAISdk::get_instance().update_model_files(ModelName(model_name), to_cpp(*files),
+                                                    to_cpp_update_model_flag(flag));
 }
 
 bool odai_create_semantic_space(const c_SemanticSpaceConfig* config)

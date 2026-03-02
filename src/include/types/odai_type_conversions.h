@@ -11,6 +11,12 @@
 /// @return Corresponding C++ ModelType enum
 ModelType to_cpp_model_type(c_ModelType c);
 
+/// Converts c_UpdateModelFlag to C++ UpdateModelFlag enum
+UpdateModelFlag to_cpp_update_model_flag(c_UpdateModelFlag c);
+
+/// Converts a C-style ModelFiles to C++ style
+ModelFiles to_cpp(const c_ModelFiles& c);
+
 /// Converts c_InputItemType to C++ InputItemType enum
 InputItemType to_cpp_input_item_type(c_InputItemType c);
 
@@ -119,3 +125,4 @@ void from_json(const json& j, ChunkingConfig& p);
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(InputItem, m_type, m_data, m_mimeType)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, m_name, m_embeddingModelConfig, m_chunkingConfig, m_dimensions)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ChatConfig, m_persistence, m_systemPrompt, m_llmModelConfig)
+NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(ModelFiles, m_modelType, m_engineType, m_entries)

@@ -3,7 +3,10 @@
 #include "backendEngine/odai_llama_backend_engine.h"
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
+#include "types/odai_types.h"
 #include "utils/string_utils.h"
+#include <filesystem>
+#include <nlohmann/json.hpp>
 
 /// Redirects llama.cpp log messages to the Odai logging system.
 /// Maps GGML log levels to Odai log levels and filters out debug messages.
@@ -108,13 +111,47 @@ unique_ptr<llama_sampler, LlamaSamplerDeleter> ODAILlamaEngine::get_new_llm_llam
   return sampler;
 }
 
-bool ODAILlamaEngine::load_embedding_model(const ModelPath& path, const EmbeddingModelConfig& config)
+bool ODAILlamaEngine::validate_model_files(const ModelFiles& files) const
+{
+  if (!files.m_entries.contains("base_model_path"))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Missing 'base_model_path' in model registration details");
+    return false;
+  }
+  const std::string& path = files.m_entries.at("base_model_path");
+  if (path.empty() || !std::filesystem::exists(path))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid or missing file at 'base_model_path': {}", path);
+    return false;
+  }
+
+  if (files.m_entries.contains("mmproj_model_path"))
+  {
+    const std::string& mmproj_path = files.m_entries.at("mmproj_model_path");
+    if (!mmproj_path.empty() && !std::filesystem::exists(mmproj_path))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid or missing file at 'mmproj_model_path': {}", mmproj_path);
+      return false;
+    }
+  }
+
+  return true;
+}
+
+bool ODAILlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
 {
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
     return false;
   }
+
+  if (!this->validate_model_files(files))
+  {
+    return false;
+  }
+
+  std::string path = files.m_entries.at("base_model_path");
 
   if (this->m_currentEmbeddingModelPath == path)
   {
@@ -143,13 +180,20 @@ bool ODAILlamaEngine::load_embedding_model(const ModelPath& path, const Embeddin
   return true;
 }
 
-bool ODAILlamaEngine::load_language_model(const ModelPath& path, const LLMModelConfig& config)
+bool ODAILlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
 {
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized");
     return false;
   }
+
+  if (!this->validate_model_files(files))
+  {
+    return false;
+  }
+
+  std::string path = files.m_entries.at("base_model_path");
 
   if (this->m_currentLlmModelPath == path)
   {

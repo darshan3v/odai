@@ -5,6 +5,31 @@ inline bool is_sane(c_ModelType type)
   return (type == ODAI_MODEL_TYPE_EMBEDDING || type == ODAI_MODEL_TYPE_LLM);
 }
 
+inline bool is_sane(const c_ModelFiles* details)
+{
+  if (details == nullptr)
+  {
+    return false;
+  }
+  if (details->m_modelType > ODAI_MODEL_TYPE_LLM)
+  {
+    return false;
+  }
+  if (details->m_engineType > LLAMA_BACKEND_ENGINE)
+  {
+    return false;
+  }
+  if (details->m_entries == nullptr)
+  {
+    return false;
+  }
+  if (details->m_entriesCount == 0)
+  {
+    return false;
+  }
+  return true;
+}
+
 inline bool is_sane(const c_InputItem* item)
 {
   if (item == nullptr)

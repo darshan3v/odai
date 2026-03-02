@@ -42,18 +42,20 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
-  /// Registers a new model.
+  /// Registers a new model with generic files.
   /// @param name The unique name of the model.
-  /// @param path The file path to the model.
-  /// @param type The type of the model.
+  /// @param files The Model Files struct containing paths.
   /// @return true if registered successfully, false otherwise.
-  bool register_model(const ModelName& name, const ModelPath& path, ModelType type);
+  bool register_model_files(const ModelName& name, const ModelFiles& files);
 
-  /// Updates the path for a model.
+  /// Updates the registration files for a model.
+  /// Only the files explicitly provided in `files` will be updated and validated.
+  /// Existing registrations for other files belonging to the model remain untouched.
   /// @param name The name of the model.
-  /// @param path The new path.
+  /// @param files The Model Files struct containing paths to update.
+  /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if updated successfully, false otherwise.
-  bool update_model_path(const ModelName& name, const ModelPath& path);
+  bool update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag);
 
   /// Creates a new semantic space.
   /// @param config The configuration for the semantic space.

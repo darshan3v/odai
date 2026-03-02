@@ -14,24 +14,20 @@ class ODAIRagEngine
 public:
   ODAIRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
-  /// Registers a new model in the system with the given name and path.
-  /// The model path is validated and a checksum is computed to ensure
-  /// integrity.
+  /// Registers a new model in the system with the given name and paths.
+  /// The backend engine validates the paths and computes checksums.
   /// @param name The unique name to assign to the model.
-  /// @param path The full file system path to the model file.
-  /// @param type The type of the model.
-  /// @return true if registration succeeded, false if name exists or file is
-  /// invalid.
-  bool register_model(const ModelName& name, const ModelPath& path, ModelType type);
+  /// @param details The Model Registration Details struct containing paths.
+  /// @return true if registration succeeded, false if name exists or details are invalid.
+  bool register_model_files(const ModelName& name, const ModelFiles& details);
 
-  /// Updates the path for an existing model.
-  /// Validates that the new file has the same checksum as the originally
-  /// registered model.
+  /// Updates the registration details for an existing model.
+  /// Validates the details and potentially checks checksums based on the flag.
   /// @param name The name of the model to update.
-  /// @param path The new full file system path to the model file.
-  /// @return true if update succeeded, false if validation fails or model not
-  /// found.
-  bool update_model_path(const ModelName& name, const ModelPath& path);
+  /// @param details The Model Registration Details struct.
+  /// @param flag Flag indicating how to handle checksum changes.
+  /// @return true if update succeeded, false if validation fails or model not found.
+  bool update_model_files(const ModelName& name, const ModelFiles& details, UpdateModelFlag flag);
 
   /// Generates a streaming response for the given query.
   /// The response is streamed incrementally via the callback function.
@@ -93,9 +89,9 @@ private:
   /// Resolves the file system path for a given model name using cache or
   /// database.
   /// @param modelName The name of the model.
-  /// @param path Output parameter for the resolved path.
+  /// @param details Output parameter for the resolved paths.
   /// @return true if found, false otherwise.
-  bool resolve_model_path(const ModelName& model_name, ModelPath& path);
+  bool resolve_model_files(const ModelName& model_name, ModelFiles& details);
 
   /// Helper to ensure chat session is loaded into memory (backend engine
   /// context). If not loaded, it retrieves history from DB and loads it.
@@ -107,5 +103,5 @@ private:
   std::unique_ptr<ODAIDb> m_db;
   std::unique_ptr<ODAIBackendEngine> m_backendEngine;
 
-  unordered_map<string, string> m_modelPathCache;
+  unordered_map<string, ModelFiles> m_modelDetailsCache;
 };

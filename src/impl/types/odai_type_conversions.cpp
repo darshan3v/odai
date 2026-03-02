@@ -18,6 +18,34 @@ ModelType to_cpp_model_type(c_ModelType c)
   return ModelType::LLM;
 }
 
+UpdateModelFlag to_cpp_update_model_flag(c_UpdateModelFlag c)
+{
+  if (c == ODAI_UPDATE_STRICT_MATCH)
+  {
+    return UpdateModelFlag::STRICT_MATCH;
+  }
+  return UpdateModelFlag::ALLOW_MISMATCH;
+}
+
+ModelFiles to_cpp(const c_ModelFiles& c)
+{
+  ModelFiles details;
+  details.m_modelType = to_cpp_model_type(c.m_modelType);
+  details.m_engineType = c.m_engineType;
+
+  if ((c.m_entries != nullptr) && c.m_entriesCount > 0)
+  {
+    for (size_t i = 0; i < c.m_entriesCount; ++i)
+    {
+      if ((c.m_entries[i].m_key != nullptr) && (c.m_entries[i].m_value != nullptr))
+      {
+        details.m_entries[string(c.m_entries[i].m_key)] = string(c.m_entries[i].m_value);
+      }
+    }
+  }
+  return details;
+}
+
 InputItemType to_cpp_input_item_type(c_InputItemType c)
 {
   switch (c)

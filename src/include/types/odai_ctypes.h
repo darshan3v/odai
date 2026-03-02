@@ -26,6 +26,51 @@ typedef uint32_t c_ModelType;
 #define ODAI_MODEL_TYPE_EMBEDDING (c_ModelType)0
 #define ODAI_MODEL_TYPE_LLM (c_ModelType)1
 
+/// Flags for updating model registration details
+typedef uint32_t c_UpdateModelFlag;
+#define ODAI_UPDATE_STRICT_MATCH ((c_UpdateModelFlag)0)
+#define ODAI_UPDATE_ALLOW_MISMATCH ((c_UpdateModelFlag)1)
+
+/// Key-Value entry for model registration files
+struct c_ModelFileEntry
+{
+  const char* m_key;
+  const char* m_value;
+};
+
+/// Generic struct to hold model registration files
+struct c_ModelFiles
+{
+  c_ModelType m_modelType;
+  BackendEngineType m_engineType;
+  struct c_ModelFileEntry* m_entries;
+  size_t m_entriesCount;
+};
+
+inline void free_members(c_ModelFiles* details)
+{
+  if (details == nullptr)
+  {
+    return;
+  }
+  if (details->m_entries != nullptr)
+  {
+    for (size_t i = 0; i < details->m_entriesCount; ++i)
+    {
+      if (details->m_entries[i].m_key != nullptr)
+      {
+        free(const_cast<char*>(details->m_entries[i].m_key));
+      }
+      if (details->m_entries[i].m_value != nullptr)
+      {
+        free(const_cast<char*>(details->m_entries[i].m_value));
+      }
+    }
+    free(details->m_entries);
+    details->m_entries = nullptr;
+  }
+}
+
 /// Input Item Type for Multimodal Support
 typedef uint32_t c_InputItemType;
 #define ODAI_INPUT_ITEM_TYPE_TEXT (c_InputItemType)0

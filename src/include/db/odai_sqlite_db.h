@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <memory>
 #include <string>
 #include <vector>
@@ -24,7 +25,7 @@ private:
   string m_dbPath;
   unique_ptr<SQLite::Database> m_db = nullptr;
 
-  int m_transactionDepth = 0;
+  uint16_t m_transactionDepth = 0;
   std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
 
   /// Registers the sqlite-vec extension and opens the database connection.
@@ -67,31 +68,31 @@ public:
   bool rollback_transaction() override;
 
   /// Registers a new model in the database.
-  /// Stores the model name, path, checksum and type in the models table.
+  /// Stores the model name, details JSON, checksums JSON, and type in the models table.
   /// @param name The unique name to assign to the model
-  /// @param path The full file system path to the model file
-  /// @param type The type of the model (LLM or EMBEDDING)
-  /// @param checksum The checksum of the model file for integrity verification
+  /// @param details The generic model registration details
+  /// @param checksums The computed checksums for the files
   /// @return true if registration succeeded, false on error
-  bool register_model(const ModelName& name, const ModelPath& path, ModelType type, const string& checksum) override;
+  bool register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums) override;
 
-  /// Retrieves the file system path for a registered model.
+  /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
-  /// @param path Output parameter to store the model path
+  /// @param details Output parameter to store the model details
   /// @return true if model found, false if not found or on error
-  bool get_model_path(const ModelName& name, ModelPath& path) override;
+  bool get_model_files(const ModelName& name, ModelFiles& details) override;
 
-  /// Retrieves the stored checksum for a registered model.
+  /// Retrieves the stored checksums for a registered model.
   /// @param name The name of the model to look up
-  /// @param checksum Output parameter to store the model checksum
+  /// @param checksums Output parameter to store the model checksums
   /// @return true if model found, false if not found or on error
-  bool get_model_checksum(const ModelName& name, string& checksum) override;
+  bool get_model_checksums(const ModelName& name, string& checksums) override;
 
-  /// Updates the path for an existing model record.
+  /// Updates the details for an existing model record.
   /// @param name The name of the model to update
-  /// @param new_path The new file system path to store
+  /// @param new_details The new registration details to store
+  /// @param new_checksums The new computed checksums
   /// @return true if update succeeded, false on error
-  bool update_model_path(const ModelName& name, const ModelPath& new_path) override;
+  bool update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums) override;
 
   /// Creates a new semantic space configuration in the database.
   /// @param config The semantic space configuration to store.
@@ -223,8 +224,8 @@ CREATE TABLE semantic_spaces (
 
 CREATE TABLE models (
     name TEXT NOT NULL PRIMARY KEY,
-    path TEXT NOT NULL,
-    checksum TEXT NOT NULL,
+    details BLOB NOT NULL,
+    checksums BLOB NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('LLM', 'EMBEDDING')),
     created_at INTEGER NOT NULL DEFAULT (unixepoch())
 );

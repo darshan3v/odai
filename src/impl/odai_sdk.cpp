@@ -88,7 +88,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
   }
 }
 
-bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, const ModelType type)
+bool ODAISdk::register_model_files(const ModelName& name, const ModelFiles& files)
 {
   try
   {
@@ -98,7 +98,7 @@ bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, const
       return false;
     }
 
-    return m_ragEngine->register_model(name, path, type);
+    return m_ragEngine->register_model_files(name, files);
   }
   catch (...)
   {
@@ -107,7 +107,7 @@ bool ODAISdk::register_model(const ModelName& name, const ModelPath& path, const
   }
 }
 
-bool ODAISdk::update_model_path(const ModelName& name, const ModelPath& path)
+bool ODAISdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
 {
   try
   {
@@ -117,7 +117,7 @@ bool ODAISdk::update_model_path(const ModelName& name, const ModelPath& path)
       return false;
     }
 
-    return m_ragEngine->update_model_path(name, path);
+    return m_ragEngine->update_model_files(name, files, flag);
   }
   catch (...)
   {

@@ -39,20 +39,22 @@ extern "C"
   /// @return true if initialization succeeded, false otherwise
   ODAI_API bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
 
-  /// Registers a new model in the system with the given name and path.
-  /// The model path is validated and a checksum is computed to ensure integrity.
+  /// Registers a new model in the system with the given name and generic files map.
+  /// The engine validates the files and a checksum is computed to ensure integrity.
   /// @param model_name The unique name to assign to the model.
-  /// @param model_path The full file system path to the model file.
-  /// @param model_type The type of the model ("LLM" or "EMBEDDING").
-  /// @return true if registration succeeded, false if name exists or file is invalid.
-  ODAI_API bool odai_register_model(c_ModelName model_name, c_ModelPath model_path, c_ModelType model_type);
+  /// @param files The Model Files struct containing paths
+  /// @return true if registration succeeded, false if name exists or properties are invalid.
+  ODAI_API bool odai_register_model_files(c_ModelName model_name, const c_ModelFiles* files);
 
-  /// Updates the path for an existing model.
-  /// Validates that the new file has the same checksum as the originally registered model.
+  /// Updates the registration files for an existing model.
+  /// Validates the files and potentially checks checksums based on the flag.
+  /// Only the files explicitly provided in `files` will be updated and validated.
+  /// Existing registrations for other files properties belonging to the model remain untouched.
   /// @param model_name The name of the model to update.
-  /// @param model_path The new full file system path to the model file.
+  /// @param files The Model Files struct containing paths to update.
+  /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if update succeeded, false if validation fails or model not found.
-  ODAI_API bool odai_update_model_path(c_ModelName model_name, c_ModelPath model_path);
+  ODAI_API bool odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);
 
   /// Creates a new semantic space configuration.
   /// @param config The semantic space configuration to create.

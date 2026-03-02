@@ -74,19 +74,25 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_engine() override;
 
+  /// Validates the model files specifically for llama.cpp backend.
+  /// Expects 'base_model_path' key to be present and pointing to a valid file.
+  /// @param files The generic model files to validate.
+  /// @return true if valid, false otherwise.
+  bool validate_model_files(const ModelFiles& files) const override;
+
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
-  /// @param path The resolved file system path to the model.
+  /// @param files The generic model files containing paths.
   /// @param config Configuration containing parameters.
   /// @return true if model loaded successfully, false otherwise
-  bool load_embedding_model(const ModelPath& path, const EmbeddingModelConfig& config) override;
+  bool load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config) override;
 
   /// Loads a language model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
-  /// @param path The resolved file system path to the model.
+  /// @param files The generic model files containing paths.
   /// @param config Configuration containing parameters.
   /// @return true if model loaded successfully, false otherwise
-  bool load_language_model(const ModelPath& path, const LLMModelConfig& config) override;
+  bool load_language_model(const ModelFiles& files, const LLMModelConfig& config) override;
 
   /// Generates a streaming response for the given prompt using the loaded
   /// language model.

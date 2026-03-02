@@ -9,7 +9,9 @@ using namespace std;
 /// @return A unique string identifier in the format "chat_<random>_<timestamp>"
 ChatId generate_chat_id();
 
-/// Calculates the XXHash checksum of a file.
-/// @param path The path to the file.
-/// @return The hex string representation of the checksum, or empty string on error.
 string calculate_file_checksum(const string& path);
+
+/// Calculates checksums for all files in a ModelFiles struct.
+/// @param files The Model Files struct containing paths.
+/// @return A JSON string containing key-value pairs of checksums, or empty string on error.
+string calculate_model_checksums(const ModelFiles& files);

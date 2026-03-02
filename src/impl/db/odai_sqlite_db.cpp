@@ -22,7 +22,7 @@ bool ODAISqliteDb::register_vec_extension()
   try
   {
     // because of the way sqlite3 is built, can't directly call sqlite3_vec_init, if you call it will crash
-    int ret_code = sqlite3_auto_extension((void (*)(void))sqlite3_vec_init);
+    int64_t ret_code = sqlite3_auto_extension((void (*)(void))sqlite3_vec_init);
 
     if (ret_code != SQLITE_OK)
     {
@@ -176,7 +176,7 @@ bool ODAISqliteDb::rollback_transaction()
   }
 }
 
-bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, ModelType type, const string& checksum)
+bool ODAISqliteDb::register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums)
 {
   try
   {
@@ -186,18 +186,18 @@ bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, 
       return false;
     }
 
-    if (checksum.empty())
+    if (checksums.empty())
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "Empty checksum passed for file: {}", path);
+      ODAI_LOG(ODAI_LOG_ERROR, "Empty checksums passed for model: {}", name);
       return false;
     }
 
     string type_str;
-    if (type == ModelType::LLM)
+    if (details.m_modelType == ModelType::LLM)
     {
       type_str = "LLM";
     }
-    else if (type == ModelType::EMBEDDING)
+    else if (details.m_modelType == ModelType::EMBEDDING)
     {
       type_str = "EMBEDDING";
     }
@@ -207,11 +207,14 @@ bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, 
       return false;
     }
 
-    SQLite::Statement insert(*m_db,
-                             "INSERT INTO models (name, path, checksum, type) VALUES (:name, :path, :checksum, :type)");
+    json j = details;
+    string details_json = j.dump();
+
+    SQLite::Statement insert(*m_db, "INSERT INTO models (name, details, checksums, type) VALUES (:name, "
+                                    "jsonb(:details), jsonb(:checksums), :type)");
     insert.bind(":name", name);
-    insert.bind(":path", path);
-    insert.bind(":checksum", checksum);
+    insert.bind(":details", details_json);
+    insert.bind(":checksums", checksums);
     insert.bind(":type", type_str);
 
     insert.exec();
@@ -225,7 +228,7 @@ bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, 
   }
 }
 
-bool ODAISqliteDb::get_model_path(const ModelName& name, ModelPath& path)
+bool ODAISqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
 {
   try
   {
@@ -235,12 +238,14 @@ bool ODAISqliteDb::get_model_path(const ModelName& name, ModelPath& path)
       return false;
     }
 
-    SQLite::Statement query(*m_db, "SELECT path FROM models WHERE name = :name LIMIT 1");
+    SQLite::Statement query(*m_db, "SELECT json(details) as details FROM models WHERE name = :name LIMIT 1");
     query.bind(":name", name);
 
     if (query.executeStep())
     {
-      path = query.getColumn("path").getString();
+      SQLite::Column details_col = query.getColumn("details");
+      json details_json = json::parse(details_col.getString());
+      details = details_json.get<ModelFiles>();
       return true;
     }
 
@@ -248,12 +253,12 @@ bool ODAISqliteDb::get_model_path(const ModelName& name, ModelPath& path)
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model path: {}, Error: {}", name, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model details: {}, Error: {}", name, e.what());
     return false;
   }
 }
 
-bool ODAISqliteDb::get_model_checksum(const ModelName& name, string& checksum)
+bool ODAISqliteDb::get_model_checksums(const ModelName& name, string& checksums)
 {
   try
   {
@@ -263,12 +268,12 @@ bool ODAISqliteDb::get_model_checksum(const ModelName& name, string& checksum)
       return false;
     }
 
-    SQLite::Statement query(*m_db, "SELECT checksum FROM models WHERE name = :name LIMIT 1");
+    SQLite::Statement query(*m_db, "SELECT json(checksums) as checksums FROM models WHERE name = :name LIMIT 1");
     query.bind(":name", name);
 
     if (query.executeStep())
     {
-      checksum = query.getColumn("checksum").getString();
+      checksums = query.getColumn("checksums").getString();
       return true;
     }
 
@@ -276,12 +281,12 @@ bool ODAISqliteDb::get_model_checksum(const ModelName& name, string& checksum)
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model checksum: {}, Error: {}", name, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model checksums: {}, Error: {}", name, e.what());
     return false;
   }
 }
 
-bool ODAISqliteDb::update_model_path(const ModelName& name, const ModelPath& new_path)
+bool ODAISqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums)
 {
   try
   {
@@ -291,8 +296,13 @@ bool ODAISqliteDb::update_model_path(const ModelName& name, const ModelPath& new
       return false;
     }
 
-    SQLite::Statement update(*m_db, "UPDATE models SET path = :path WHERE name = :name");
-    update.bind(":path", new_path);
+    json j = new_details;
+    string details_json = j.dump();
+
+    SQLite::Statement update(
+        *m_db, "UPDATE models SET details = jsonb(:details), checksums = jsonb(:checksums) WHERE name = :name");
+    update.bind(":details", details_json);
+    update.bind(":checksums", new_checksums);
     update.bind(":name", name);
 
     update.exec();
@@ -301,7 +311,7 @@ bool ODAISqliteDb::update_model_path(const ModelName& name, const ModelPath& new
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update model path: {}, Error: {}", name, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update model details: {}, Error: {}", name, e.what());
     return false;
   }
 }

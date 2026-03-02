@@ -40,31 +40,32 @@ public:
   virtual bool rollback_transaction() = 0;
 
   /// Registers a new model in the database.
-  /// Stores the model name, path, checksum and type in the models table.
+  /// Stores the model name, details JSON, checksums JSON, and type in the models table.
   /// @param name The unique name to assign to the model
-  /// @param path The full file system path to the model file
-  /// @param type The type of the model (LLM or EMBEDDING)
-  /// @param checksum The checksum of the model file for integrity verification
+  /// @param details The generic model registration details
+  /// @param checksums The computed checksums for the files
   /// @return true if registration succeeded, false on error
-  virtual bool register_model(const ModelName& name, const ModelPath& path, ModelType type, const string& checksum) = 0;
+  virtual bool register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums) = 0;
 
-  /// Retrieves the file system path for a registered model.
+  /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
-  /// @param path Output parameter to store the model path
+  /// @param details Output parameter to store the model details
   /// @return true if model found, false if not found or on error
-  virtual bool get_model_path(const ModelName& name, ModelPath& path) = 0;
+  virtual bool get_model_files(const ModelName& name, ModelFiles& details) = 0;
 
-  /// Retrieves the stored checksum for a registered model.
+  /// Retrieves the stored checksums for a registered model.
   /// @param name The name of the model to look up
-  /// @param checksum Output parameter to store the model checksum
+  /// @param checksums Output parameter to store the model checksums
   /// @return true if model found, false if not found or on error
-  virtual bool get_model_checksum(const ModelName& name, string& checksum) = 0;
+  virtual bool get_model_checksums(const ModelName& name, string& checksums) = 0;
 
-  /// Updates the path for an existing model record.
+  /// Updates the details for an existing model record.
   /// @param name The name of the model to update
-  /// @param new_path The new file system path to store
+  /// @param new_details The new registration details to store
+  /// @param new_checksums The new computed checksums
   /// @return true if update succeeded, false on error
-  virtual bool update_model_path(const ModelName& name, const ModelPath& new_path) = 0;
+  virtual bool update_model_files(const ModelName& name, const ModelFiles& new_details,
+                                  const string& new_checksums) = 0;
 
   /// Creates a new semantic space.
   /// @param config The configuration for the semantic space.

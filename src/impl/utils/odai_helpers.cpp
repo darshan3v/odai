@@ -6,6 +6,7 @@
 
 #include "utils/odai_helpers.h"
 #include "xxhash.h"
+#include <nlohmann/json.hpp>
 
 using namespace std;
 
@@ -48,4 +49,25 @@ string calculate_file_checksum(const string& path)
   stringstream ss;
   ss << hex << setw(16) << setfill('0') << hash;
   return ss.str();
+}
+
+string calculate_model_checksums(const ModelFiles& files)
+{
+  nlohmann::json checksums_json;
+  for (const auto& [key, path] : files.m_entries)
+  {
+    string checksum = calculate_file_checksum(path);
+    if (!checksum.empty())
+    {
+      checksums_json[key] = checksum;
+    }
+    // if checksum fails, it might just be an optional file that doesn't exist, but we skip it.
+  }
+
+  if (checksums_json.empty() && !files.m_entries.empty())
+  {
+    return ""; // Failed to calculate any checksums
+  }
+
+  return checksums_json.dump();
 }

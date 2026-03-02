@@ -12,19 +12,24 @@ public:
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_engine() = 0;
 
+  /// Validates the given model registration paths for this specific backend engine.
+  /// @param files The generic model paths to validate.
+  /// @return true if the files contain required paths and are valid.
+  virtual bool validate_model_files(const ModelFiles& files) const = 0;
+
   /// Loads an embedding model from the specified configuration.
   /// If a model is already loaded, it will be freed and replaced with the new one.
-  /// @param path The resolved file system path to the model.
+  /// @param files The Model Files struct.
   /// @param config Configuration containing parameters.
   /// @return true if model loaded successfully, false otherwise
-  virtual bool load_embedding_model(const ModelPath& path, const EmbeddingModelConfig& config) = 0;
+  virtual bool load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config) = 0;
 
   /// Loads a language model from the specified configuration.
   /// If a model is already loaded, it will be freed and replaced with the new one.
-  /// @param path The resolved file system path to the model.
+  /// @param files The Model Files struct.
   /// @param config Configuration containing parameters.
   /// @return true if model loaded successfully, false otherwise
-  virtual bool load_language_model(const ModelPath& path, const LLMModelConfig& config) = 0;
+  virtual bool load_language_model(const ModelFiles& files, const LLMModelConfig& config) = 0;
 
   /// Generates a streaming response for the given prompt using the loaded language model.
   /// The response is streamed incrementally via the callback function.

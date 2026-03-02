@@ -32,50 +32,84 @@ ODAIRagEngine::ODAIRagEngine(const DBConfig& db_config, const BackendEngineConfi
   ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
 }
 
-bool ODAIRagEngine::register_model(const ModelName& name, const ModelPath& path, ModelType type)
+bool ODAIRagEngine::register_model_files(const ModelName& name, const ModelFiles& details)
 {
-  string checksum = calculate_file_checksum(path);
-  if (checksum.empty())
+  if (!m_backendEngine->validate_model_files(details))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksum for file: {}", path);
+    ODAI_LOG(ODAI_LOG_ERROR, "Validation failed for model details: {}", name);
     return false;
   }
 
-  if (m_db->register_model(name, path, type, checksum))
+  string checksums = calculate_model_checksums(details);
+  if (checksums.empty())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
+    return false;
+  }
+
+  if (m_db->register_model_files(name, details, checksums))
   {
     // Update cache
-    m_modelPathCache[name] = path;
+    m_modelDetailsCache[name] = details;
     return true;
   }
   return false;
 }
 
-bool ODAIRagEngine::update_model_path(const ModelName& name, const ModelPath& path)
+bool ODAIRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_details, UpdateModelFlag flag)
 {
-  const string checksum = calculate_file_checksum(path);
-  if (checksum.empty())
+  if (!m_backendEngine->validate_model_files(new_details))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksum for file: {}", path);
+    ODAI_LOG(ODAI_LOG_ERROR, "Validation failed for model details: {}", name);
     return false;
   }
 
-  string old_checksum;
-  if (!m_db->get_model_checksum(name, old_checksum))
+  string new_checksums = calculate_model_checksums(new_details);
+  if (new_checksums.empty())
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksum: {}", name);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
     return false;
   }
 
-  if (checksum != old_checksum)
+  if (flag == UpdateModelFlag::STRICT_MATCH)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {}. Expected: {}, Got: {}", name, old_checksum, checksum);
-    return false;
+    string old_checksums;
+    if (!m_db->get_model_checksums(name, old_checksums))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}", name);
+      return false;
+    }
+
+    try
+    {
+      auto new_checksums_json = nlohmann::json::parse(new_checksums);
+      auto old_checksums_json = nlohmann::json::parse(old_checksums);
+
+      for (auto it = new_checksums_json.begin(); it != new_checksums_json.end(); ++it)
+      {
+        const string& key = it.key();
+        if (old_checksums_json.contains(key))
+        {
+          if (old_checksums_json[key] != it.value())
+          {
+            ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {} on key: {}. Expected: {}, Got: {}", name, key,
+                     old_checksums_json[key].dump(), it.value().dump());
+            return false;
+          }
+        }
+      }
+    }
+    catch (...)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to parse/compare checksum JSONs");
+      return false;
+    }
   }
 
-  if (m_db->update_model_path(name, path))
+  if (m_db->update_model_files(name, new_details, new_checksums))
   {
     // Update cache
-    m_modelPathCache[name] = path;
+    m_modelDetailsCache[name] = new_details;
     return true;
   }
   return false;
@@ -97,14 +131,14 @@ int32_t ODAIRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  ModelPath model_path;
-  if (!this->resolve_model_path(llm_model_config.m_modelName, model_path))
+  ModelFiles details;
+  if (!this->resolve_model_files(llm_model_config.m_modelName, details))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve path for model: {}", llm_model_config.m_modelName);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve details for model: {}", llm_model_config.m_modelName);
     return -1;
   }
 
-  if (!m_backendEngine->load_language_model(model_path, llm_model_config))
+  if (!m_backendEngine->load_language_model(details, llm_model_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
     return -1;
@@ -278,21 +312,21 @@ bool ODAIRagEngine::unload_chat_session(const ChatId& chat_id)
   return this->m_backendEngine->unload_chat_context(chat_id);
 }
 
-bool ODAIRagEngine::resolve_model_path(const ModelName& model_name, ModelPath& path)
+bool ODAIRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles& details)
 {
   // check cache first
-  auto it = m_modelPathCache.find(model_name);
-  if (it != m_modelPathCache.end())
+  auto it = m_modelDetailsCache.find(model_name);
+  if (it != m_modelDetailsCache.end())
   {
-    path = it->second;
+    details = it->second;
     return true;
   }
 
   // if not in cache, check db
-  if (m_db->get_model_path(model_name, path))
+  if (m_db->get_model_files(model_name, details))
   {
     // update cache
-    m_modelPathCache[model_name] = path;
+    m_modelDetailsCache[model_name] = details;
     return true;
   }
 
@@ -305,14 +339,14 @@ bool ODAIRagEngine::ensure_chat_session_loaded(const ChatId& chat_id, const Chat
   // 1. Ensure the correct language model is loaded
   // This call handles checking if the model is already loaded (fast path),
   // and if not, it loads it and CLEARS existing contexts (slow path).
-  ModelPath model_path;
-  if (!resolve_model_path(chat_config.m_llmModelConfig.m_modelName, model_path))
+  ModelFiles details;
+  if (!resolve_model_files(chat_config.m_llmModelConfig.m_modelName, details))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to resolve model path for chat {}", chat_id);
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to resolve model details for chat {}", chat_id);
     return false;
   }
 
-  if (!m_backendEngine->load_language_model(model_path, chat_config.m_llmModelConfig))
+  if (!m_backendEngine->load_language_model(details, chat_config.m_llmModelConfig))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat {}, error : failed to load language Model", chat_id);
     return false;

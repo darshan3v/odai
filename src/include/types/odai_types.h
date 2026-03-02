@@ -6,6 +6,7 @@
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
+#include <unordered_map>
 #include <variant>
 
 using namespace std;
@@ -36,6 +37,21 @@ enum ModelType
 {
   EMBEDDING,
   LLM
+};
+
+enum UpdateModelFlag
+{
+  STRICT_MATCH = ODAI_UPDATE_STRICT_MATCH,
+  ALLOW_MISMATCH = ODAI_UPDATE_ALLOW_MISMATCH
+};
+
+struct ModelFiles
+{
+  ModelType m_modelType;
+  BackendEngineType m_engineType{};
+  std::unordered_map<std::string, std::string> m_entries;
+
+  bool is_sane() const { return m_engineType == LLAMA_BACKEND_ENGINE; }
 };
 
 enum InputItemType
@@ -107,7 +123,7 @@ struct BackendEngineConfig
 struct EmbeddingModelConfig
 {
   /// Name of the embedding model to use (must be registered via
-  /// odai_register_model).
+  /// odai_register_model_files).
   ModelName m_modelName;
 
   bool is_sane() const { return !m_modelName.empty(); }
@@ -117,7 +133,7 @@ struct EmbeddingModelConfig
 struct LLMModelConfig
 {
   /// Name of the language model to use (must be registered via
-  /// odai_register_model).
+  /// odai_register_model_files).
   ModelName m_modelName;
 
   bool is_sane() const { return !m_modelName.empty(); }
