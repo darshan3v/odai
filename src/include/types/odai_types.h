@@ -57,16 +57,13 @@ struct InputItem
   std::string get_text() const
   {
     if (m_data.empty())
+    {
       return "";
+    }
     return std::string(reinterpret_cast<const char*>(m_data.data()), m_data.size());
   }
 
-  bool is_sane() const
-  {
-    if (m_data.empty())
-      return false;
-    return true;
-  }
+  bool is_sane() const { return !m_data.empty(); }
 };
 
 struct DBConfig
@@ -81,10 +78,14 @@ struct DBConfig
   bool is_sane() const
   {
     if (m_dbPath.empty())
+    {
       return false;
+    }
 
     if (m_dbType != SQLITE_DB)
+    {
       return false;
+    }
 
     return true;
   }
@@ -97,13 +98,7 @@ struct BackendEngineConfig
   /// Backend engine type (e.g., LLAMA_BACKEND_ENGINE)
   BackendEngineType m_engineType;
 
-  bool is_sane() const
-  {
-    if (m_engineType != LLAMA_BACKEND_ENGINE)
-      return false;
-
-    return true;
-  }
+  bool is_sane() const { return m_engineType == LLAMA_BACKEND_ENGINE; }
 };
 
 /// Configuration structure for embedding models.
@@ -115,30 +110,17 @@ struct EmbeddingModelConfig
   /// odai_register_model).
   ModelName m_modelName;
 
-  bool is_sane() const
-  {
-    if (m_modelName.empty())
-      return false;
-
-    return true;
-  }
+  bool is_sane() const { return !m_modelName.empty(); }
 };
 
 /// Configuration structure for language models (LLMs).
-/// Contains the path to the language model file used for text generation.
 struct LLMModelConfig
 {
   /// Name of the language model to use (must be registered via
   /// odai_register_model).
   ModelName m_modelName;
 
-  bool is_sane() const
-  {
-    if (m_modelName.empty())
-      return false;
-
-    return true;
-  }
+  bool is_sane() const { return !m_modelName.empty(); }
 };
 
 /// Configuration for Fixed Size Chunking Strategy
@@ -150,9 +132,13 @@ struct FixedSizeChunkingConfig
   bool is_sane() const
   {
     if (m_chunkSize == 0)
+    {
       return false;
+    }
     if (m_chunkOverlap >= m_chunkSize)
+    {
       return false;
+    }
     return true;
   }
 };
@@ -184,16 +170,22 @@ struct SemanticSpaceConfig
   SemanticSpaceName m_name;
   EmbeddingModelConfig m_embeddingModelConfig;
   ChunkingConfig m_chunkingConfig;
-  uint32_t m_dimensions;
+  uint32_t m_dimensions{};
 
   bool is_sane() const
   {
     if (m_name.empty())
+    {
       return false;
+    }
     if (!m_embeddingModelConfig.is_sane())
+    {
       return false;
+    }
     if (!m_chunkingConfig.is_sane())
+    {
       return false;
+    }
     // dimensions == 0 means auto-infer from model
 
     return true;
@@ -220,9 +212,13 @@ struct RetrievalConfig
   bool is_sane() const
   {
     if (m_topK == 0)
+    {
       return false;
-    if (m_scoreThreshold < 0.0f || m_scoreThreshold > 1.0f)
+    }
+    if (m_scoreThreshold < 0.0F || m_scoreThreshold > 1.0F)
+    {
       return false;
+    }
 
     return true;
   }
@@ -232,18 +228,24 @@ struct RetrievalConfig
 /// Uses SemanticSpaceName to reference an existing space.
 struct GeneratorRagConfig
 {
-  RetrievalConfig m_retrievalConfig;
+  RetrievalConfig m_retrievalConfig{};
   SemanticSpaceName m_semanticSpaceName;
   ScopeId m_scopeId;
 
   bool is_sane() const
   {
     if (!m_retrievalConfig.is_sane())
+    {
       return false;
+    }
     if (m_semanticSpaceName.empty())
+    {
       return false;
+    }
     if (m_scopeId.empty())
+    {
       return false;
+    }
     return true;
   }
 };
@@ -252,15 +254,19 @@ struct GeneratorRagConfig
 /// Includes full SemanticSpaceConfig definition.
 struct RagGenerationConfig
 {
-  RetrievalConfig m_retrievalConfig;
+  RetrievalConfig m_retrievalConfig{};
   SemanticSpaceConfig m_semanticSpaceConfig;
 
   bool is_sane() const
   {
     if (!m_retrievalConfig.is_sane())
+    {
       return false;
+    }
     if (!m_semanticSpaceConfig.is_sane())
+    {
       return false;
+    }
     return true;
   }
 };
@@ -276,11 +282,17 @@ struct SamplerConfig
   bool is_sane() const
   {
     if (m_maxTokens == 0)
+    {
       return false;
-    if (m_topP < 0.0f || m_topP > 1.0f)
+    }
+    if (m_topP < 0.0F || m_topP > 1.0F)
+    {
       return false;
+    }
     if (m_topK <= 0)
+    {
       return false;
+    }
 
     return true;
   }
@@ -290,25 +302,33 @@ struct SamplerConfig
 struct GeneratorConfig
 {
   SamplerConfig m_samplerConfig;
-  RagMode m_ragMode;
+  RagMode m_ragMode{};
   std::optional<GeneratorRagConfig> m_ragConfig;
 
   bool is_sane() const
   {
     if (!m_samplerConfig.is_sane())
+    {
       return false;
+    }
 
     if (m_ragMode == RAG_MODE_NEVER)
     {
       if (m_ragConfig.has_value())
+      {
         return false;
+      }
     }
     else // ALWAYS or DYNAMIC
     {
       if (!m_ragConfig.has_value())
+      {
         return false;
+      }
       if (!m_ragConfig->is_sane())
+      {
         return false;
+      }
     }
 
     return true;
@@ -322,7 +342,7 @@ struct GeneratorConfig
 struct ChatConfig
 {
   /// Whether chat messages should be persisted to the database
-  bool m_persistence;
+  bool m_persistence{};
   /// System prompt that defines the assistant's behavior and instructions
   string m_systemPrompt;
   /// Configuration for the language model used in this chat session
@@ -331,9 +351,13 @@ struct ChatConfig
   bool is_sane() const
   {
     if (m_systemPrompt.empty())
+    {
       return false;
+    }
     if (!m_llmModelConfig.is_sane())
+    {
       return false;
+    }
 
     return true;
   }
@@ -350,19 +374,25 @@ struct ChatMessage
   /// JSON object for additional metadata (citations, context, etc.)
   json m_messageMetadata;
   /// Unix timestamp when the message was created
-  uint64_t m_createdAt;
+  uint64_t m_createdAt{};
 
   bool is_sane() const
   {
     if (m_role != "user" && m_role != "assistant" && m_role != "system")
+    {
       return false;
+    }
     if (m_contentItems.empty())
+    {
       return false;
+    }
 
     for (const auto& item : m_contentItems)
     {
       if (!item.is_sane())
+      {
         return false;
+      }
     }
 
     return true;
@@ -372,6 +402,6 @@ struct ChatMessage
 struct StreamingBufferContext
 {
   string m_bufferedResponse;
-  OdaiStreamRespCallbackFn m_userCallback;
-  void* m_userData;
+  OdaiStreamRespCallbackFn m_userCallback{};
+  void* m_userData{};
 };

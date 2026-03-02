@@ -69,7 +69,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
     // Initalize the RAGEngine
     m_ragEngine = make_unique<ODAIRagEngine>(db_config, backend_config);
 
-    if ((m_ragEngine.get() == nullptr))
+    if ((m_ragEngine == nullptr))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine");
       m_sdkInitialized = false;
@@ -136,7 +136,7 @@ bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
       return false;
     }
 
-    if (config.is_sane() == false)
+    if (!config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
       return false;
@@ -211,7 +211,7 @@ bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
 }
 
 bool ODAISdk::add_document(const string& content, const DocumentId& document_id,
-                           const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id)
+                           const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const
 {
   try
   {

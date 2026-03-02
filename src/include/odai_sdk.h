@@ -47,7 +47,7 @@ public:
   /// @param path The file path to the model.
   /// @param type The type of the model.
   /// @return true if registered successfully, false otherwise.
-  bool register_model(const ModelName& name, const ModelPath& path, const ModelType type);
+  bool register_model(const ModelName& name, const ModelPath& path, ModelType type);
 
   /// Updates the path for a model.
   /// @param name The name of the model.
@@ -83,7 +83,7 @@ public:
   /// @param scopeId Scope identifier to group documents
   /// @return true if document was added successfully, false otherwise
   bool add_document(const string& content, const DocumentId& document_id, const SemanticSpaceName& semantic_space_name,
-                    const ScopeId& scope_id);
+                    const ScopeId& scope_id) const;
 
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG

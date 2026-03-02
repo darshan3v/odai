@@ -16,13 +16,21 @@ static void llama_log_redirect(ggml_log_level level, const char* text, void* use
   OdaiLogLevel our_level = ODAI_LOG_INFO;
 
   if (level == GGML_LOG_LEVEL_ERROR)
+  {
     our_level = ODAI_LOG_ERROR;
+  }
   else if (level == GGML_LOG_LEVEL_WARN)
+  {
     our_level = ODAI_LOG_WARN;
+  }
   else if (level == GGML_LOG_LEVEL_INFO)
+  {
     our_level = ODAI_LOG_INFO;
+  }
   else
+  {
     return; // Ignore debug/spam from llama if you want
+  }
 
   ODAI_LOG(our_level, "[llama.cpp] {}", text);
 }
@@ -102,7 +110,7 @@ unique_ptr<llama_sampler, LlamaSamplerDeleter> ODAILlamaEngine::get_new_llm_llam
 
 bool ODAILlamaEngine::load_embedding_model(const ModelPath& path, const EmbeddingModelConfig& config)
 {
-  if (this->m_isInitialized == false)
+  if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
     return false;
@@ -137,7 +145,7 @@ bool ODAILlamaEngine::load_embedding_model(const ModelPath& path, const Embeddin
 
 bool ODAILlamaEngine::load_language_model(const ModelPath& path, const LLMModelConfig& config)
 {
-  if (this->m_isInitialized == false)
+  if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized");
     return false;
@@ -233,7 +241,7 @@ string ODAILlamaEngine::detokenize(const vector<llama_token>& tokens)
     return "";
   }
 
-  string result = "";
+  string result;
 
   for (llama_token token : tokens)
   {
@@ -289,7 +297,7 @@ void ODAILlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, lla
 bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
                                                     uint32_t& next_pos, const bool request_logits_for_last_token)
 {
-  if (tokens.size() == 0)
+  if (tokens.empty())
   {
     ODAI_LOG(ODAI_LOG_WARN, "empty token sequence passed");
     return true;
@@ -311,7 +319,7 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
 
   batch.reset(new llama_batch(llama_batch_init(tokens.size(), 0, 1)));
 
-  this->add_tokens_to_batch(tokens, *batch, next_pos, 0, request_logits_for_last_token);
+  ODAILlamaEngine::add_tokens_to_batch(tokens, *batch, next_pos, 0, request_logits_for_last_token);
 
   if (llama_decode(&model_context, *batch) != 0)
   {
@@ -329,19 +337,20 @@ bool ODAILlamaEngine::load_into_context(llama_context& model_context, const stri
 
   vector<llama_token> prompt_tokens = this->tokenize(prompt, is_first, ModelType::LLM);
 
-  if (prompt_tokens.size() == 0)
+  if (prompt_tokens.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt");
     return false;
   }
 
-  return this->load_tokens_into_context_impl(model_context, prompt_tokens, next_pos, request_logits_for_last_token);
+  return ODAILlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens, next_pos,
+                                                        request_logits_for_last_token);
 }
 
 bool ODAILlamaEngine::load_into_context(llama_context& model_context, const vector<llama_token>& tokens,
                                         uint32_t& next_pos, const bool request_logits_for_last_token)
 {
-  return this->load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
+  return ODAILlamaEngine::load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
 }
 
 bool ODAILlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
@@ -385,14 +394,14 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
     return -1;
   }
 
-  llama_token generated_token;
+  llama_token generated_token = 0;
   vector<llama_token> buffered_tokens;
   int32_t total_tokens = 0;
   string output_buffer;
 
   while (true)
   {
-    if (!generate_next_token(model_context, sampler, generated_token, true))
+    if (!ODAILlamaEngine::generate_next_token(model_context, sampler, generated_token, true))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate next token");
       return -1;
@@ -402,11 +411,13 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
     if (llama_vocab_is_eog(this->m_llmVocab, generated_token))
     {
       // flush left over tokens
-      if (buffered_tokens.size() > 0)
+      if (!buffered_tokens.empty())
       {
         string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
         if (!callback(safe_output_buffer.c_str(), user_data))
+        {
           return total_tokens;
+        }
       }
       break;
     }
@@ -418,7 +429,9 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
     {
       string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
       if (!callback(safe_output_buffer.c_str(), user_data))
+      {
         return total_tokens;
+      }
     }
   }
 
@@ -429,7 +442,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& pr
                                                      const SamplerConfig& sampler_config,
                                                      OdaiStreamRespCallbackFn callback, void* user_data)
 {
-  if (this->m_isInitialized == false)
+  if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet hence can't generate response");
     return -1;
@@ -464,7 +477,8 @@ int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& pr
     }
   }
 
-  unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler = this->get_new_llm_llama_sampler(sampler_config);
+  unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler =
+      ODAILlamaEngine::get_new_llm_llama_sampler(sampler_config);
 
   if (llm_llama_sampler == nullptr)
   {
@@ -511,6 +525,7 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
   }
 
   vector<llama_chat_message> llama_messages;
+  llama_messages.reserve(messages.size());
   for (size_t i = 0; i < messages.size(); ++i)
   {
     llama_messages.push_back({messages[i].m_role.c_str(), formatted_contents[i].c_str()});
@@ -558,7 +573,7 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
 bool ODAILlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages)
 {
 
-  if (this->m_isInitialized == false)
+  if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
     return false;
@@ -570,7 +585,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
     return false;
   }
 
-  if (this->m_chatContext.find(chat_id) != this->m_chatContext.end())
+  if (this->m_chatContext.contains(chat_id))
   {
     ODAI_LOG(ODAI_LOG_INFO, "chat context for chat_id {} is already loaded", chat_id);
     return true;
@@ -628,7 +643,7 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
     return -1;
   }
 
-  unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler = this->get_new_llm_llama_sampler(sampler_config);
+  unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler = ODAILlamaEngine::get_new_llm_llama_sampler(sampler_config);
 
   if (sampler == nullptr)
   {
@@ -655,7 +670,7 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
 
 bool ODAILlamaEngine::is_chat_context_loaded(const ChatId& chat_id)
 {
-  return this->m_chatContext.find(chat_id) != this->m_chatContext.end();
+  return this->m_chatContext.contains(chat_id);
 }
 
 bool ODAILlamaEngine::unload_chat_context(const ChatId& chat_id)

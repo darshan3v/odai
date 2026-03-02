@@ -49,15 +49,17 @@ struct c_InputItem
 inline void free_members(c_InputItem* item)
 {
   if (item == nullptr)
+  {
     return;
+  }
 
-  if (item->m_data)
+  if (item->m_data != nullptr)
   {
     free(item->m_data);
     item->m_data = nullptr;
   }
 
-  if (item->m_mimeType)
+  if (item->m_mimeType != nullptr)
   {
     free(item->m_mimeType);
     item->m_mimeType = nullptr;
@@ -92,8 +94,10 @@ struct c_EmbeddingModelConfig
 inline void free_members(c_EmbeddingModelConfig* config)
 {
   if (config == nullptr)
+  {
     return;
-  if (config->m_modelName)
+  }
+  if (config->m_modelName != nullptr)
   {
     free(const_cast<char*>(config->m_modelName));
     config->m_modelName = nullptr;
@@ -101,7 +105,7 @@ inline void free_members(c_EmbeddingModelConfig* config)
 }
 
 /// C-style configuration structure for language models (LLMs).
-/// Used for C API compatibility. Contains the path to the language model file.
+/// Used for C API compatibility.
 struct c_LlmModelConfig
 {
   /// Name of the language model (must be registered).
@@ -142,8 +146,10 @@ struct c_SemanticSpaceConfig
 inline void free_members(c_SemanticSpaceConfig* config)
 {
   if (config == nullptr)
+  {
     return;
-  if (config->m_name)
+  }
+  if (config->m_name != nullptr)
   {
     free(const_cast<char*>(config->m_name));
     config->m_name = nullptr;
@@ -221,9 +227,11 @@ struct c_ChatMessage
 inline void free_members(c_ChatMessage* message)
 {
   if (message == nullptr)
+  {
     return;
+  }
 
-  if (message->m_contentItems)
+  if (message->m_contentItems != nullptr)
   {
     for (size_t i = 0; i < message->m_contentItemsCount; ++i)
     {
@@ -233,7 +241,7 @@ inline void free_members(c_ChatMessage* message)
     message->m_contentItems = nullptr;
   }
 
-  if (message->m_messageMetadata)
+  if (message->m_messageMetadata != nullptr)
   {
     free(message->m_messageMetadata);
     message->m_messageMetadata = nullptr;

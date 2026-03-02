@@ -32,7 +32,7 @@ string calculate_file_checksum(const string& path)
 
   XXH3_64bits_reset(state);
 
-  const size_t buffer_size = 64 * 1024; // 64KB buffer
+  const uint32_t buffer_size = static_cast<const uint32_t>(64 * 1024); // 64KB buffer
   vector<char> buffer(buffer_size);
 
   while (file.read(buffer.data(), buffer_size))

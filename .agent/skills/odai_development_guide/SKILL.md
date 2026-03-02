@@ -33,15 +33,19 @@ We maintain a strict separation between C types (API boundary) and C++ types (In
     - Structs strictly compatible with C.
     - Naming convention: `c_` prefix (e.g., `c_ChatConfig`).
     - Use `typedef char*` for opaque handles (e.g., `c_ChatId`) for type safety.
+    - **Machine-Independent Sized Types**: Always use fixed-width integer types from `<stdint.h>` (e.g., `int32_t`, `uint64_t`) instead of primitive types (`int`, `long`, `size_t`)
 - **C++ Types (`src/include/types/odai_types.h`)**:
     - Modern C++ structs/classes using STL (`std::string`, `std::vector`).
     - Validation logic included via `is_sane()` member functions.
 
-### 2.2 Enums and ABI Stability
+### 2.2 Enums, Unions, and ABI Stability
 - **Avoid C Enums in Public API**: 
     - C enums do not have a guaranteed size (can be `int`, `unsigned int`, `char`, etc., depending on compiler/flags). This breaks ABI stability.
     - **Solution**: Use `typedef uint8_t` or `typedef uint32_t` along with `#define` macros for constants in `odai_ctypes.h`.
     - Example: `typedef uint32_t c_ModelType; #define ODAI_MODEL_TYPE_LLM (c_ModelType)1`
+- **Avoid Unions in Public API**:
+    - Unions can introduce ABI instability due to differing alignment, sizing, and padding rules across various compilers and architectures. They also complicate creating safe bindings for other languages.
+    - **Solution**: Use explicitly laid-out structs with an accompanying tag (type field), or use opaque pointers depending on the necessity of exposing layout.
 
 ### 2.3 Sanitization & Conversion
 - **Sanitizers (`src/include/utils/odai_csanitizers.h`)**:

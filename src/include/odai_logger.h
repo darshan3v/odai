@@ -46,10 +46,14 @@ public:
     try
     {
       if (!this->m_callback)
+      {
         return;
+      }
 
       if (level > this->m_logLevel)
+      {
         return;
+      }
 
       std::string msg = format(fmt, std::forward<Args>(args)...);
 

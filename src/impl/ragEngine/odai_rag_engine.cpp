@@ -187,7 +187,7 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   }
 
   // final_prompt = combine_context_and_query(context, prompt);
-  vector<InputItem> final_prompt = prompt; // Placeholder until context retrieval is implemented
+  const vector<InputItem>& final_prompt = prompt; // Placeholder until context retrieval is implemented
 
   StreamingBufferContext buffer_ctx;
   buffer_ctx.m_userCallback = callback;
@@ -198,7 +198,9 @@ int32_t ODAIRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   auto internal_callback = [](const char* token, void* user_data) -> bool
   {
     if (token == nullptr || user_data == nullptr)
+    {
       return false;
+    }
 
     StreamingBufferContext* ctx = static_cast<StreamingBufferContext*>(user_data);
 

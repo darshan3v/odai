@@ -15,10 +15,7 @@ using namespace std;
 
 extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_api_routines* p_api);
 
-ODAISqliteDb::ODAISqliteDb(const DBConfig& db_config)
-{
-  this->m_dbPath = db_config.m_dbPath;
-}
+ODAISqliteDb::ODAISqliteDb(const DBConfig& db_config) : m_dbPath(db_config.m_dbPath) {}
 
 bool ODAISqliteDb::register_vec_extension()
 {
@@ -112,7 +109,9 @@ bool ODAISqliteDb::begin_transaction()
       m_transaction.reset();
     }
     else
+    {
       m_transactionDepth--;
+    }
     return false;
   }
 }
@@ -195,9 +194,13 @@ bool ODAISqliteDb::register_model(const ModelName& name, const ModelPath& path, 
 
     string type_str;
     if (type == ModelType::LLM)
+    {
       type_str = "LLM";
+    }
     else if (type == ModelType::EMBEDDING)
+    {
       type_str = "EMBEDDING";
+    }
     else
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed");

@@ -46,6 +46,8 @@ public:
   virtual bool load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages) = 0;
 
   /// Generates a streaming chat response for the given query in the given chat session.
+  /// This function expects the chat context is already loaded into the model's context using
+  /// load_chat_messages_into_context.
   /// @param chat_id Unique identifier for the chat session whose cached context will be used
   /// @param query The input query/message to generate a response for
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)

@@ -8,11 +8,17 @@ inline bool is_sane(c_ModelType type)
 inline bool is_sane(const c_InputItem* item)
 {
   if (item == nullptr)
+  {
     return false;
+  }
   if (item->m_data == nullptr || item->m_dataSize == 0)
+  {
     return false;
+  }
   if (item->m_type > ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64)
+  {
     return false;
+  }
   return true;
 }
 
@@ -65,10 +71,14 @@ inline bool is_sane(const c_ChunkingConfig* config)
   // would have to do it in cpp type is_sane() not here
 
   if (config == nullptr)
+  {
     return false;
+  }
 
   if (config->m_strategy != FIXED_SIZE_CHUNKING)
+  {
     return false;
+  }
 
   return true;
 }
@@ -102,34 +112,50 @@ inline bool is_sane(const c_SamplerConfig* config)
 inline bool is_sane(const struct c_GeneratorRagConfig* config)
 {
   if (config == nullptr)
+  {
     return false;
+  }
   if (!is_sane(&config->m_retrievalConfig))
+  {
     return false;
+  }
   if (config->m_semanticSpaceName == nullptr)
+  {
     return false;
+  }
   if (config->m_scopeId == nullptr)
+  {
     return false;
+  }
   return true;
 }
 
 inline bool is_sane(const struct c_GeneratorConfig* config)
 {
   if (config == nullptr)
+  {
     return false;
+  }
   // Check sampler config sane? Using standard logic inside types if available,
   // otherwise manual check c_SamplerConfig manual check:
 
   if (config->m_ragMode == RAG_MODE_NEVER)
   {
     if (config->m_ragConfig != nullptr)
+    {
       return false;
+    }
   }
   else // ALWAYS or DYNAMIC
   {
     if (config->m_ragConfig == nullptr)
+    {
       return false;
+    }
     if (!is_sane(config->m_ragConfig))
+    {
       return false;
+    }
   }
 
   return true;

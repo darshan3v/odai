@@ -2,8 +2,13 @@
 # Enforces naming conventions per style guide
 
 Checks: >
-  -*, 
-  readability-identifier-naming
+  -*,
+  cppcoreguidelines-*,
+  bugprone-*,
+  clang-analyzer-*,
+  performance-*,
+  readability-*,
+  google-runtime-int
 
 CheckOptions:
   # Functions: lower_case

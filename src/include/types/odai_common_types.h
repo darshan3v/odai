@@ -41,9 +41,9 @@ typedef uint8_t RagMode;
 #define RAG_MODE_NEVER (RagMode)1
 #define RAG_MODE_DYNAMIC (RagMode)2
 
-#define DEFAULT_CHUNKING_SIZE 512
-#define DEFAULT_CHUNKING_OVERLAP 50
+constexpr uint32_t DEFAULT_CHUNKING_SIZE = 512;
+constexpr uint32_t DEFAULT_CHUNKING_OVERLAP = 50;
 
-#define DEFAULT_MAX_TOKENS 4096
-#define DEFAULT_TOP_P 0.95f
-#define DEFAULT_TOP_K 40
+constexpr uint32_t DEFAULT_MAX_TOKENS = 4096;
+constexpr float DEFAULT_TOP_P = 0.95F;
+constexpr uint32_t DEFAULT_TOP_K = 40;

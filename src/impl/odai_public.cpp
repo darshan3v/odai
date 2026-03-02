@@ -93,7 +93,9 @@ bool odai_get_semantic_space(const c_SemanticSpaceName semantic_space_name, c_Se
 void odai_free_semantic_space_config(c_SemanticSpaceConfig* config)
 {
   if (config == nullptr)
+  {
     return;
+  }
   free_members(config);
 }
 
@@ -141,7 +143,9 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* space
 void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, size_t count)
 {
   if (spaces == nullptr)
+  {
     return;
+  }
 
   try
   {
@@ -256,7 +260,7 @@ bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_co
 
 void odai_free_chat_id(c_ChatId chat_id)
 {
-  if (chat_id)
+  if (chat_id != nullptr)
   {
     free(chat_id);
   }
@@ -323,7 +327,9 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
 void odai_free_chat_messages(c_ChatMessage* c_messages, size_t count)
 {
   if (c_messages == nullptr)
+  {
     return;
+  }
 
   try
   {

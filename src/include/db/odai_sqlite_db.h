@@ -31,7 +31,7 @@ private:
   /// The extension is registered before creating the database object to enable
   /// vector operations.
   /// @return true if extension registered, false on error
-  bool register_vec_extension();
+  static bool register_vec_extension();
 
 public:
   /// Constructs a new ODAISqliteDb instance with the specified database

@@ -5,9 +5,13 @@
 ModelType to_cpp_model_type(c_ModelType c)
 {
   if (c == ODAI_MODEL_TYPE_LLM)
+  {
     return ModelType::LLM;
-  else if (c == ODAI_MODEL_TYPE_EMBEDDING)
+  }
+  if (c == ODAI_MODEL_TYPE_EMBEDDING)
+  {
     return ModelType::EMBEDDING;
+  }
 
   // Default to LLM if unknown, or handle error appropriately.
   // Since we can't easily return error here, we assume valid input or handle at caller.
@@ -38,13 +42,13 @@ InputItem to_cpp(const c_InputItem& c)
   InputItem item;
   item.m_type = to_cpp_input_item_type(c.m_type);
 
-  if (c.m_data && c.m_dataSize > 0)
+  if ((c.m_data != nullptr) && c.m_dataSize > 0)
   {
     const uint8_t* ptr = static_cast<const uint8_t*>(c.m_data);
     item.m_data.assign(ptr, ptr + c.m_dataSize);
   }
 
-  if (c.m_mimeType)
+  if (c.m_mimeType != nullptr)
   {
     item.m_mimeType = c.m_mimeType;
   }
@@ -98,7 +102,7 @@ SemanticSpaceConfig to_cpp(const c_SemanticSpaceConfig& c)
 
 RetrievalConfig to_cpp(const c_RetrievalConfig& c)
 {
-  RetrievalConfig config;
+  RetrievalConfig config{};
   config.m_topK = c.m_topK;
   config.m_fetchK = c.m_fetchK;
   config.m_scoreThreshold = c.m_scoreThreshold;
@@ -117,11 +121,11 @@ GeneratorRagConfig to_cpp(const c_GeneratorRagConfig& source)
 {
   GeneratorRagConfig config;
   config.m_retrievalConfig = to_cpp(source.m_retrievalConfig);
-  if (source.m_semanticSpaceName)
+  if (source.m_semanticSpaceName != nullptr)
   {
     config.m_semanticSpaceName = string(source.m_semanticSpaceName);
   }
-  if (source.m_scopeId)
+  if (source.m_scopeId != nullptr)
   {
     config.m_scopeId = string(source.m_scopeId);
   }
@@ -153,7 +157,7 @@ ChatConfig to_cpp(const c_ChatConfig& c)
 
 c_EmbeddingModelConfig to_c(const EmbeddingModelConfig& cpp)
 {
-  c_EmbeddingModelConfig c;
+  c_EmbeddingModelConfig c{};
   c.m_modelName = strdup(cpp.m_modelName.c_str());
   return c;
 }
@@ -179,7 +183,7 @@ c_InputItemType to_c(const InputItemType& cpp)
 
 c_InputItem to_c(const InputItem& cpp)
 {
-  c_InputItem item;
+  c_InputItem item{};
   item.m_type = to_c(cpp.m_type);
   item.m_dataSize = cpp.m_data.size();
 
@@ -207,11 +211,11 @@ c_InputItem to_c(const InputItem& cpp)
 
 c_ChunkingConfig to_c(const ChunkingConfig& cpp)
 {
-  c_ChunkingConfig c;
+  c_ChunkingConfig c{};
   if (std::holds_alternative<FixedSizeChunkingConfig>(cpp.m_config))
   {
     c.m_strategy = FIXED_SIZE_CHUNKING;
-    auto& conf = std::get<FixedSizeChunkingConfig>(cpp.m_config);
+    const auto& conf = std::get<FixedSizeChunkingConfig>(cpp.m_config);
     c.m_config.m_fixedSizeConfig.m_chunkSize = conf.m_chunkSize;
     c.m_config.m_fixedSizeConfig.m_chunkOverlap = conf.m_chunkOverlap;
   }
@@ -220,7 +224,7 @@ c_ChunkingConfig to_c(const ChunkingConfig& cpp)
 
 c_SemanticSpaceConfig to_c(const SemanticSpaceConfig& cpp)
 {
-  c_SemanticSpaceConfig c;
+  c_SemanticSpaceConfig c{};
   c.m_name = strdup(cpp.m_name.c_str());
   c.m_embeddingModelConfig = to_c(cpp.m_embeddingModelConfig);
   c.m_chunkingConfig = to_c(cpp.m_chunkingConfig);
@@ -230,7 +234,7 @@ c_SemanticSpaceConfig to_c(const SemanticSpaceConfig& cpp)
 
 c_ChatMessage to_c(const ChatMessage& cpp)
 {
-  c_ChatMessage result;
+  c_ChatMessage result{};
 
   // Copy role to fixed-size buffer (truncate if too long)
   strncpy(result.m_role, cpp.m_role.c_str(), sizeof(result.m_role) - 1);
@@ -271,7 +275,7 @@ void to_json(json& j, const ChunkingConfig& p)
 
 void from_json(const json& j, ChunkingConfig& p)
 {
-  ChunkingStrategy strategy;
+  ChunkingStrategy strategy = 0;
   j.at("strategy").get_to(strategy);
   if (strategy == FIXED_SIZE_CHUNKING)
   {
