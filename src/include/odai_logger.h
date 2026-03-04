@@ -9,7 +9,7 @@
 /// Logger class that provides formatted logging functionality with configurable
 /// log levels and callbacks. Supports format string arguments and automatically
 /// prefixes log messages with "[odai]".
-class ODAILogger
+class OdaiLogger
 {
 
 private:

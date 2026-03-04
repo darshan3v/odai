@@ -118,6 +118,32 @@ bool ODAISdk::create_feature(const FeatureConfig& config)
 }
 ```
 
+### 3.2 Interface Design
+
+When defining pure virtual interfaces in the C++ backend:
+1.  **Naming**: Interfaces must be prefixed with `I` (e.g., `IAudioDecoder`, `IOdaiDb`). This is enforced by `clang-tidy`.
+2.  **Lifecycle**: Interfaces must declare a `virtual ~IInterfaceName() = default;` destructor to ensure proper cleanup of derived classes.
+3.  **Non-Copyable & Non-Movable**: Interfaces must explicitly delete copy and move constructors/assignments to prevent slicing and accidental copying of polymorphic objects.
+
+**Example (`IExampleInterface.h`):**
+```cpp
+class IExampleInterface {
+public:
+    virtual ~IExampleInterface() = default;
+    IExampleInterface() = default;
+    
+    // Non-copyable
+    IExampleInterface(const IExampleInterface&) = delete;
+    IExampleInterface& operator=(const IExampleInterface&) = delete;
+    
+    // Non-movable
+    IExampleInterface(IExampleInterface&&) = delete;
+    IExampleInterface& operator=(IExampleInterface&&) = delete;
+
+    virtual void do_something() = 0;
+};
+```
+
 ## 4. Key Directives
 
 1.  **Sync Headers**: `odai_public.h` (C) and `odai_sdk.h` (C++) must be kept in sync regarding feature parity.
@@ -186,6 +212,8 @@ To ensure consistency between the C API and C++ implementation, and to maintain 
 - **Types (Classes, Structs, Enums, Typedefs)**: Use `PascalCase`.
     - *Examples*: `ChatConfig`, `BackendEngineInternal`, `OAIModelType`.
     - *Incorrect*: `chat_config`, `backend_engine`.
+- **Interfaces**: Abstract classes must be prefixed with `I` followed by `PascalCase`. Enforced by `clang-tidy` (`readability-identifier-naming.AbstractClassPrefix`).
+    - *Examples*: `IAudioDecoder`, `IOdaiDb`.
 - **Constants & Macros**: Use `UPPER_SNAKE_CASE`.
     - *Examples*: `ODAI_MAX_PATH`, `DEFAULT_CHUNK_SIZE`.
 - **Member Variables (Classes)**: Prefix with `m_` followed by `camelBack`.

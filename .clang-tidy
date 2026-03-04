@@ -91,3 +91,11 @@ CheckOptions:
   # Namespaces: lower_case
   - key: readability-identifier-naming.NamespaceCase
     value: lower_case
+
+  # Enforce that abstract classes (interfaces) start with 'I'
+  - key: readability-identifier-naming.AbstractClassPrefix
+    value: I
+  
+  # Enforce CamelCase for the rest of the name
+  - key: readability-identifier-naming.AbstractClassCase
+    value: CamelCase

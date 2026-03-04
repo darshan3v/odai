@@ -1,5 +1,7 @@
 #pragma once
 
+#ifdef ODAI_ENABLE_LLAMA_BACKEND
+
 #include "backendEngine/odai_backend_engine.h"
 
 #include <llama.h>
@@ -65,10 +67,10 @@ struct ChatSessionLLMContext
 
 /// Llama.cpp-based implementation of the backend engine for model loading and
 /// text generation. Currenntly For LLM's supports Decoder-only LLMs.
-class ODAILlamaEngine : public ODAIBackendEngine
+class OdaiLlamaEngine : public IOdaiBackendEngine
 {
 public:
-  ODAILlamaEngine(const BackendEngineConfig& backend_engine_config);
+  OdaiLlamaEngine(const BackendEngineConfig& backend_engine_config);
 
   /// Initializes the llama backend engine and sets up logging.
   /// @return true if initialization succeeded, false otherwise
@@ -149,7 +151,7 @@ public:
   bool unload_chat_context(const ChatId& chat_id) override;
 
   /// Destructor that frees the llama backend resources.
-  ~ODAILlamaEngine() override;
+  ~OdaiLlamaEngine() override;
 
 private:
   bool m_isInitialized = false;
@@ -288,3 +290,5 @@ private:
   int32_t generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler, const string& prompt,
                                            OdaiStreamRespCallbackFn callback, void* user_data);
 };
+
+#endif // ODAI_ENABLE_LLAMA_BACKEND

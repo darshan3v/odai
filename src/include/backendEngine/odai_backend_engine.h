@@ -4,10 +4,16 @@
 #include <vector>
 
 /// Abstract base class for backend engines that handle model loading and text generation.
-class ODAIBackendEngine
+class IOdaiBackendEngine
 {
-
 public:
+  IOdaiBackendEngine() = default;
+
+  IOdaiBackendEngine(const IOdaiBackendEngine&) = delete;
+  IOdaiBackendEngine& operator=(const IOdaiBackendEngine&) = delete;
+  IOdaiBackendEngine(IOdaiBackendEngine&&) = delete;
+  IOdaiBackendEngine& operator=(IOdaiBackendEngine&&) = delete;
+
   /// Initializes the backend engine. Must be called before loading models.
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_engine() = 0;
@@ -73,5 +79,5 @@ public:
   /// @return true if unloaded successfully (or was not loaded), false on error
   virtual bool unload_chat_context(const ChatId& chat_id) = 0;
 
-  virtual ~ODAIBackendEngine() = default;
+  virtual ~IOdaiBackendEngine() = default;
 };

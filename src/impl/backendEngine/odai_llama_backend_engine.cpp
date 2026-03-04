@@ -38,9 +38,9 @@ static void llama_log_redirect(ggml_log_level level, const char* text, void* use
   ODAI_LOG(our_level, "[llama.cpp] {}", text);
 }
 
-ODAILlamaEngine::ODAILlamaEngine(const BackendEngineConfig& backend_engine_config) {}
+OdaiLlamaEngine::OdaiLlamaEngine(const BackendEngineConfig& backend_engine_config) {}
 
-bool ODAILlamaEngine::initialize_engine()
+bool OdaiLlamaEngine::initialize_engine()
 {
 
   llama_backend_init();
@@ -54,7 +54,7 @@ bool ODAILlamaEngine::initialize_engine()
   return true;
 }
 
-unique_ptr<llama_context, LlamaContextDeleter> ODAILlamaEngine::get_new_llama_context(ModelType model_type)
+unique_ptr<llama_context, LlamaContextDeleter> OdaiLlamaEngine::get_new_llama_context(ModelType model_type)
 {
   unique_ptr<llama_context, LlamaContextDeleter> context = nullptr;
   llama_context_params context_params = llama_context_default_params();
@@ -90,7 +90,7 @@ unique_ptr<llama_context, LlamaContextDeleter> ODAILlamaEngine::get_new_llama_co
   return context;
 }
 
-unique_ptr<llama_sampler, LlamaSamplerDeleter> ODAILlamaEngine::get_new_llm_llama_sampler(const SamplerConfig& config)
+unique_ptr<llama_sampler, LlamaSamplerDeleter> OdaiLlamaEngine::get_new_llm_llama_sampler(const SamplerConfig& config)
 {
   unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler = nullptr;
 
@@ -111,7 +111,7 @@ unique_ptr<llama_sampler, LlamaSamplerDeleter> ODAILlamaEngine::get_new_llm_llam
   return sampler;
 }
 
-bool ODAILlamaEngine::validate_model_files(const ModelFiles& files) const
+bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
 {
   if (!files.m_entries.contains("base_model_path"))
   {
@@ -138,7 +138,7 @@ bool ODAILlamaEngine::validate_model_files(const ModelFiles& files) const
   return true;
 }
 
-bool ODAILlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
+bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
 {
   if (!this->m_isInitialized)
   {
@@ -180,7 +180,7 @@ bool ODAILlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
   return true;
 }
 
-bool ODAILlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
+bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
 {
   if (!this->m_isInitialized)
   {
@@ -234,7 +234,7 @@ bool ODAILlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   return true;
 }
 
-vector<llama_token> ODAILlamaEngine::tokenize(const string& input, bool is_first, ModelType model_type)
+vector<llama_token> OdaiLlamaEngine::tokenize(const string& input, bool is_first, ModelType model_type)
 {
 
   const llama_vocab* vocab = nullptr;
@@ -277,7 +277,7 @@ vector<llama_token> ODAILlamaEngine::tokenize(const string& input, bool is_first
   return tokens;
 }
 
-string ODAILlamaEngine::detokenize(const vector<llama_token>& tokens)
+string OdaiLlamaEngine::detokenize(const vector<llama_token>& tokens)
 {
   if (this->m_llmVocab == nullptr)
   {
@@ -305,7 +305,7 @@ string ODAILlamaEngine::detokenize(const vector<llama_token>& tokens)
   return result;
 }
 
-string ODAILlamaEngine::flush_utf8_safe_output(vector<llama_token>& buffered_tokens, string& output_buffer)
+string OdaiLlamaEngine::flush_utf8_safe_output(vector<llama_token>& buffered_tokens, string& output_buffer)
 {
   output_buffer += this->detokenize(buffered_tokens);
 
@@ -320,7 +320,7 @@ string ODAILlamaEngine::flush_utf8_safe_output(vector<llama_token>& buffered_tok
   return safe_output_buffer;
 }
 
-void ODAILlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
+void OdaiLlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
                                           const llama_seq_id seq_id, const bool set_logit_request_for_last_token)
 {
   for (llama_token token : tokens)
@@ -338,7 +338,7 @@ void ODAILlamaEngine::add_tokens_to_batch(const vector<llama_token>& tokens, lla
   batch.logits[batch.n_tokens - 1] = set_logit_request_for_last_token ? 1 : 0; // request logits for the last token
 }
 
-bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
+bool OdaiLlamaEngine::load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
                                                     uint32_t& next_pos, const bool request_logits_for_last_token)
 {
   if (tokens.empty())
@@ -363,7 +363,7 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
 
   batch.reset(new llama_batch(llama_batch_init(tokens.size(), 0, 1)));
 
-  ODAILlamaEngine::add_tokens_to_batch(tokens, *batch, next_pos, 0, request_logits_for_last_token);
+  OdaiLlamaEngine::add_tokens_to_batch(tokens, *batch, next_pos, 0, request_logits_for_last_token);
 
   if (llama_decode(&model_context, *batch) != 0)
   {
@@ -374,7 +374,7 @@ bool ODAILlamaEngine::load_tokens_into_context_impl(llama_context& model_context
   return true;
 }
 
-bool ODAILlamaEngine::load_into_context(llama_context& model_context, const string& prompt, uint32_t& next_pos,
+bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const string& prompt, uint32_t& next_pos,
                                         const bool request_logits_for_last_token)
 {
   const bool is_first = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
@@ -387,17 +387,17 @@ bool ODAILlamaEngine::load_into_context(llama_context& model_context, const stri
     return false;
   }
 
-  return ODAILlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens, next_pos,
+  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens, next_pos,
                                                         request_logits_for_last_token);
 }
 
-bool ODAILlamaEngine::load_into_context(llama_context& model_context, const vector<llama_token>& tokens,
+bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const vector<llama_token>& tokens,
                                         uint32_t& next_pos, const bool request_logits_for_last_token)
 {
-  return ODAILlamaEngine::load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
+  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
 }
 
-bool ODAILlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
+bool OdaiLlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
                                           const bool append_to_context)
 {
 
@@ -426,7 +426,7 @@ bool ODAILlamaEngine::generate_next_token(llama_context& model_context, llama_sa
   return true;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
+int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
                                                           const string& prompt, OdaiStreamRespCallbackFn callback,
                                                           void* user_data)
 {
@@ -445,7 +445,7 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
 
   while (true)
   {
-    if (!ODAILlamaEngine::generate_next_token(model_context, sampler, generated_token, true))
+    if (!OdaiLlamaEngine::generate_next_token(model_context, sampler, generated_token, true))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate next token");
       return -1;
@@ -482,7 +482,7 @@ int32_t ODAILlamaEngine::generate_streaming_response_impl(llama_context& model_c
   return total_tokens;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& prompt,
+int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& prompt,
                                                      const SamplerConfig& sampler_config,
                                                      OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -522,7 +522,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& pr
   }
 
   unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler =
-      ODAILlamaEngine::get_new_llm_llama_sampler(sampler_config);
+      OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
 
   if (llm_llama_sampler == nullptr)
   {
@@ -533,7 +533,7 @@ int32_t ODAILlamaEngine::generate_streaming_response(const vector<InputItem>& pr
   return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, text_prompt, callback, user_data);
 }
 
-string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>& messages,
+string OdaiLlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>& messages,
                                                        const bool add_generation_prompt)
 {
   if (this->m_llmModel == nullptr)
@@ -614,7 +614,7 @@ string ODAILlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
   return string(formatted_buffer.data());
 }
 
-bool ODAILlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages)
+bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages)
 {
 
   if (!this->m_isInitialized)
@@ -667,7 +667,7 @@ bool ODAILlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   return true;
 }
 
-int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
+int32_t OdaiLlamaEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                           const SamplerConfig& sampler_config,
                                                           OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -687,7 +687,7 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
     return -1;
   }
 
-  unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler = ODAILlamaEngine::get_new_llm_llama_sampler(sampler_config);
+  unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler = OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
 
   if (sampler == nullptr)
   {
@@ -712,12 +712,12 @@ int32_t ODAILlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
                                                 user_data);
 }
 
-bool ODAILlamaEngine::is_chat_context_loaded(const ChatId& chat_id)
+bool OdaiLlamaEngine::is_chat_context_loaded(const ChatId& chat_id)
 {
   return this->m_chatContext.contains(chat_id);
 }
 
-bool ODAILlamaEngine::unload_chat_context(const ChatId& chat_id)
+bool OdaiLlamaEngine::unload_chat_context(const ChatId& chat_id)
 {
   auto it = this->m_chatContext.find(chat_id);
   if (it != this->m_chatContext.end())
@@ -730,7 +730,7 @@ bool ODAILlamaEngine::unload_chat_context(const ChatId& chat_id)
   return true;
 }
 
-ODAILlamaEngine::~ODAILlamaEngine()
+OdaiLlamaEngine::~OdaiLlamaEngine()
 {
   llama_backend_free();
 }

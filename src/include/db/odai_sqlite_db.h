@@ -1,5 +1,6 @@
 #pragma once
 
+#ifdef ODAI_ENABLE_SQLITE_DB
 #include <cstdint>
 #include <memory>
 #include <string>
@@ -18,7 +19,7 @@ using namespace nlohmann;
 /// (Retrieval-Augmented Generation) chat sessions and messages. Provides
 /// functionality for initializing SQLite database with vector extensions,
 /// managing chat sessions, and storing chat messages with metadata.
-class ODAISqliteDb : public ODAIDb
+class OdaiSqliteDb : public IOdaiDb
 {
 
 private:
@@ -38,11 +39,11 @@ public:
   /// Constructs a new ODAISqliteDb instance with the specified database
   /// configuration. The database is not opened until initialize_db() is called.
   /// @param dbConfig Database configuration object.
-  ODAISqliteDb(const DBConfig& db_config);
+  OdaiSqliteDb(const DBConfig& db_config);
 
   /// Destructor that cleans up database resources.
   /// ToDo : Not yet implemented
-  ~ODAISqliteDb() override;
+  ~OdaiSqliteDb() override;
 
   /// Initializes the database object (if db doesn't exist then create and
   /// initializes with schema) Registers the sqlite-vec extension, opens the
@@ -240,3 +241,5 @@ CREATE TABLE models (
 
 )";
 };
+
+#endif // ODAI_ENABLE_SQLITE_DB

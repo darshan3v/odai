@@ -3,7 +3,6 @@
 // This is a C Stable Header File
 
 #include "types/odai_ctypes.h"
-#include "types/odai_export.h"
 #include <cstddef>
 #include <cstdint>
 
@@ -24,27 +23,27 @@ extern "C"
   /// Sets a custom logging callback function for receiving log messages.
   /// @param callback Function to call for each log message, or nullptr to disable custom logging
   /// @param user_data User-provided data pointer that will be passed to the callback function
-  ODAI_API void odai_set_logger(OdaiLogCallbackFn callback, void* user_data);
+  void odai_set_logger(OdaiLogCallbackFn callback, void* user_data);
 
   /// Sets the minimum log level for messages to be processed.
   /// Only messages at or below this level will be logged or passed to the callback.
   /// @param log_level Minimum log level (OdaiLogLevel) - use ODAI_LOG_ERROR, ODAI_LOG_WARN, ODAI_LOG_INFO, or
   /// ODAI_LOG_DEBUG
-  ODAI_API void odai_set_log_level(OdaiLogLevel log_level);
+  void odai_set_log_level(OdaiLogLevel log_level);
 
   /// Initializes the SDK with database and backend engine configurations.
   /// Must be called before using any other SDK functions. Creates or opens the database at the specified path.
   /// @param db_config Configuration structure containing the database type and path
   /// @param backend_engine_config Configuration structure specifying which backend engine to use
   /// @return true if initialization succeeded, false otherwise
-  ODAI_API bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
+  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
 
   /// Registers a new model in the system with the given name and generic files map.
   /// The engine validates the files and a checksum is computed to ensure integrity.
   /// @param model_name The unique name to assign to the model.
   /// @param files The Model Files struct containing paths
   /// @return true if registration succeeded, false if name exists or properties are invalid.
-  ODAI_API bool odai_register_model_files(c_ModelName model_name, const c_ModelFiles* files);
+  bool odai_register_model_files(c_ModelName model_name, const c_ModelFiles* files);
 
   /// Updates the registration files for an existing model.
   /// Validates the files and potentially checks checksums based on the flag.
@@ -54,39 +53,39 @@ extern "C"
   /// @param files The Model Files struct containing paths to update.
   /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if update succeeded, false if validation fails or model not found.
-  ODAI_API bool odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);
+  bool odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);
 
   /// Creates a new semantic space configuration.
   /// @param config The semantic space configuration to create.
   /// @return true if created successfully, false on error.
-  ODAI_API bool odai_create_semantic_space(const c_SemanticSpaceConfig* config);
+  bool odai_create_semantic_space(const c_SemanticSpaceConfig* config);
 
   /// Retrieves the configuration for a semantic space.
   /// @param name The name of the semantic space to retrieve.
   /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
   /// @return true if found, false on error.
-  ODAI_API bool odai_get_semantic_space(c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out);
+  bool odai_get_semantic_space(c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out);
 
   /// Frees members allocated by odai_get_semantic_space
   /// @param config pointer to c_SemanticSpaceConfig struct to free .
-  ODAI_API void odai_free_semantic_space_config(c_SemanticSpaceConfig* config);
+  void odai_free_semantic_space_config(c_SemanticSpaceConfig* config);
 
   /// Lists all available semantic spaces.
   /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
   /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
   /// @param spaces_count Output parameter: number of spaces returned.
   /// @return true if successful, false on error.
-  ODAI_API bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* spaces_count);
+  bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* spaces_count);
 
   /// Frees memory allocated by odai_list_semantic_spaces.
   /// @param spaces Array of c_SemanticSpaceConfig to free.
   /// @param count Number of items in the array.
-  ODAI_API void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, size_t count);
+  void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, size_t count);
 
   /// Deletes a semantic space configuration.
   /// @param name The name of the semantic space to delete.
   /// @return true if deleted successfully, false on error.
-  ODAI_API bool odai_delete_semantic_space(c_SemanticSpaceName name);
+  bool odai_delete_semantic_space(c_SemanticSpaceName name);
 
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// The document content is embedded and stored in the database for later retrieval.
@@ -96,8 +95,8 @@ extern "C"
   /// @param semantic_space_name Name of the semantic space to use
   /// @param scope_id Scope identifier to group documents (used for filtering during retrieval)
   /// @return true if document was added successfully, false otherwise
-  ODAI_API bool odai_add_document(const char* content, c_DocumentId document_id,
-                                  c_SemanticSpaceName semantic_space_name, c_ScopeId scope_id);
+  bool odai_add_document(const char* content, c_DocumentId document_id, c_SemanticSpaceName semantic_space_name,
+                         c_ScopeId scope_id);
 
   /// Generates a streaming response for a single query using the specified LLM Model.
   /// @param llm_model_config Configuration of the LLM model to use
@@ -108,10 +107,9 @@ extern "C"
   /// @param c_user_data User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel
   /// streaming.
-  ODAI_API int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config,
-                                                    const c_InputItem* c_prompt_items, size_t prompt_items_count,
-                                                    const c_SamplerConfig* c_sampler_config,
-                                                    OdaiStreamRespCallbackFn c_callback, void* c_user_data);
+  int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const c_InputItem* c_prompt_items,
+                                           size_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
+                                           OdaiStreamRespCallbackFn c_callback, void* c_user_data);
 
   /// Creates a new chat session with the specified configuration.
   /// If chat_id_in is nullptr, a unique chat ID will be generated and returned in chat_id_out.
@@ -122,17 +120,17 @@ extern "C"
   /// @param c_chat_id_out Output parameter: pointer to the chat ID string (allocated by this function, caller must free
   /// using odai_free_chat_id)
   /// @return true if chat session was created successfully, false otherwise
-  ODAI_API bool odai_create_chat(c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out);
+  bool odai_create_chat(c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out);
 
   /// Frees the chat ID string allocated by odai_create_chat.
   /// @param chat_id The chat ID string to free
-  ODAI_API void odai_free_chat_id(c_ChatId chat_id);
+  void odai_free_chat_id(c_ChatId chat_id);
 
   /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
   /// Its only purpose is to pre-load a existing chat
   /// @param c_chat_id The unique identifier of the chat session to load
   /// @return true if chat session was loaded successfully, false if chat_id not found or on error
-  ODAI_API bool odai_load_chat(c_ChatId c_chat_id);
+  bool odai_load_chat(c_ChatId c_chat_id);
 
   /// Retrieves all chat messages for the specified chat session.
   /// Messages are returned in chronological order.
@@ -141,13 +139,13 @@ extern "C"
   /// @param c_messages_out Output parameter: pointer to array of i_ChatMessage (allocated by this function)
   /// @param messages_count Output parameter: number of messages retrieved
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error
-  ODAI_API bool odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count);
+  bool odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count);
 
   /// Frees memory allocated for an array of i_ChatMessage structures.
   /// Should be called after odai_get_chat_history to free allocated strings.
   /// @param messages Array of i_ChatMessage structures to free
   /// @param count Number of messages in the array
-  ODAI_API void odai_free_chat_messages(c_ChatMessage* messages, size_t count);
+  void odai_free_chat_messages(c_ChatMessage* messages, size_t count);
 
   /// Generates a streaming response for an existing chat session.
   /// @param c_chat_id The unique identifier of the chat session
@@ -157,15 +155,14 @@ extern "C"
   /// @param callback Function to be called for each generated text chunk
   /// @param user_data Opaque pointer passed back to the callback
   /// @return true if generation starts successfully, false if chat not found or on error
-  ODAI_API bool odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
-                                                      size_t prompt_items_count,
-                                                      const c_GeneratorConfig* c_generator_config,
-                                                      OdaiStreamRespCallbackFn callback, void* user_data);
+  bool odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
+                                             size_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
+                                             OdaiStreamRespCallbackFn callback, void* user_data);
 
   /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).
   /// @param c_chat_id The unique identifier of the chat session to unload
   /// @return true if chat session was unloaded successfully, false on error
-  ODAI_API bool odai_unload_chat(c_ChatId c_chat_id);
+  bool odai_unload_chat(c_ChatId c_chat_id);
 
 #ifdef __cplusplus
 }

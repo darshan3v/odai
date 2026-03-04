@@ -6,19 +6,18 @@
 
 #include "odai_logger.h"
 #include "ragEngine/odai_rag_engine.h"
-#include "types/odai_export.h"
 #include "types/odai_types.h"
 
 /// C++ Entry point for ODAI SDK
-class ODAI_API ODAISdk
+class OdaiSdk
 {
 public:
   /// Get the singleton instance of the SDK
-  static ODAISdk& get_instance();
+  static OdaiSdk& get_instance();
 
   /// Prevent copying and assignment
-  ODAISdk(const ODAISdk&) = delete;
-  ODAISdk& operator=(const ODAISdk&) = delete;
+  OdaiSdk(const OdaiSdk&) = delete;
+  OdaiSdk& operator=(const OdaiSdk&) = delete;
 
   /// Sets a custom logging callback function for receiving log messages.
   /// @param callback Function to call for each log message, or nullptr to
@@ -146,18 +145,18 @@ public:
   bool unload_chat(const ChatId& chat_id);
 
 private:
-  ODAISdk();
-  ~ODAISdk();
+  OdaiSdk();
+  ~OdaiSdk();
 
   bool m_sdkInitialized = false;
 
-  std::unique_ptr<ODAILogger> m_logger;
-  std::unique_ptr<ODAIRagEngine> m_ragEngine;
+  std::unique_ptr<OdaiLogger> m_logger;
+  std::unique_ptr<OdaiRagEngine> m_ragEngine;
 
 public:
-  ODAILogger* get_logger() { return m_logger.get(); }
+  OdaiLogger* get_logger() { return m_logger.get(); }
 };
 
 #define ODAI_LOG(level, fmt, ...)                                                                                      \
-  if (auto logger = ODAISdk::get_instance().get_logger())                                                              \
+  if (auto logger = OdaiSdk::get_instance().get_logger())                                                              \
   logger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)

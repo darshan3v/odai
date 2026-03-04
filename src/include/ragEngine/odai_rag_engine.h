@@ -9,10 +9,10 @@
 /// language models for context-aware text generation. Manages the
 /// initialization of models and generation of streaming responses using
 /// retrieved context.
-class ODAIRagEngine
+class OdaiRagEngine
 {
 public:
-  ODAIRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
+  OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.
@@ -74,16 +74,43 @@ public:
   /// @return true if unloaded successfully, false on error
   bool unload_chat_session(const ChatId& chat_id);
 
+  /// Creates a new semantic space for vector embeddings in the database.
+  /// @param config The configuration for the semantic space to be created
+  /// @return true if semantic space created successfully, false on error or if name already exists
   bool create_semantic_space(const SemanticSpaceConfig& config);
-  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
-  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
-  bool delete_semantic_space(const SemanticSpaceName& name);
-  bool create_chat(const ChatId& chat_id, const ChatConfig& chat_config);
-  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages);
-  bool chat_id_exists(const ChatId& chat_id);
 
-  ODAIDb* get_db() const { return m_db.get(); }
-  ODAIBackendEngine* get_backend_engine() const { return m_backendEngine.get(); }
+  /// Retrieves the configuration of an existing semantic space by name.
+  /// @param name The name of the semantic space to retrieve
+  /// @param config Output parameter populated with the semantic space configuration
+  /// @return true if successful, false on error or if name not found
+  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
+
+  /// Retrieves a list of all existing semantic spaces in the database.
+  /// @param spaces Output parameter populated with configurations of all semantic spaces
+  /// @return true if successful, false on error
+  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+
+  /// Deletes an existing semantic space and its associated data from the database.
+  /// @param name The name of the semantic space to delete
+  /// @return true if deleted successfully, false on error or if name not found
+  bool delete_semantic_space(const SemanticSpaceName& name);
+
+  /// Creates a new chat session in the database with the provided identifier and configuration.
+  /// @param chat_id Unique identifier for the new chat session
+  /// @param chat_config Configuration parameters for the chat session
+  /// @return true if chat created successfully, false on error or if chat_id already exists
+  bool create_chat(const ChatId& chat_id, const ChatConfig& chat_config);
+
+  /// Retrieves the message history for a given chat session from the database.
+  /// @param chat_id Unique identifier for the chat session
+  /// @param messages Output parameter populated with the chronological sequence of chat messages
+  /// @return true if successful, false on error or if chat_id not found
+  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages);
+
+  /// Checks if a chat session with the specified identifier already exists in the database.
+  /// @param chat_id Unique identifier for the chat session to check
+  /// @return true if the chat_id exists, false otherwise
+  bool chat_id_exists(const ChatId& chat_id);
 
 private:
   /// Resolves the file system path for a given model name using cache or
@@ -100,8 +127,8 @@ private:
   /// @return true if session is loaded (or was already loaded), false on error
   bool ensure_chat_session_loaded(const ChatId& chat_id, const ChatConfig& chat_config);
 
-  std::unique_ptr<ODAIDb> m_db;
-  std::unique_ptr<ODAIBackendEngine> m_backendEngine;
+  std::unique_ptr<IOdaiDb> m_db;
+  std::unique_ptr<IOdaiBackendEngine> m_backendEngine;
 
   unordered_map<string, ModelFiles> m_modelDetailsCache;
 };

@@ -9,24 +9,24 @@
 
 using namespace std;
 
-ODAISdk& ODAISdk::get_instance()
+OdaiSdk& OdaiSdk::get_instance()
 {
-  static ODAISdk instance;
+  static OdaiSdk instance;
   return instance;
 }
 
-ODAISdk::ODAISdk()
+OdaiSdk::OdaiSdk()
 {
-  m_logger = std::make_unique<ODAILogger>();
+  m_logger = std::make_unique<OdaiLogger>();
 }
 
-ODAISdk::~ODAISdk()
+OdaiSdk::~OdaiSdk()
 {
   // Clean up if needed, though smart pointers in globals handle themselves
   // mostly But we might want to shut down explicitly if order matters
 }
 
-void ODAISdk::set_logger(OdaiLogCallbackFn callback, void* user_data)
+void OdaiSdk::set_logger(OdaiLogCallbackFn callback, void* user_data)
 {
   try
   {
@@ -38,7 +38,7 @@ void ODAISdk::set_logger(OdaiLogCallbackFn callback, void* user_data)
   }
 }
 
-void ODAISdk::set_log_level(OdaiLogLevel log_level)
+void OdaiSdk::set_log_level(OdaiLogLevel log_level)
 {
   try
   {
@@ -50,7 +50,7 @@ void ODAISdk::set_log_level(OdaiLogLevel log_level)
   }
 }
 
-bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
+bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
   try
   {
@@ -67,7 +67,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
     }
 
     // Initalize the RAGEngine
-    m_ragEngine = make_unique<ODAIRagEngine>(db_config, backend_config);
+    m_ragEngine = make_unique<OdaiRagEngine>(db_config, backend_config);
 
     if ((m_ragEngine == nullptr))
     {
@@ -88,7 +88,7 @@ bool ODAISdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
   }
 }
 
-bool ODAISdk::register_model_files(const ModelName& name, const ModelFiles& files)
+bool OdaiSdk::register_model_files(const ModelName& name, const ModelFiles& files)
 {
   try
   {
@@ -107,7 +107,7 @@ bool ODAISdk::register_model_files(const ModelName& name, const ModelFiles& file
   }
 }
 
-bool ODAISdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
+bool OdaiSdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
 {
   try
   {
@@ -126,7 +126,7 @@ bool ODAISdk::update_model_files(const ModelName& name, const ModelFiles& files,
   }
 }
 
-bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
+bool OdaiSdk::create_semantic_space(const SemanticSpaceConfig& config)
 {
   try
   {
@@ -153,7 +153,7 @@ bool ODAISdk::create_semantic_space(const SemanticSpaceConfig& config)
   }
 }
 
-bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
+bool OdaiSdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
 {
   try
   {
@@ -172,7 +172,7 @@ bool ODAISdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticS
   }
 }
 
-bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+bool OdaiSdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
 {
   try
   {
@@ -191,7 +191,7 @@ bool ODAISdk::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
   }
 }
 
-bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
+bool OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
 {
   try
   {
@@ -210,7 +210,7 @@ bool ODAISdk::delete_semantic_space(const SemanticSpaceName& name)
   }
 }
 
-bool ODAISdk::add_document(const string& content, const DocumentId& document_id,
+bool OdaiSdk::add_document(const string& content, const DocumentId& document_id,
                            const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const
 {
   try
@@ -234,7 +234,7 @@ bool ODAISdk::add_document(const string& content, const DocumentId& document_id,
   }
 }
 
-int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
+int32_t OdaiSdk::generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
                                              const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                              void* user_data)
 {
@@ -288,7 +288,7 @@ int32_t ODAISdk::generate_streaming_response(const LLMModelConfig& llm_model_con
   }
 }
 
-bool ODAISdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config, ChatId& chat_id_out)
+bool OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config, ChatId& chat_id_out)
 {
   try
   {
@@ -339,7 +339,7 @@ bool ODAISdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
   }
 }
 
-bool ODAISdk::load_chat(const ChatId& chat_id)
+bool OdaiSdk::load_chat(const ChatId& chat_id)
 {
   try
   {
@@ -370,7 +370,7 @@ bool ODAISdk::load_chat(const ChatId& chat_id)
   }
 }
 
-bool ODAISdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
+bool OdaiSdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
 {
   try
   {
@@ -400,7 +400,7 @@ bool ODAISdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messa
   }
 }
 
-bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
+bool OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                                const GeneratorConfig& generator_config,
                                                OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -466,7 +466,7 @@ bool ODAISdk::generate_streaming_chat_response(const ChatId& chat_id, const vect
   }
 }
 
-bool ODAISdk::unload_chat(const ChatId& chat_id)
+bool OdaiSdk::unload_chat(const ChatId& chat_id)
 {
   try
   {

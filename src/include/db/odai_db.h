@@ -14,11 +14,18 @@ using namespace nlohmann;
 /// Abstract interface for database backends managing RAG (Retrieval-Augmented Generation) chat sessions and messages.
 /// Provides functionality for managing chat sessions, storing chat messages with metadata, and more.
 /// Implementations can use different database backends (e.g., SQLite, PostgreSQL, etc.).
-class ODAIDb
+class IOdaiDb
 {
 public:
+  IOdaiDb() = default;
+
+  IOdaiDb(const IOdaiDb&) = delete;
+  IOdaiDb& operator=(const IOdaiDb&) = delete;
+  IOdaiDb(IOdaiDb&&) = delete;
+  IOdaiDb& operator=(IOdaiDb&&) = delete;
+
   /// Virtual destructor
-  virtual ~ODAIDb() = default;
+  virtual ~IOdaiDb() = default;
 
   /// Initializes the database backend.
   /// Should be called before any other operations.

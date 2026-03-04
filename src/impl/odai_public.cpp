@@ -9,12 +9,12 @@ using namespace std;
 
 void odai_set_logger(OdaiLogCallbackFn callback, void* user_data)
 {
-  ODAISdk::get_instance().set_logger(callback, user_data);
+  OdaiSdk::get_instance().set_logger(callback, user_data);
 }
 
 void odai_set_log_level(OdaiLogLevel log_level)
 {
-  ODAISdk::get_instance().set_log_level(log_level);
+  OdaiSdk::get_instance().set_log_level(log_level);
 }
 
 bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineConfig* c_backend_engine_config)
@@ -31,7 +31,7 @@ bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineCon
     return false;
   }
 
-  return ODAISdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
+  return OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
 }
 
 bool odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
@@ -42,7 +42,7 @@ bool odai_register_model_files(const c_ModelName model_name, const c_ModelFiles*
     return false;
   }
 
-  return ODAISdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
+  return OdaiSdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
 }
 
 bool odai_update_model_files(const c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag)
@@ -52,7 +52,7 @@ bool odai_update_model_files(const c_ModelName model_name, const c_ModelFiles* f
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_update_model_files");
     return false;
   }
-  return ODAISdk::get_instance().update_model_files(ModelName(model_name), to_cpp(*files),
+  return OdaiSdk::get_instance().update_model_files(ModelName(model_name), to_cpp(*files),
                                                     to_cpp_update_model_flag(flag));
 }
 
@@ -63,7 +63,7 @@ bool odai_create_semantic_space(const c_SemanticSpaceConfig* config)
     ODAI_LOG(ODAI_LOG_ERROR, "invalid semantic space config passed");
     return false;
   }
-  return ODAISdk::get_instance().create_semantic_space(to_cpp(*config));
+  return OdaiSdk::get_instance().create_semantic_space(to_cpp(*config));
 }
 
 bool odai_get_semantic_space(const c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out)
@@ -75,7 +75,7 @@ bool odai_get_semantic_space(const c_SemanticSpaceName semantic_space_name, c_Se
   }
 
   SemanticSpaceConfig config;
-  if (!ODAISdk::get_instance().get_semantic_space_config(SemanticSpaceName(semantic_space_name), config))
+  if (!OdaiSdk::get_instance().get_semantic_space_config(SemanticSpaceName(semantic_space_name), config))
   {
     return false;
   }
@@ -102,7 +102,7 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* space
   }
 
   vector<SemanticSpaceConfig> spaces;
-  if (!ODAISdk::get_instance().list_semantic_spaces(spaces))
+  if (!OdaiSdk::get_instance().list_semantic_spaces(spaces))
   {
     *spaces_out = nullptr;
     *spaces_count = 0;
@@ -162,7 +162,7 @@ bool odai_delete_semantic_space(const c_SemanticSpaceName name)
     ODAI_LOG(ODAI_LOG_ERROR, "invalid space name passed");
     return false;
   }
-  return ODAISdk::get_instance().delete_semantic_space(string(name));
+  return OdaiSdk::get_instance().delete_semantic_space(string(name));
 }
 
 bool odai_add_document(const char* content, const c_DocumentId document_id,
@@ -174,7 +174,7 @@ bool odai_add_document(const char* content, const c_DocumentId document_id,
     return false;
   }
 
-  return ODAISdk::get_instance().add_document(string(content), DocumentId(document_id),
+  return OdaiSdk::get_instance().add_document(string(content), DocumentId(document_id),
                                               SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
 }
 
@@ -212,7 +212,7 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }
 
-  return ODAISdk::get_instance().generate_streaming_response(to_cpp(*llm_model_config), prompt_items,
+  return OdaiSdk::get_instance().generate_streaming_response(to_cpp(*llm_model_config), prompt_items,
                                                              to_cpp(*c_sampler_config), c_callback, c_user_data);
 }
 
@@ -233,7 +233,7 @@ bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_co
   ChatId chat_id_in = (c_chat_id_in != nullptr) ? ChatId(c_chat_id_in) : ChatId("");
   ChatId chat_id_out;
 
-  bool result = ODAISdk::get_instance().create_chat(chat_id_in, to_cpp(*c_chat_config), chat_id_out);
+  bool result = OdaiSdk::get_instance().create_chat(chat_id_in, to_cpp(*c_chat_config), chat_id_out);
 
   if (result)
   {
@@ -267,7 +267,7 @@ bool odai_load_chat(const c_ChatId c_chat_id)
     ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
     return false;
   }
-  return ODAISdk::get_instance().load_chat(ChatId(c_chat_id));
+  return OdaiSdk::get_instance().load_chat(ChatId(c_chat_id));
 }
 
 bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count)
@@ -285,12 +285,12 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
   }
 
   vector<ChatMessage> messages;
-  if (!ODAISdk::get_instance().get_chat_history(ChatId(c_chat_id), messages))
+  if (!OdaiSdk::get_instance().get_chat_history(ChatId(c_chat_id), messages))
   {
     *c_messages_out = nullptr;
     *messages_count = 0;
     return false; // Or true if empty? Original returned false on DB error, true on empty.
-                  // ODAISdk::get_chat_history returns false on error.
+                  // OdaiSdk::get_chat_history returns false on error.
   }
 
   if (messages.empty())
@@ -372,7 +372,7 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_Inp
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }
 
-  return ODAISdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), prompt_items,
+  return OdaiSdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), prompt_items,
                                                                   to_cpp(*c_generator_config), callback, user_data);
 }
 
@@ -383,5 +383,5 @@ bool odai_unload_chat(const c_ChatId c_chat_id)
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid chat_id passed");
     return false;
   }
-  return ODAISdk::get_instance().unload_chat(ChatId(c_chat_id));
+  return OdaiSdk::get_instance().unload_chat(ChatId(c_chat_id));
 }

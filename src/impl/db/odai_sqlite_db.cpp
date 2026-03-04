@@ -15,9 +15,9 @@ using namespace std;
 
 extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_api_routines* p_api);
 
-ODAISqliteDb::ODAISqliteDb(const DBConfig& db_config) : m_dbPath(db_config.m_dbPath) {}
+OdaiSqliteDb::OdaiSqliteDb(const DBConfig& db_config) : m_dbPath(db_config.m_dbPath) {}
 
-bool ODAISqliteDb::register_vec_extension()
+bool OdaiSqliteDb::register_vec_extension()
 {
   try
   {
@@ -42,7 +42,7 @@ bool ODAISqliteDb::register_vec_extension()
   }
 }
 
-bool ODAISqliteDb::initialize_db()
+bool OdaiSqliteDb::initialize_db()
 {
   try
   {
@@ -82,7 +82,7 @@ bool ODAISqliteDb::initialize_db()
   }
 }
 
-bool ODAISqliteDb::begin_transaction()
+bool OdaiSqliteDb::begin_transaction()
 {
   try
   {
@@ -116,7 +116,7 @@ bool ODAISqliteDb::begin_transaction()
   }
 }
 
-bool ODAISqliteDb::commit_transaction()
+bool OdaiSqliteDb::commit_transaction()
 {
   try
   {
@@ -152,7 +152,7 @@ bool ODAISqliteDb::commit_transaction()
   }
 }
 
-bool ODAISqliteDb::rollback_transaction()
+bool OdaiSqliteDb::rollback_transaction()
 {
   try
   {
@@ -176,7 +176,7 @@ bool ODAISqliteDb::rollback_transaction()
   }
 }
 
-bool ODAISqliteDb::register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums)
+bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums)
 {
   try
   {
@@ -228,7 +228,7 @@ bool ODAISqliteDb::register_model_files(const ModelName& name, const ModelFiles&
   }
 }
 
-bool ODAISqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
+bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
 {
   try
   {
@@ -258,7 +258,7 @@ bool ODAISqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
   }
 }
 
-bool ODAISqliteDb::get_model_checksums(const ModelName& name, string& checksums)
+bool OdaiSqliteDb::get_model_checksums(const ModelName& name, string& checksums)
 {
   try
   {
@@ -286,7 +286,7 @@ bool ODAISqliteDb::get_model_checksums(const ModelName& name, string& checksums)
   }
 }
 
-bool ODAISqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums)
+bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums)
 {
   try
   {
@@ -316,7 +316,7 @@ bool ODAISqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
   }
 }
 
-bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig& config)
+bool OdaiSqliteDb::create_semantic_space(const SemanticSpaceConfig& config)
 {
   try
   {
@@ -350,7 +350,7 @@ bool ODAISqliteDb::create_semantic_space(const SemanticSpaceConfig& config)
   }
 }
 
-bool ODAISqliteDb::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
+bool OdaiSqliteDb::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
 {
   try
   {
@@ -382,7 +382,7 @@ bool ODAISqliteDb::get_semantic_space_config(const SemanticSpaceName& name, Sema
   }
 }
 
-bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+bool OdaiSqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
 {
   try
   {
@@ -412,7 +412,7 @@ bool ODAISqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
   }
 }
 
-bool ODAISqliteDb::delete_semantic_space(const SemanticSpaceName& name)
+bool OdaiSqliteDb::delete_semantic_space(const SemanticSpaceName& name)
 {
   try
   {
@@ -436,7 +436,7 @@ bool ODAISqliteDb::delete_semantic_space(const SemanticSpaceName& name)
   }
 }
 
-bool ODAISqliteDb::chat_id_exists(const ChatId& chat_id)
+bool OdaiSqliteDb::chat_id_exists(const ChatId& chat_id)
 {
   try
   {
@@ -457,7 +457,7 @@ bool ODAISqliteDb::chat_id_exists(const ChatId& chat_id)
   }
 }
 
-bool ODAISqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_config)
+bool OdaiSqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_config)
 {
   try
   {
@@ -506,7 +506,7 @@ bool ODAISqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_con
   }
 }
 
-bool ODAISqliteDb::get_chat_config(const ChatId& chat_id, ChatConfig& chat_config)
+bool OdaiSqliteDb::get_chat_config(const ChatId& chat_id, ChatConfig& chat_config)
 {
   try
   {
@@ -549,7 +549,7 @@ bool ODAISqliteDb::get_chat_config(const ChatId& chat_id, ChatConfig& chat_confi
   }
 }
 
-bool ODAISqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
+bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
 {
   try
   {
@@ -617,7 +617,7 @@ bool ODAISqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
   }
 }
 
-bool ODAISqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages)
+bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages)
 {
   try
   {
@@ -673,7 +673,7 @@ bool ODAISqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
   }
 }
 
-void ODAISqliteDb::close()
+void OdaiSqliteDb::close()
 {
   try
   {
@@ -689,4 +689,4 @@ void ODAISqliteDb::close()
   }
 }
 
-ODAISqliteDb::~ODAISqliteDb() {}
+OdaiSqliteDb::~OdaiSqliteDb() {}
