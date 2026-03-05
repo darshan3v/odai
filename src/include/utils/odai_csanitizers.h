@@ -40,7 +40,7 @@ inline bool is_sane(const c_InputItem* item)
   {
     return false;
   }
-  if (item->m_type > ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64)
+  if (item->m_type > ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA)
   {
     return false;
   }
@@ -55,6 +55,15 @@ inline bool is_sane(const c_InputItem* item)
 inline bool is_sane(const c_DbConfig* config)
 {
   return config != nullptr && config->m_dbPath != nullptr;
+}
+
+/// Validates that an SDK configuration is sane and usable.
+/// Checks that the cache directory path is not null.
+/// @param config The SDK configuration to validate
+/// @return true if the configuration is valid (has a non-null cacheDirPath), false otherwise
+inline bool is_sane(const c_SdkConfig* config)
+{
+  return config != nullptr && config->m_cacheDirPath != nullptr;
 }
 
 /// Validates that a backend engine configuration is sane and usable.

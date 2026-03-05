@@ -30,6 +30,12 @@ InputItem to_cpp(const c_InputItem& c);
 /// @return C++ DBConfig with the converted configuration
 DBConfig to_cpp(const c_DbConfig& c);
 
+/// Converts a C-style SDK configuration to C++ style.
+/// Creates a new C++ SdkConfig by copying the cacheDirPath.
+/// @param c C-style Sdk configuration to convert
+/// @return C++ SdkConfig with the converted configuration
+SdkConfig to_cpp(const c_SdkConfig& c);
+
 /// Converts a C-style backend engine configuration to C++ style.
 /// Creates a new C++ BackendEngineConfig by copying the engine type from the C
 /// struct.

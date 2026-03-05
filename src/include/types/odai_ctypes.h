@@ -72,12 +72,11 @@ inline void free_members(c_ModelFiles* details)
 }
 
 /// Input Item Type for Multimodal Support
-typedef uint32_t c_InputItemType;
-#define ODAI_INPUT_ITEM_TYPE_TEXT (c_InputItemType)0
-#define ODAI_INPUT_ITEM_TYPE_IMAGE_FILE (c_InputItemType)1
-#define ODAI_INPUT_ITEM_TYPE_AUDIO_FILE (c_InputItemType)2
-#define ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64 (c_InputItemType)5
-#define ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64 (c_InputItemType)6
+typedef uint8_t c_InputItemType;
+#define ODAI_INPUT_ITEM_TYPE_FILE_PATH ((c_InputItemType)0)
+#define ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER ((c_InputItemType)1)
+#define ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA ((c_InputItemType)2)
+#define ODAI_INPUT_ITEM_TYPE_INVALID ((c_InputItemType)UINT8_MAX)
 
 /// C-style structure representing a single input item for generation or chat.
 struct c_InputItem
@@ -118,6 +117,13 @@ struct c_DbConfig
   /// Path to the database file (for SQLite) or connection string (for other backends).
   /// Must be a full file system path for SQLite. Content URIs (e.g., Android content:// URIs) are not supported.
   const char* m_dbPath;
+};
+
+/// C-style configuration for SDK specific settings
+struct c_SdkConfig
+{
+  /// Global absolute path where SDK should cache media files (e.g. decoded images/audio).
+  const char* m_cacheDirPath;
 };
 
 /// C-style configuration for backend engine (LLM runtime).

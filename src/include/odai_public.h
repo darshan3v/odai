@@ -35,8 +35,10 @@ extern "C"
   /// Must be called before using any other SDK functions. Creates or opens the database at the specified path.
   /// @param db_config Configuration structure containing the database type and path
   /// @param backend_engine_config Configuration structure specifying which backend engine to use
+  /// @param sdk_config Configuration structure specifying SDK specific settings
   /// @return true if initialization succeeded, false otherwise
-  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
+  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config,
+                           const c_SdkConfig* sdk_config);
 
   /// Registers a new model in the system with the given name and generic files map.
   /// The engine validates the files and a checksum is computed to ensure integrity.
@@ -47,10 +49,10 @@ extern "C"
 
   /// Updates the registration files for an existing model.
   /// Validates the files and potentially checks checksums based on the flag.
-  /// Only the files explicitly provided in `files` will be updated and validated.
-  /// Existing registrations for other files properties belonging to the model remain untouched.
+  /// Note: At this SDK layer, only the newly added or explicitly modified files should
+  /// be provided in `files`. Existing registrations for other properties will remain untouched.
   /// @param model_name The name of the model to update.
-  /// @param files The Model Files struct containing paths to update.
+  /// @param files The Model Files struct containing newly added or updated paths.
   /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if update succeeded, false if validation fails or model not found.
   bool odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);

@@ -1,20 +1,34 @@
 #include "ragEngine/odai_rag_engine.h"
+#include "types/odai_types.h"
+#include <vector>
+
+#ifdef ODAI_ENABLE_MINIAUDIO
+#include "audioEngine/odai_miniaudio_decoder.h"
+#endif
+
 #include "backendEngine/odai_backend_engine.h"
 
+#ifdef ODAI_ENABLE_LLAMA_BACKEND
 #include "backendEngine/odai_llama_backend_engine.h"
+#endif
+
+#ifdef ODAI_ENABLE_SQLITE_DB
 #include "db/odai_sqlite_db.h"
+#endif
 
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
 #include "utils/odai_helpers.h"
+#include <cstring>
 #include <stdexcept>
 
-OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config)
+OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config,
+                             const SdkConfig& sdk_config)
 {
   if (db_config.m_dbType == SQLITE_DB)
   {
 #ifdef ODAI_ENABLE_SQLITE_DB
-    m_db = std::make_unique<OdaiSqliteDb>(db_config);
+    m_db = std::make_unique<OdaiSqliteDb>(db_config, sdk_config.m_cacheDirPath);
 #else
     throw std::runtime_error("SQLite DB support not enabled");
 #endif
@@ -24,6 +38,13 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
   {
     throw std::runtime_error("Failed to initialize db in RAG engine");
   }
+
+#ifdef ODAI_ENABLE_MINIAUDIO
+  m_audioDecoder = std::make_unique<OdaiMiniAudioDecoder>();
+  ODAI_LOG(ODAI_LOG_INFO, "OdaiMiniAudioDecoder initialized in RAG engine");
+#else
+  throw std::runtime_error("MiniAudio support not enabled");
+#endif
 
   if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
   {
@@ -50,14 +71,14 @@ bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles
     return false;
   }
 
-  string checksums = calculate_model_checksums(details);
-  if (checksums.empty())
+  string checksums_json = calculate_model_checksums(details);
+  if (checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
     return false;
   }
 
-  if (m_db->register_model_files(name, details, checksums))
+  if (m_db->register_model_files(name, details, checksums_json))
   {
     // Update cache
     m_modelDetailsCache[name] = details;
@@ -74,8 +95,8 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     return false;
   }
 
-  string new_checksums = calculate_model_checksums(new_details);
-  if (new_checksums.empty())
+  string new_checksums_json = calculate_model_checksums(new_details);
+  if (new_checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
     return false;
@@ -83,8 +104,8 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
 
   if (flag == UpdateModelFlag::STRICT_MATCH)
   {
-    string old_checksums;
-    if (!m_db->get_model_checksums(name, old_checksums))
+    string old_checksums_json;
+    if (!m_db->get_model_checksums(name, old_checksums_json))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}", name);
       return false;
@@ -92,20 +113,25 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
 
     try
     {
-      auto new_checksums_json = nlohmann::json::parse(new_checksums);
-      auto old_checksums_json = nlohmann::json::parse(old_checksums);
+      auto new_checksums_json_obj = nlohmann::json::parse(new_checksums_json);
+      auto old_checksums_json_obj = nlohmann::json::parse(old_checksums_json);
 
-      for (auto it = new_checksums_json.begin(); it != new_checksums_json.end(); ++it)
+      for (auto it = new_checksums_json_obj.begin(); it != new_checksums_json_obj.end(); ++it)
       {
         const string& key = it.key();
-        if (old_checksums_json.contains(key))
+        if (old_checksums_json_obj.contains(key))
         {
-          if (old_checksums_json[key] != it.value())
+          if (old_checksums_json_obj[key] != it.value())
           {
             ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {} on key: {}. Expected: {}, Got: {}", name, key,
-                     old_checksums_json[key].dump(), it.value().dump());
+                     old_checksums_json_obj[key].dump(), it.value().dump());
             return false;
           }
+        }
+        else
+        {
+          ODAI_LOG(ODAI_LOG_INFO, "New key found: {}, adding it to the model details", key);
+          old_checksums_json_obj[key] = it.value();
         }
       }
     }
@@ -116,7 +142,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     }
   }
 
-  if (m_db->update_model_files(name, new_details, new_checksums))
+  if (m_db->update_model_files(name, new_details, new_checksums_json))
   {
     // Update cache
     m_modelDetailsCache[name] = new_details;
@@ -154,7 +180,14 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  return m_backendEngine->generate_streaming_response(prompt, sampler_config, callback, user_data);
+  vector<InputItem> processed_prompt = prompt;
+  if (!this->process_multimodal_inputs(processed_prompt, llm_model_config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load multimodal inputs");
+    return -1;
+  }
+
+  return m_backendEngine->generate_streaming_response(processed_prompt, sampler_config, callback, user_data);
 }
 
 bool OdaiRagEngine::load_chat_session(const ChatId& chat_id)
@@ -188,7 +221,6 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     return -1;
   }
 
-  // Check RAG settings: if RAG is enabled but scope_id is empty, return error
   // Check RAG settings: if RAG is enabled but scope_id is empty, return error
   if (generator_config.m_ragMode != RAG_MODE_NEVER)
   {
@@ -229,9 +261,15 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to ensure chat session is loaded for chat_id: {}", chat_id);
     return -1;
   }
-
-  // final_prompt = combine_context_and_query(context, prompt);
   const vector<InputItem>& final_prompt = prompt; // Placeholder until context retrieval is implemented
+
+  vector<InputItem> processed_final_prompt = final_prompt;
+
+  if (!this->process_multimodal_inputs(processed_final_prompt, chat_config.m_llmModelConfig))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to process multimodal inputs");
+    return -1;
+  }
 
   StreamingBufferContext buffer_ctx;
   buffer_ctx.m_userCallback = callback;
@@ -257,7 +295,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      chat_id, final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
+      chat_id, processed_final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {
@@ -270,15 +308,19 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   ChatMessage user_msg;
   user_msg.m_role = "user";
-  user_msg.m_contentItems = prompt;
+  // We MUST pass the original 'prompt' to the DB so that we serialize
+  // the true reference/buffer (e.g., AUDIO_FILE) and not the internal decoded data
+  user_msg.m_contentItems = final_prompt;
+  // we should update message_metadata with citations if any from RAG context
   user_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(user_msg);
 
   // ToDo in message_metadata add citations if any from RAG context
 
   InputItem assistant_item;
-  assistant_item.m_type = TEXT;
+  assistant_item.m_type = InputItemType::MEMORY_BUFFER;
   assistant_item.m_data.assign(buffer_ctx.m_bufferedResponse.begin(), buffer_ctx.m_bufferedResponse.end());
+  assistant_item.m_mimeType = "text/plain";
 
   ChatMessage assistant_msg;
   assistant_msg.m_role = "assistant";
@@ -376,10 +418,70 @@ bool OdaiRagEngine::ensure_chat_session_loaded(const ChatId& chat_id, const Chat
     return false;
   }
 
+  for (auto& msg : messages)
+  {
+    if (!this->process_multimodal_inputs(msg.m_contentItems, chat_config.m_llmModelConfig))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load historic multimodal inputs");
+      return false;
+    }
+  }
+
   if (!m_backendEngine->load_chat_messages_into_context(chat_id, messages))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat history into context for chat_id: {}", chat_id);
     return false;
+  }
+
+  return true;
+}
+
+bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config)
+{
+  std::optional<OdaiAudioTargetSpec> audio_spec_opt = m_backendEngine->get_required_audio_spec(llm_model_config);
+
+  for (auto& item : prompt_out)
+  {
+    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
+
+    if (media_type == MediaType::TEXT)
+    {
+      // no special processing needed for text
+      item.m_type = InputItemType::PROCESSED_DATA;
+    }
+    else if (media_type == MediaType::AUDIO)
+    {
+      if (audio_spec_opt.has_value())
+      {
+        if (!m_audioDecoder)
+        {
+          ODAI_LOG(ODAI_LOG_ERROR, "Target model expects audio but OdaiMiniAudioDecoder is not available");
+          return false;
+        }
+
+        OdaiDecodedAudio decoded_audio;
+        bool decode_success = m_audioDecoder->decode_to_spec(item, audio_spec_opt.value(), decoded_audio);
+
+        if (!decode_success)
+        {
+          ODAI_LOG(ODAI_LOG_ERROR, "Failed to decode input audio item");
+          return false;
+        }
+
+        // Convert float array to uint8_t byte array for transport
+        size_t byte_size = decoded_audio.m_samples.size() * sizeof(float);
+        std::vector<uint8_t> pcm_bytes(byte_size);
+        std::memcpy(pcm_bytes.data(), decoded_audio.m_samples.data(), byte_size);
+
+        item.m_data = std::move(pcm_bytes);
+        item.m_type = InputItemType::PROCESSED_DATA;
+      }
+      else
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Input contains audio but backend model does not support it.");
+        return false;
+      }
+    }
   }
 
   return true;

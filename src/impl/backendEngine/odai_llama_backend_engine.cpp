@@ -4,6 +4,7 @@
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
 #include "types/odai_types.h"
+#include "utils/odai_helpers.h"
 #include "utils/string_utils.h"
 #include <filesystem>
 #include <nlohmann/json.hpp>
@@ -136,6 +137,14 @@ bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
   }
 
   return true;
+}
+
+std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config) const
+{
+  (void)config;
+  // Currently, the standard llama cpp backend implementation does not fully support multimodal audio
+  // so we return nullopt.
+  return std::nullopt;
 }
 
 bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
@@ -515,9 +524,22 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& pr
   string text_prompt;
   for (const auto& item : prompt)
   {
-    if (item.m_type == TEXT)
+    if (item.m_type != InputItemType::PROCESSED_DATA)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "For now backend only supports PROCESSED_DATA type of input items");
+      return -1;
+    }
+
+    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
+
+    if (media_type == MediaType::TEXT)
     {
       text_prompt.append(item.m_data.begin(), item.m_data.end());
+    }
+    else
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
+      return -1;
     }
   }
 
@@ -560,9 +582,14 @@ string OdaiLlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
     string text_content;
     for (const auto& item : msg.m_contentItems)
     {
-      if (item.m_type == TEXT)
+      if (item.m_type == InputItemType::MEMORY_BUFFER && get_media_type_from_mime(item.m_mimeType) == MediaType::TEXT)
       {
         text_content.append(item.m_data.begin(), item.m_data.end());
+      }
+      else
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
+        return "";
       }
     }
     formatted_contents.push_back(text_content);

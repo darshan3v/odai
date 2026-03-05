@@ -17,7 +17,8 @@ void odai_set_log_level(OdaiLogLevel log_level)
   OdaiSdk::get_instance().set_log_level(log_level);
 }
 
-bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineConfig* c_backend_engine_config)
+bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineConfig* c_backend_engine_config,
+                         const c_SdkConfig* c_sdk_config)
 {
   if (!is_sane(c_db_config))
   {
@@ -31,7 +32,14 @@ bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineCon
     return false;
   }
 
-  return OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
+  if (!is_sane(c_sdk_config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "invalid sdkConfig passed");
+    return false;
+  }
+
+  return OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config),
+                                                to_cpp(*c_sdk_config));
 }
 
 bool odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)

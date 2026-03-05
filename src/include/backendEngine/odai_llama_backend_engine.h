@@ -82,6 +82,11 @@ public:
   /// @return true if valid, false otherwise.
   bool validate_model_files(const ModelFiles& files) const override;
 
+  /// Returns the required audio specification for the llama model.
+  /// @param config The LLM model configuration to check requirements for.
+  /// @return Currently std::nullopt as multimodal is not yet fully supported in LLaMA backend here.
+  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const override;
+
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
   /// @param files The generic model files containing paths.
@@ -98,6 +103,7 @@ public:
 
   /// Generates a streaming response for the given prompt using the loaded
   /// language model.
+  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA.
   /// @param prompt The input prompt to generate a response for
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
@@ -126,6 +132,8 @@ public:
   /// then continues generation.
   /// This function expects the chat context is already loaded into the model's context using
   /// load_chat_messages_into_context.
+  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// (e.g., pre-decoded audio buffers) rather than file paths.
   /// @param chat_id Unique identifier for the chat session whose cached context
   /// will be used
   /// @param query The input query/message to generate a response for

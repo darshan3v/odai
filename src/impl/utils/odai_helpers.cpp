@@ -51,6 +51,37 @@ string calculate_file_checksum(const string& path)
   return ss.str();
 }
 
+string calculate_data_checksum(const vector<uint8_t>& data)
+{
+  if (data.empty())
+  {
+    return "";
+  }
+
+  XXH64_hash_t hash = XXH3_64bits(data.data(), data.size());
+
+  stringstream ss;
+  ss << hex << setw(16) << setfill('0') << hash;
+  return ss.str();
+}
+
+MediaType get_media_type_from_mime(const std::string& mime_type)
+{
+  if (mime_type.find("text") != std::string::npos)
+  {
+    return MediaType::TEXT;
+  }
+  if (mime_type.find("image") != std::string::npos)
+  {
+    return MediaType::IMAGE;
+  }
+  if (mime_type.find("audio") != std::string::npos)
+  {
+    return MediaType::AUDIO;
+  }
+  return MediaType::INVALID;
+}
+
 string calculate_model_checksums(const ModelFiles& files)
 {
   nlohmann::json checksums_json;

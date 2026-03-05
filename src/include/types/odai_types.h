@@ -45,6 +45,21 @@ enum UpdateModelFlag
   ALLOW_MISMATCH = ODAI_UPDATE_ALLOW_MISMATCH
 };
 
+/// Specifies the desired output format for the decoded audio.
+struct OdaiAudioTargetSpec
+{
+  uint32_t m_sampleRate;
+  uint8_t m_channels;
+};
+
+/// Holds the raw float32 PCM samples and metadata after decoding.
+struct OdaiDecodedAudio
+{
+  std::vector<float> m_samples;
+  uint32_t m_sampleRate{};
+  uint8_t m_channels{};
+};
+
 struct ModelFiles
 {
   ModelType m_modelType;
@@ -54,13 +69,22 @@ struct ModelFiles
   bool is_sane() const { return m_engineType == LLAMA_BACKEND_ENGINE; }
 };
 
-enum InputItemType
+/// Internal enum to determine the media class
+enum class MediaType : std::uint8_t
 {
-  TEXT = ODAI_INPUT_ITEM_TYPE_TEXT,
-  IMAGE_FILE = ODAI_INPUT_ITEM_TYPE_IMAGE_FILE,
-  AUDIO_FILE = ODAI_INPUT_ITEM_TYPE_AUDIO_FILE,
-  IMAGE_BASE64 = ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64,
-  AUDIO_BASE64 = ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64
+  TEXT = 0,
+  IMAGE = 1,
+  AUDIO = 2,
+  INVALID = UINT8_MAX
+};
+
+/// Represents the type of input item format.
+enum class InputItemType : std::uint8_t
+{
+  FILE_PATH = 0,
+  MEMORY_BUFFER = 1,
+  PROCESSED_DATA = 2,
+  INVALID = UINT8_MAX
 };
 
 struct InputItem
@@ -90,7 +114,6 @@ struct DBConfig
   /// backends). Must be a full file system path for SQLite. Content URIs (e.g.,
   /// Android content:// URIs) are not supported.
   string m_dbPath;
-
   bool is_sane() const
   {
     if (m_dbPath.empty())
@@ -105,6 +128,14 @@ struct DBConfig
 
     return true;
   }
+};
+
+struct SdkConfig
+{
+  /// Global absolute path where SDK should cache media files (e.g. decoded images/audio).
+  string m_cacheDirPath;
+
+  bool is_sane() const { return !m_cacheDirPath.empty(); }
 };
 
 /// Configuration structure for backend engine (LLM runtime).

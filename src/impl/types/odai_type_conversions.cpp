@@ -1,4 +1,5 @@
 #include "types/odai_type_conversions.h"
+#include "types/odai_ctypes.h"
 
 #include <cstring>
 
@@ -50,18 +51,14 @@ InputItemType to_cpp_input_item_type(c_InputItemType c)
 {
   switch (c)
   {
-  case ODAI_INPUT_ITEM_TYPE_TEXT:
-    return InputItemType::TEXT;
-  case ODAI_INPUT_ITEM_TYPE_IMAGE_FILE:
-    return InputItemType::IMAGE_FILE;
-  case ODAI_INPUT_ITEM_TYPE_AUDIO_FILE:
-    return InputItemType::AUDIO_FILE;
-  case ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64:
-    return InputItemType::IMAGE_BASE64;
-  case ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64:
-    return InputItemType::AUDIO_BASE64;
+  case ODAI_INPUT_ITEM_TYPE_FILE_PATH:
+    return InputItemType::FILE_PATH;
+  case ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER:
+    return InputItemType::MEMORY_BUFFER;
+  case ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA:
+    return InputItemType::PROCESSED_DATA;
   default:
-    return InputItemType::TEXT;
+    return InputItemType::INVALID;
   }
 }
 
@@ -87,6 +84,11 @@ InputItem to_cpp(const c_InputItem& c)
 DBConfig to_cpp(const c_DbConfig& c)
 {
   return {c.m_dbType, string(c.m_dbPath)};
+}
+
+SdkConfig to_cpp(const c_SdkConfig& c)
+{
+  return {string(c.m_cacheDirPath)};
 }
 
 BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
@@ -194,18 +196,14 @@ c_InputItemType to_c(const InputItemType& cpp)
 {
   switch (cpp)
   {
-  case InputItemType::TEXT:
-    return ODAI_INPUT_ITEM_TYPE_TEXT;
-  case InputItemType::IMAGE_FILE:
-    return ODAI_INPUT_ITEM_TYPE_IMAGE_FILE;
-  case InputItemType::AUDIO_FILE:
-    return ODAI_INPUT_ITEM_TYPE_AUDIO_FILE;
-  case InputItemType::IMAGE_BASE64:
-    return ODAI_INPUT_ITEM_TYPE_IMAGE_BASE64;
-  case InputItemType::AUDIO_BASE64:
-    return ODAI_INPUT_ITEM_TYPE_AUDIO_BASE64;
+  case InputItemType::FILE_PATH:
+    return ODAI_INPUT_ITEM_TYPE_FILE_PATH;
+  case InputItemType::MEMORY_BUFFER:
+    return ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER;
+  case InputItemType::PROCESSED_DATA:
+    return ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA;
   default:
-    return ODAI_INPUT_ITEM_TYPE_TEXT;
+    return ODAI_INPUT_ITEM_TYPE_INVALID;
   }
 }
 

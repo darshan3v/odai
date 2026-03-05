@@ -50,7 +50,8 @@ void OdaiSdk::set_log_level(OdaiLogLevel log_level)
   }
 }
 
-bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
+bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config,
+                             const SdkConfig& sdk_config)
 {
   try
   {
@@ -66,8 +67,14 @@ bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
       return false;
     }
 
+    if (!sdk_config.is_sane())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "invalid SDK config passed");
+      return false;
+    }
+
     // Initalize the RAGEngine
-    m_ragEngine = make_unique<OdaiRagEngine>(db_config, backend_config);
+    m_ragEngine = make_unique<OdaiRagEngine>(db_config, backend_config, sdk_config);
 
     if ((m_ragEngine == nullptr))
     {

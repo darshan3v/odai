@@ -15,12 +15,12 @@ public:
   OdaiMiniAudioDecoder(OdaiMiniAudioDecoder&&) = delete;
   OdaiMiniAudioDecoder& operator=(OdaiMiniAudioDecoder&&) = delete;
 
-  /// Decodes an audio file and resamples it to match the target specification.
-  /// @param file_path The absolute path to the input audio file.
-  /// @param target_spec The required target spec.
+  /// Decodes an audio InputItem and processes it to match the target specification.
+  /// @param input The InputItem containing audio data.
+  /// @param target_spec The required output's spec.
   /// @param decoded_audio The output decoded audio.
   /// @return true if decoding was successful, false otherwise.
-  bool decode_to_spec(const std::string& file_path, const OdaiAudioTargetSpec& target_spec,
+  bool decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
                       OdaiDecodedAudio& decoded_audio) override;
 };
 

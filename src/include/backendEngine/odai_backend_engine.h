@@ -23,6 +23,11 @@ public:
   /// @return true if the files contain required paths and are valid.
   virtual bool validate_model_files(const ModelFiles& files) const = 0;
 
+  /// Returns the required audio specification for a specific language model.
+  /// @param config The LLM model configuration to check requirements for.
+  /// @return The required audio spec if the model is multimodal, std::nullopt otherwise.
+  virtual std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const = 0;
+
   /// Loads an embedding model from the specified configuration.
   /// If a model is already loaded, it will be freed and replaced with the new one.
   /// @param files The Model Files struct.
@@ -39,6 +44,8 @@ public:
 
   /// Generates a streaming response for the given prompt using the loaded language model.
   /// The response is streamed incrementally via the callback function.
+  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// (e.g., pre-decoded audio or raw buffers) rather than file paths.
   /// @param prompt The input prompt to generate a response for
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
@@ -59,6 +66,8 @@ public:
   /// Generates a streaming chat response for the given query in the given chat session.
   /// This function expects the chat context is already loaded into the model's context using
   /// load_chat_messages_into_context.
+  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// (e.g., pre-decoded audio buffers) rather than file paths.
   /// @param chat_id Unique identifier for the chat session whose cached context will be used
   /// @param query The input query/message to generate a response for
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)

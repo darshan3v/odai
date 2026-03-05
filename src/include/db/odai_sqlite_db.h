@@ -24,6 +24,7 @@ class OdaiSqliteDb : public IOdaiDb
 
 private:
   string m_dbPath;
+  string m_cacheDirPath;
   unique_ptr<SQLite::Database> m_db = nullptr;
 
   uint16_t m_transactionDepth = 0;
@@ -35,11 +36,24 @@ private:
   /// @return true if extension registered, false on error
   static bool register_vec_extension();
 
+  /// Processes and caches media items (such as audio or image files and buffers)
+  /// into the media cache directory to prevent storing large blobs directly in the database.
+  ///
+  /// This method calculates the xxhash checksum of the media item. If the item is not
+  /// found in the cache, it is written to the file system. In both cases, the properties
+  /// of the InputItem are modified in-place: its type is updated to FILE_PATH,
+  /// and its data is replaced with the absolute path to the cached file.
+  ///
+  /// @param item The InputItem to process and mutate in place.
+  /// @return true if processing and caching succeeded, false upon an error.
+  bool process_and_cache_media_item(InputItem& item);
+
 public:
   /// Constructs a new ODAISqliteDb instance with the specified database
   /// configuration. The database is not opened until initialize_db() is called.
   /// @param dbConfig Database configuration object.
-  OdaiSqliteDb(const DBConfig& db_config);
+  /// @param cache_dir_path Path to the cache directory.
+  OdaiSqliteDb(const DBConfig& db_config, const string& cache_dir_path);
 
   /// Destructor that cleans up database resources.
   /// ToDo : Not yet implemented
@@ -89,9 +103,11 @@ public:
   bool get_model_checksums(const ModelName& name, string& checksums) override;
 
   /// Updates the details for an existing model record.
+  /// Note: This method expects `new_details` and `new_checksums` to contain the
+  /// complete and comprehensive details mapping (replacing any existing record entirely).
   /// @param name The name of the model to update
-  /// @param new_details The new registration details to store
-  /// @param new_checksums The new computed checksums
+  /// @param new_details The complete new registration details to store
+  /// @param new_checksums The complete new computed checksums
   /// @return true if update succeeded, false on error
   bool update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums) override;
 
@@ -142,20 +158,36 @@ public:
   bool get_chat_config(const ChatId& chat_id, ChatConfig& chat_config) override;
 
   /// Retrieves all chat messages for the specified chat session.
+  ///
   /// Messages are returned in chronological order based on sequence_index.
-  /// @param chat_id The chat identifier to retrieve messages for
-  /// @param messages Output parameter that will be populated with the chat
-  /// messages (cleared and populated)
-  /// @return true if messages retrieved successfully, false if chat_id doesn't
-  /// exist or on error
+  /// Note: Any multimodal inputs (audio/image) that were previously cached
+  /// during insertion will be returned as InputItems with type FILE_PATH.
+  /// Their m_data payload will contain the local absolute path string pointing
+  /// to the cached file on disk, rather than the raw binary data.
+  ///
+  /// @param chat_id The chat identifier to retrieve messages for.
+  /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
+  /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.
   bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages) override;
 
   /// Inserts multiple chat messages into the database.
-  /// Each message is assigned a sequence index automatically based on existing
-  /// messages for the chat.
-  /// @param chat_id Unique identifier for the chat session
-  /// @param messages Vector of ChatMessage objects to insert
-  /// @return true if all messages inserted successfully, false on error
+  ///
+  /// This function attaches messages to an existing chat session. Each message
+  /// is assigned an auto-incrementing sequence index for timeline preservation.
+  /// Furthermore, all multimodal inputs (audio/image) inside message contents
+  /// are automatically processed, deduplicated (via xxhash checksum comparison),
+  /// and stored directly onto the filesystem (media cache) rather than stuffing
+  /// large blobs into the chat_messages table. The database stores the file
+  /// paths instead.
+  ///
+  /// IMPORTANT: Media within `messages` must be strictly provided as true format
+  /// sources (FILE_PATH or MEMORY_BUFFER). Pre-processed or decoded audio data
+  /// (`PROCESSED_DATA`) will be rejected since deduplication routines operate on
+  /// raw compressed binary payloads.
+  ///
+  /// @param chat_id Unique identifier for the chat session.
+  /// @param messages Vector of ChatMessage objects to insert. Its multimodal items will be modified after caching.
+  /// @return true if all messages were inserted and cached successfully, false on error.
   bool insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages) override;
 
   /// Closes the database connection and releases resources.
@@ -168,6 +200,15 @@ CREATE TABLE chats (
     chat_id        TEXT PRIMARY KEY,
     title          TEXT DEFAULT NULL,
     chat_config    BLOB NOT NULL,        -- JSON
+    created_at     INTEGER NOT NULL DEFAULT (unixepoch())
+);
+
+CREATE TABLE media_cache (
+    id             TEXT PRIMARY KEY,
+    hash_xxhash    TEXT UNIQUE NOT NULL,
+    media_type     TEXT NOT NULL,
+    absolute_path  TEXT NOT NULL,
+    file_name      TEXT NOT NULL,
     created_at     INTEGER NOT NULL DEFAULT (unixepoch())
 );
 

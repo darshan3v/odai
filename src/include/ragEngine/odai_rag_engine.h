@@ -1,8 +1,10 @@
 #pragma once
 
+#include "audioEngine/odai_audio_decoder.h"
 #include "backendEngine/odai_backend_engine.h"
 #include "db/odai_db.h"
 #include "types/odai_types.h"
+#include <memory>
 #include <unordered_map>
 
 /// RAG (Retrieval-Augmented Generation) engine that combines embedding and
@@ -12,7 +14,7 @@
 class OdaiRagEngine
 {
 public:
-  OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
+  OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config, const SdkConfig& sdk_config);
 
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.
@@ -23,8 +25,10 @@ public:
 
   /// Updates the registration details for an existing model.
   /// Validates the details and potentially checks checksums based on the flag.
+  /// Note: At the Engine/SDK layer, this method expects `details` to contain only
+  /// the newly added or updated files. It will be merged with existing details.
   /// @param name The name of the model to update.
-  /// @param details The Model Registration Details struct.
+  /// @param details The Model Registration Details struct containing newly updated files.
   /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if update succeeded, false if validation fails or model not found.
   bool update_model_files(const ModelName& name, const ModelFiles& details, UpdateModelFlag flag);
@@ -127,8 +131,18 @@ private:
   /// @return true if session is loaded (or was already loaded), false on error
   bool ensure_chat_session_loaded(const ChatId& chat_id, const ChatConfig& chat_config);
 
+  /// Helper to process multimodal inputs and decode/load files into memory buffer
+  /// before sending them to the inference engine. This mutates the input items,
+  /// converting formats like AUDIO_FILE into an internal processed data format.
+  /// Thus, the returned / mutated prompt contains decoded/processed data meant exclusively
+  /// for the backend engine and should NOT be persisted to the database.
+  /// @param prompt Items to process.
+  /// @param llm_model_config The target LlmModelConfig used.
+  bool process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config);
+
   std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<IOdaiBackendEngine> m_backendEngine;
+  std::unique_ptr<IOdaiAudioDecoder> m_audioDecoder;
 
   unordered_map<string, ModelFiles> m_modelDetailsCache;
 };

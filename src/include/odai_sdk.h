@@ -38,8 +38,10 @@ public:
   /// path
   /// @param backendConfig Configuration structure specifying which backend
   /// engine to use
+  /// @param sdkConfig Configuration structure containing SDK specific settings
   /// @return true if initialization succeeded, false otherwise
-  bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
+  bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config,
+                      const SdkConfig& sdk_config);
 
   /// Registers a new model with generic files.
   /// @param name The unique name of the model.
