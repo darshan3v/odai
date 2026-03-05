@@ -33,6 +33,17 @@ static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded
   return true;
 }
 
+bool OdaiMiniAudioDecoder::is_supported(const std::string& format) const
+{
+  std::string lower_format;
+  for (char c : format)
+  {
+    lower_format += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+  }
+
+  return lower_format == "wav" || lower_format == "mp3" || lower_format == "flac";
+}
+
 bool OdaiMiniAudioDecoder::decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
                                           OdaiDecodedAudio& decoded_audio)
 {
