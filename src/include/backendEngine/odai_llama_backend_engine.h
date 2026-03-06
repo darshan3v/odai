@@ -63,6 +63,7 @@ struct ChatSessionLLMContext
   unique_ptr<llama_context, LlamaContextDeleter> m_context;
 
   LLMModelConfig m_llmModelConfig;
+  ModelFiles m_llmModelFiles;
 };
 
 /// Llama.cpp-based implementation of the backend engine for model loading and
@@ -76,6 +77,11 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_engine() override;
 
+  /// Returns the required audio specification for the llama model.
+  /// @param config The LLM model configuration to check requirements for.
+  /// @return Currently std::nullopt as multimodal is not yet fully supported in LLaMA backend here.
+  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const override;
+
   /// Validates the model files specifically for the llama.cpp backend engine.
   /// Ensures that the engine type is LLAMA_BACKEND_ENGINE.
   /// For LLM models, expects at most 2 entries: a mandatory 'base_model_path' and an optional 'mmproj_model_path', both
@@ -84,11 +90,6 @@ public:
   /// @param files The model files object to validate
   /// @return true if the associated model files are valid, false otherwise
   bool validate_model_files(const ModelFiles& files) const override;
-
-  /// Returns the required audio specification for the llama model.
-  /// @param config The LLM model configuration to check requirements for.
-  /// @return Currently std::nullopt as multimodal is not yet fully supported in LLaMA backend here.
-  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const override;
 
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
@@ -170,8 +171,8 @@ private:
   EmbeddingModelConfig m_embeddingModelConfig;
   LLMModelConfig m_llmModelConfig;
 
-  ModelPath m_currentEmbeddingModelPath;
-  ModelPath m_currentLlmModelPath;
+  ModelFiles m_embeddingModelFiles;
+  ModelFiles m_llmModelFiles;
 
   unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
   unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
@@ -183,6 +184,14 @@ private:
   /// Unordered map to store cached chat session data keyed by chat_id
   /// Each entry contains the context with KV cache, sampler, and metadata
   unordered_map<ChatId, ChatSessionLLMContext> m_chatContext;
+
+  /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
+  /// @param entries The map of model file entries
+  /// @param key The entry key to validate (e.g., "base_model_path")
+  /// @param is_optional If true, the entry is not required. If present and not empty, it must be a valid file.
+  /// @return true if the entry is valid or successfully omitted, false otherwise
+  static bool validate_model_file_entry(const unordered_map<string, string>& entries, const string& key,
+                                        bool is_optional);
 
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for
@@ -214,14 +223,6 @@ private:
   /// last token added
   static void add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
                                   llama_seq_id seq_id, bool set_logit_request_for_last_token);
-
-  /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
-  /// @param entries The map of model file entries
-  /// @param key The entry key to validate (e.g., "base_model_path")
-  /// @param is_optional If true, the entry is not required. If present and not empty, it must be a valid file.
-  /// @return true if the entry is valid or successfully omitted, false otherwise
-  static bool validate_model_file_entry(const unordered_map<string, string>& entries, const string& key,
-                                        bool is_optional);
 
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize

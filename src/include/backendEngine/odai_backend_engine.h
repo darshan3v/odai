@@ -18,15 +18,16 @@ public:
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_engine() = 0;
 
-  /// Validates the given model registration paths for this specific backend engine.
-  /// @param files The generic model paths to validate.
-  /// @return true if the files contain required paths and are valid.
-  virtual bool validate_model_files(const ModelFiles& files) const = 0;
-
   /// Returns the required audio specification for a specific language model.
   /// @param config The LLM model configuration to check requirements for.
   /// @return The required audio spec if the model is multimodal, std::nullopt otherwise.
   virtual std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const = 0;
+
+  /// Validates the given model registration paths for this specific backend engine.
+  /// @note Implementations should document the expected model files in this function's documentation.
+  /// @param files The generic model paths to validate.
+  /// @return true if the files contain required paths and are valid.
+  virtual bool validate_model_files(const ModelFiles& files) const = 0;
 
   /// Loads an embedding model from the specified configuration.
   /// If a model is already loaded, it will be freed and replaced with the new one.

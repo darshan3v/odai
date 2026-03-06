@@ -18,9 +18,6 @@ typedef char* c_SemanticSpaceName;
 /// Model Name - opaque string type for type safety.
 typedef char* c_ModelName;
 
-/// Model Path - opaque string type for type safety.
-typedef char* c_ModelPath;
-
 /// Model Type - opaque type for model classification
 typedef uint32_t c_ModelType;
 #define ODAI_MODEL_TYPE_EMBEDDING (c_ModelType)0

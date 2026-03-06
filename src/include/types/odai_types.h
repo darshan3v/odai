@@ -30,9 +30,6 @@ typedef string SemanticSpaceName;
 /// Strong type for model names.
 typedef string ModelName;
 
-/// Strong type for model paths.
-typedef string ModelPath;
-
 enum ModelType
 {
   EMBEDDING,

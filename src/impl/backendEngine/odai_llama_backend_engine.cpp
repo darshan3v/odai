@@ -200,18 +200,20 @@ bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
     return false;
   }
 
-  if (!this->validate_model_files(files))
+  if (!this->validate_model_files(files) || files.m_modelType != ModelType::EMBEDDING)
   {
     return false;
   }
 
   std::string path = files.m_entries.at("base_model_path");
 
-  if (this->m_currentEmbeddingModelPath == path)
+  if (this->m_embeddingModelFiles.m_entries.contains("base_model_path") &&
+      this->m_embeddingModelFiles.m_entries.at("base_model_path") == path)
   {
     ODAI_LOG(ODAI_LOG_INFO, "embedding model {} is already loaded", path);
     // update config though, some other params might have changed
     this->m_embeddingModelConfig = config;
+    this->m_embeddingModelFiles = files;
     return true;
   }
 
@@ -228,7 +230,7 @@ bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
   }
 
   this->m_embeddingModelConfig = config;
-  this->m_currentEmbeddingModelPath = path;
+  this->m_embeddingModelFiles = files;
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded embedding model {}", path);
   return true;
@@ -242,18 +244,20 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
     return false;
   }
 
-  if (!this->validate_model_files(files))
+  if (!this->validate_model_files(files) || files.m_modelType != ModelType::LLM)
   {
     return false;
   }
 
   std::string path = files.m_entries.at("base_model_path");
 
-  if (this->m_currentLlmModelPath == path)
+  if (this->m_llmModelFiles.m_entries.contains("base_model_path") &&
+      this->m_llmModelFiles.m_entries.at("base_model_path") == path)
   {
     ODAI_LOG(ODAI_LOG_INFO, "language model {} is already loaded", path);
     // update config though, some other params might have changed
     this->m_llmModelConfig = config;
+    this->m_llmModelFiles = files;
     return true;
   }
 
@@ -282,7 +286,7 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   }
 
   this->m_llmModelConfig = config;
-  this->m_currentLlmModelPath = path;
+  this->m_llmModelFiles = files;
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}", path);
   return true;
@@ -733,7 +737,7 @@ bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   }
 
   // Store the context and sampler for this chat session
-  this->m_chatContext[chat_id] = {std::move(llm_llama_context)};
+  this->m_chatContext[chat_id] = {std::move(llm_llama_context), this->m_llmModelConfig, this->m_llmModelFiles};
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context for chat_id {}", chat_id);
   return true;
