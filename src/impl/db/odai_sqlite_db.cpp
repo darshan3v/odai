@@ -697,7 +697,7 @@ bool OdaiSqliteDb::process_and_cache_media_item(InputItem& item)
       out_file.close();
 
       SQLite::Statement insert_cache(
-          *m_db, "INSERT INTO media_cache (id, hash_xxhash, media_type, absolute_path, file_name) VALUES (?, "
+          *m_db, "INSERT INTO media_cache (id, hash_xxhash, mime_type, absolute_path, file_name) VALUES (?, "
                  "?, ?, ?, ?)");
       insert_cache.bind(1, "mc_" + hash_xxhash);
       insert_cache.bind(2, hash_xxhash);

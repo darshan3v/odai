@@ -76,10 +76,13 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_engine() override;
 
-  /// Validates the model files specifically for llama.cpp backend.
-  /// Expects 'base_model_path' key to be present and pointing to a valid file.
-  /// @param files The generic model files to validate.
-  /// @return true if valid, false otherwise.
+  /// Validates the model files specifically for the llama.cpp backend engine.
+  /// Ensures that the engine type is LLAMA_BACKEND_ENGINE.
+  /// For LLM models, expects at most 2 entries: a mandatory 'base_model_path' and an optional 'mmproj_model_path', both
+  /// pointing to valid existing files. For EMBEDDING models, expects exactly 1 entry: a mandatory 'base_model_path'
+  /// pointing to a valid existing file.
+  /// @param files The model files object to validate
+  /// @return true if the associated model files are valid, false otherwise
   bool validate_model_files(const ModelFiles& files) const override;
 
   /// Returns the required audio specification for the llama model.
@@ -211,6 +214,14 @@ private:
   /// last token added
   static void add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
                                   llama_seq_id seq_id, bool set_logit_request_for_last_token);
+
+  /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
+  /// @param entries The map of model file entries
+  /// @param key The entry key to validate (e.g., "base_model_path")
+  /// @param is_optional If true, the entry is not required. If present and not empty, it must be a valid file.
+  /// @return true if the entry is valid or successfully omitted, false otherwise
+  static bool validate_model_file_entry(const unordered_map<string, string>& entries, const string& key,
+                                        bool is_optional);
 
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize

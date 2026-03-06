@@ -112,26 +112,71 @@ unique_ptr<llama_sampler, LlamaSamplerDeleter> OdaiLlamaEngine::get_new_llm_llam
   return sampler;
 }
 
-bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
+bool OdaiLlamaEngine::validate_model_file_entry(const std::unordered_map<std::string, std::string>& entries,
+                                                const std::string& key, bool is_optional)
 {
-  if (!files.m_entries.contains("base_model_path"))
+  if (!entries.contains(key))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Missing 'base_model_path' in model registration details");
-    return false;
-  }
-  const std::string& path = files.m_entries.at("base_model_path");
-  if (path.empty() || !std::filesystem::exists(path))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid or missing file at 'base_model_path': {}", path);
+    if (is_optional)
+    {
+      return true;
+    }
+    ODAI_LOG(ODAI_LOG_ERROR, "Missing '{}' in model registration details", key);
     return false;
   }
 
-  if (files.m_entries.contains("mmproj_model_path"))
+  const std::string& path = entries.at(key);
+  if (is_optional && path.empty())
   {
-    const std::string& mmproj_path = files.m_entries.at("mmproj_model_path");
-    if (!mmproj_path.empty() && !std::filesystem::exists(mmproj_path))
+    return true; // Optional file path can be empty
+  }
+
+  if (path.empty() || !std::filesystem::exists(path))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid or missing file at '{}': {}", key, path);
+    return false;
+  }
+
+  return true;
+}
+
+bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
+{
+
+  if (files.m_engineType != LLAMA_BACKEND_ENGINE)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid Engine Type passed");
+    return false;
+  }
+
+  if (files.m_modelType == ModelType::LLM)
+  {
+    if (files.m_entries.size() > 2)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "Invalid or missing file at 'mmproj_model_path': {}", mmproj_path);
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
+      return false;
+    }
+
+    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
+    {
+      return false;
+    }
+
+    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "mmproj_model_path", true))
+    {
+      return false;
+    }
+  }
+  else if (files.m_modelType == ModelType::EMBEDDING)
+  {
+    if (files.m_entries.size() != 1)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
+      return false;
+    }
+
+    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
+    {
       return false;
     }
   }

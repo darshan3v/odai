@@ -443,6 +443,13 @@ bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, con
 
   for (auto& item : prompt_out)
   {
+
+    if (item.m_type == InputItemType::PROCESSED_DATA)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Undefined, we expect unprocessed data in this function");
+      return false;
+    }
+
     MediaType media_type = get_media_type_from_mime(item.m_mimeType);
 
     if (media_type == MediaType::TEXT)

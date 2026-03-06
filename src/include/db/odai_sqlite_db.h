@@ -206,9 +206,9 @@ CREATE TABLE chats (
 CREATE TABLE media_cache (
     id             TEXT PRIMARY KEY,
     hash_xxhash    TEXT UNIQUE NOT NULL,
-    media_type     TEXT NOT NULL,
-    absolute_path  TEXT NOT NULL,
-    file_name      TEXT NOT NULL,
+    mime_type      TEXT NOT NULL,
+    absolute_path  TEXT NOT NULL, -- absolute_path of cached file not the original
+    file_name      TEXT NOT NULL, -- file_name of cached file not the original
     created_at     INTEGER NOT NULL DEFAULT (unixepoch())
 );
 
