@@ -1,6 +1,16 @@
+#include <algorithm>
+#include <cctype>
 #include <cstring>
 
 #include "utils/string_utils.h"
+
+string to_lower(const string& str)
+{
+  string lower_str = str;
+  std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
+                 [](unsigned char chr) { return std::tolower(chr); });
+  return lower_str;
+}
 
 // Helper: Returns the length of the string that is safe to send as valid UTF-8
 size_t get_safe_utf8_length(const string& buffer)

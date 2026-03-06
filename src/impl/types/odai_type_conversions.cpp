@@ -28,6 +28,21 @@ UpdateModelFlag to_cpp_update_model_flag(c_UpdateModelFlag c)
   return UpdateModelFlag::ALLOW_MISMATCH;
 }
 
+InputItemType to_cpp_input_item_type(c_InputItemType c)
+{
+  switch (c)
+  {
+  case ODAI_INPUT_ITEM_TYPE_FILE_PATH:
+    return InputItemType::FILE_PATH;
+  case ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER:
+    return InputItemType::MEMORY_BUFFER;
+  case ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA:
+    return InputItemType::PROCESSED_DATA;
+  default:
+    return InputItemType::INVALID;
+  }
+}
+
 ModelFiles to_cpp(const c_ModelFiles& c)
 {
   ModelFiles details;
@@ -45,21 +60,6 @@ ModelFiles to_cpp(const c_ModelFiles& c)
     }
   }
   return details;
-}
-
-InputItemType to_cpp_input_item_type(c_InputItemType c)
-{
-  switch (c)
-  {
-  case ODAI_INPUT_ITEM_TYPE_FILE_PATH:
-    return InputItemType::FILE_PATH;
-  case ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER:
-    return InputItemType::MEMORY_BUFFER;
-  case ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA:
-    return InputItemType::PROCESSED_DATA;
-  default:
-    return InputItemType::INVALID;
-  }
 }
 
 InputItem to_cpp(const c_InputItem& c)
@@ -288,6 +288,23 @@ c_ChatMessage to_c(const ChatMessage& cpp)
   result.m_createdAt = cpp.m_createdAt;
 
   return result;
+}
+
+MediaType get_media_type_from_mime(const string& mime_type)
+{
+  if (mime_type.find("text") != string::npos)
+  {
+    return MediaType::TEXT;
+  }
+  if (mime_type.find("image") != string::npos)
+  {
+    return MediaType::IMAGE;
+  }
+  if (mime_type.find("audio") != string::npos)
+  {
+    return MediaType::AUDIO;
+  }
+  return MediaType::INVALID;
 }
 
 void to_json(json& j, const ChunkingConfig& p)

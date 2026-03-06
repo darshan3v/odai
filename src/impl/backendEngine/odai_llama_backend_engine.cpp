@@ -3,8 +3,8 @@
 #include "backendEngine/odai_llama_backend_engine.h"
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
+#include "types/odai_type_conversions.h"
 #include "types/odai_types.h"
-#include "utils/odai_helpers.h"
 #include "utils/string_utils.h"
 #include <filesystem>
 #include <nlohmann/json.hpp>

@@ -1,6 +1,8 @@
 #include "audioEngine/odai_miniaudio_decoder.h"
 #include "miniaudio.h"
 #include "odai_sdk.h"
+#include "types/odai_type_conversions.h"
+#include "utils/string_utils.h"
 
 // Helper function to handle reading from either an initialized from-file or from-memory decoder
 static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded_audio)
@@ -33,13 +35,9 @@ static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded
   return true;
 }
 
-bool OdaiMiniAudioDecoder::is_supported(const std::string& format) const
+bool OdaiMiniAudioDecoder::is_supported(const string& format) const
 {
-  std::string lower_format;
-  for (char c : format)
-  {
-    lower_format += static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-  }
+  string lower_format = to_lower(format);
 
   return lower_format == "wav" || lower_format == "mp3" || lower_format == "flac";
 }
@@ -47,6 +45,15 @@ bool OdaiMiniAudioDecoder::is_supported(const std::string& format) const
 bool OdaiMiniAudioDecoder::decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
                                           OdaiDecodedAudio& decoded_audio)
 {
+
+  MediaType media_type = get_media_type_from_mime(input.m_mimeType);
+
+  if (media_type != MediaType::AUDIO)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Input item is not an audio file");
+    return false;
+  }
+
   ma_decoder_config decoder_config =
       ma_decoder_config_init(ma_format_f32, target_spec.m_channels, target_spec.m_sampleRate);
   ma_decoder decoder;

@@ -65,23 +65,6 @@ string calculate_data_checksum(const vector<uint8_t>& data)
   return ss.str();
 }
 
-MediaType get_media_type_from_mime(const std::string& mime_type)
-{
-  if (mime_type.find("text") != std::string::npos)
-  {
-    return MediaType::TEXT;
-  }
-  if (mime_type.find("image") != std::string::npos)
-  {
-    return MediaType::IMAGE;
-  }
-  if (mime_type.find("audio") != std::string::npos)
-  {
-    return MediaType::AUDIO;
-  }
-  return MediaType::INVALID;
-}
-
 string calculate_model_checksums(const ModelFiles& files)
 {
   nlohmann::json checksums_json;

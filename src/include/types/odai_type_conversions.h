@@ -14,11 +14,11 @@ ModelType to_cpp_model_type(c_ModelType c);
 /// Converts c_UpdateModelFlag to C++ UpdateModelFlag enum
 UpdateModelFlag to_cpp_update_model_flag(c_UpdateModelFlag c);
 
-/// Converts a C-style ModelFiles to C++ style
-ModelFiles to_cpp(const c_ModelFiles& c);
-
 /// Converts c_InputItemType to C++ InputItemType enum
 InputItemType to_cpp_input_item_type(c_InputItemType c);
+
+/// Converts a C-style ModelFiles to C++ style
+ModelFiles to_cpp(const c_ModelFiles& c);
 
 /// Converts a C-style input item to C++ style
 InputItem to_cpp(const c_InputItem& c);
@@ -116,6 +116,11 @@ c_SemanticSpaceConfig to_c(const SemanticSpaceConfig& cpp);
 /// @param cpp C++ ChatMessage to convert
 /// @return C-style c_ChatMessage with allocated strings
 c_ChatMessage to_c(const ChatMessage& cpp);
+
+/// Identifies the MediaType from a given mime_type string.
+/// @param mime_type The mime type string to evaluate.
+/// @return The appropriate MediaType enum.
+MediaType get_media_type_from_mime(const std::string& mime_type);
 
 // This creates to_json() and from_json() functions automatically.
 /// Defines JSON serialization for LLMModelConfig.

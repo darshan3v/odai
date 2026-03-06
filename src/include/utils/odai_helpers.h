@@ -22,7 +22,7 @@ string calculate_data_checksum(const vector<uint8_t>& data);
 /// Identifies the MediaType from a given mime_type string.
 /// @param mime_type The mime type string to evaluate.
 /// @return The appropriate MediaType enum.
-MediaType get_media_type_from_mime(const std::string& mime_type);
+MediaType get_media_type_from_mime(const string& mime_type);
 
 /// Calculates checksums for all files in a ModelFiles struct.
 /// @param files The Model Files struct containing paths.

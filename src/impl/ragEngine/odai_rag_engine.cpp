@@ -18,6 +18,7 @@
 
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
+#include "types/odai_type_conversions.h"
 #include "utils/odai_helpers.h"
 #include <cstring>
 #include <stdexcept>
