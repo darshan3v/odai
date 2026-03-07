@@ -6,7 +6,10 @@ This document outlines key technical reasoning, build system quirks, and "gotcha
 - [Build System (CMake)](#build-system-cmake)
     - [Third-Party Library Integration Quirks](#third-party-library-integration-quirks)
         - [Miniaudio (Header-Only STB-style)](#miniaudio-header-only-stb-style)
-        - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-c-c-library)
+        - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-cc-library)
+        - [mtmd (Explicit Subdirectory with LLAMA_INSTALL_VERSION)](#mtmd-explicit-subdirectory-with-llama_install_version)
+- [mtmd API Quirks](#mtmd-api-quirks)
+    - [mtmd_get_audio_bitrate Returns Sample Rate](#mtmd_get_audio_bitrate-returns-sample-rate)
 
 ## Build System (CMake)
 
@@ -39,3 +42,29 @@ Unlike miniaudio, `llama.cpp` builds as a traditional, separate library containi
   target_link_libraries(odai PRIVATE llama)
   ```
   **Why:** These flags instruct `llama.cpp`'s internal CMake script on *how* to compile its own `.cpp` files into a library. Once it is built, our `odai` library only needs to *link* to the resulting `llama` binary. We do not need to pass `target_compile_definitions` to our `odai` target for llama features, because our compiler is not compiling the llama source code directly—it is just pulling in the pre-compiled symbols.
+
+#### mtmd (Explicit Subdirectory with LLAMA_INSTALL_VERSION)
+The `mtmd` (multimodal) library lives inside `llama.cpp` at `tools/mtmd/`. We set `LLAMA_BUILD_TOOLS OFF` to avoid building all of llama's CLI tools, but this also skips `mtmd`. To include it, we explicitly add its subdirectory:
+
+```cmake
+if(NOT DEFINED LLAMA_INSTALL_VERSION)
+    set(LLAMA_INSTALL_VERSION "0.0.0")
+endif()
+add_subdirectory(${llama_SOURCE_DIR}/tools/mtmd ${llama_BINARY_DIR}/tools/mtmd)
+```
+
+**Why `LLAMA_INSTALL_VERSION`?** mtmd's `CMakeLists.txt` uses `VERSION ${LLAMA_INSTALL_VERSION}` in `set_target_properties`. This variable is normally set by llama.cpp's root CMake, but since `LLAMA_BUILD_TOOLS` is OFF, the tools subdirectory is never processed by llama's own build — so the variable is undefined. An undefined variable causes CMake's `set_target_properties` to fail with "incorrect number of arguments" (empty string = missing arg). Setting it to `"0.0.0"` is safe because we build mtmd as a **static library** (`BUILD_SHARED_LIBS` is OFF at that point), and the `VERSION` property on a static lib is a no-op — it only matters for shared library versioned symlinks (`libfoo.so.X.Y.Z`), which don't apply here.
+
+## mtmd API Quirks
+
+### mtmd_get_audio_bitrate Returns Sample Rate
+`mtmd_get_audio_bitrate()` is a **misnomer** in llama.cpp's mtmd API. Despite its name, it returns the **sample rate** (Hz), not bitrate (bits/sec):
+
+```cpp
+// From mtmd.cpp:
+int mtmd_get_audio_bitrate(mtmd_context * ctx) {
+    return clip_get_hparams(ctx->ctx_a)->audio_sample_rate;  // ← returns sample rate!
+}
+```
+
+Our `OdaiAudioTargetSpec` uses the correct terminology (`sampleRate`), so we map from this misleadingly-named function to a correctly-named field. Be aware of the naming discrepancy when reading mtmd code.

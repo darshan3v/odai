@@ -67,9 +67,9 @@ public:
   virtual bool get_model_checksums(const ModelName& name, string& checksums) = 0;
 
   /// Updates the details for an existing model record.
-  /// Note: The database layer expects `new_details` and `new_checksums` to contain
-  /// the complete, comprehensive set of all details (both existing and newly added).
-  /// This will overwrite and replace the previously stored details entirely.
+  /// @note The database layer expects `new_details` and `new_checksums` to contain the complete, comprehensive set of
+  /// all details (both existing and newly added).This will overwrite and replace the previously stored details
+  /// entirely.
   /// @param name The name of the model to update
   /// @param new_details The complete new registration details to store
   /// @param new_checksums The complete new computed checksums
@@ -119,11 +119,9 @@ public:
   /// Retrieves all chat messages for the specified chat session.
   ///
   /// Messages are returned in chronological order.
-  /// Note for multimodal inputs (audio/image): The implementation may return
-  /// cached files as InputItems with type FILE_PATH, and the m_data payload
-  /// containing the local absolute path string pointing to the cached file
-  /// on disk, rather than raw binary data.
-  ///
+  /// @note for multimodal inputs (audio/image): The implementation may return cached files as InputItems with type
+  /// FILE_PATH, and the m_data payload containing the local absolute path string pointing to the cached file on disk,
+  /// rather than raw binary data.
   /// @param chat_id The chat identifier to retrieve messages for.
   /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.

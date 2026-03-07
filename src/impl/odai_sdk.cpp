@@ -346,37 +346,6 @@ bool OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
   }
 }
 
-bool OdaiSdk::load_chat(const ChatId& chat_id)
-{
-  try
-  {
-    if (!m_sdkInitialized)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
-    }
-
-    if (chat_id.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
-      return false;
-    }
-
-    if (!m_ragEngine->load_chat_session(chat_id))
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat session, chat_id: {}", chat_id);
-      return false;
-    }
-
-    return true;
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
-  }
-}
-
 bool OdaiSdk::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
 {
   try
@@ -469,31 +438,6 @@ bool OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id, const vect
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught");
-    return false;
-  }
-}
-
-bool OdaiSdk::unload_chat(const ChatId& chat_id)
-{
-  try
-  {
-    if (!m_sdkInitialized)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
-    }
-
-    if (chat_id.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
-      return false;
-    }
-
-    return m_ragEngine->unload_chat_session(chat_id);
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
     return false;
   }
 }

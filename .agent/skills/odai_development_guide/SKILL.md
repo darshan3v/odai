@@ -125,6 +125,7 @@ When defining pure virtual interfaces in the C++ backend:
 1.  **Naming**: Interfaces must be prefixed with `I` (e.g., `IAudioDecoder`, `IOdaiDb`). This is enforced by `clang-tidy`.
 2.  **Lifecycle**: Interfaces must declare a `virtual ~IInterfaceName() = default;` destructor to ensure proper cleanup of derived classes.
 3.  **Non-Copyable & Non-Movable**: Interfaces must explicitly delete copy and move constructors/assignments to prevent slicing and accidental copying of polymorphic objects.
+4.  **Avoid `const` on Interface Methods**: Do not mark pure virtual methods in interfaces as `const` unless strictly necessary. This gives implementers the flexibility to mutate internal state (e.g., for caching, lazy loading, or maintaining connection state) during method execution without needing `mutable` members or breaking the interface contract.
 
 **Example (`IExampleInterface.h`):**
 ```cpp
@@ -141,6 +142,7 @@ public:
     IExampleInterface(IExampleInterface&&) = delete;
     IExampleInterface& operator=(IExampleInterface&&) = delete;
 
+    // Not marked as const to allow implementers to cache or mutate internal state
     virtual void do_something() = 0;
 };
 ```

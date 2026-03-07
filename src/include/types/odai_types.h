@@ -63,6 +63,9 @@ struct ModelFiles
   BackendEngineType m_engineType{};
   std::unordered_map<std::string, std::string> m_entries;
 
+  // This single line generates both == and !=
+  bool operator==(const ModelFiles&) const = default;
+
   bool is_sane() const { return m_engineType == LLAMA_BACKEND_ENGINE; }
 };
 
@@ -163,6 +166,9 @@ struct LLMModelConfig
   /// Name of the language model to use (must be registered via
   /// odai_register_model_files).
   ModelName m_modelName;
+
+  // This single line generates both == and !=
+  bool operator==(const LLMModelConfig&) const = default;
 
   bool is_sane() const { return !m_modelName.empty(); }
 };

@@ -48,14 +48,6 @@ public:
                                       const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                       void* user_data);
 
-  /// Loads a chat from the database to backend engine using the provided chat
-  /// ID. Retrieves the chat configuration and loads the appropriate language
-  /// model. If the chat uses RAG, the embedding model will be loaded.
-  /// @param chat_id Unique identifier for the chat session to load
-  /// @return true if chat session loaded successfully, false if chat_id not
-  /// found or model loading failed
-  bool load_chat_session(const ChatId& chat_id);
-
   /// Generates a streaming response for the given query for the given chat.
   /// Uses the previously loaded chat if cached, else will load chat and then
   /// generates a response. If RAG is enabled for the chat, retrieves relevant
@@ -72,11 +64,6 @@ public:
   int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                            const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data);
-
-  /// Unloads the chat session from memory, freeing up resources.
-  /// @param chat_id Unique identifier for the chat session
-  /// @return true if unloaded successfully, false on error
-  bool unload_chat_session(const ChatId& chat_id);
 
   /// Creates a new semantic space for vector embeddings in the database.
   /// @param config The configuration for the semantic space to be created
@@ -124,13 +111,6 @@ private:
   /// @return true if found, false otherwise.
   bool resolve_model_files(const ModelName& model_name, ModelFiles& details);
 
-  /// Helper to ensure chat session is loaded into memory (backend engine
-  /// context). If not loaded, it retrieves history from DB and loads it.
-  /// @param chat_id Unique identifier for the chat session
-  /// @param chat_config Configuration for the chat
-  /// @return true if session is loaded (or was already loaded), false on error
-  bool ensure_chat_session_loaded(const ChatId& chat_id, const ChatConfig& chat_config);
-
   /// Helper to process multimodal inputs and decode/load files into memory buffer
   /// before sending them to the inference engine. This mutates the input items,
   /// converting formats like AUDIO_FILE into an internal processed data format.
@@ -138,7 +118,8 @@ private:
   /// for the backend engine and should NOT be persisted to the database.
   /// @param prompt Items to process.
   /// @param llm_model_config The target LlmModelConfig used.
-  bool process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config);
+  bool process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config,
+                                 const ModelFiles& model_files);
 
   std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<IOdaiBackendEngine> m_backendEngine;

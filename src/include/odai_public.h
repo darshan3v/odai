@@ -128,12 +128,6 @@ extern "C"
   /// @param chat_id The chat ID string to free
   void odai_free_chat_id(c_ChatId chat_id);
 
-  /// Loads an existing chat by its ID and loads the chat KV cache into memory, along with the Language model
-  /// Its only purpose is to pre-load a existing chat
-  /// @param c_chat_id The unique identifier of the chat session to load
-  /// @return true if chat session was loaded successfully, false if chat_id not found or on error
-  bool odai_load_chat(c_ChatId c_chat_id);
-
   /// Retrieves all chat messages for the specified chat session.
   /// Messages are returned in chronological order.
   /// The caller is responsible for freeing the allocated memory using odai_free_chat_messages().
@@ -160,11 +154,6 @@ extern "C"
   bool odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
                                              size_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
                                              OdaiStreamRespCallbackFn callback, void* user_data);
-
-  /// Unloads the chat session from memory, freeing up resources (e.g., KV cache).
-  /// @param c_chat_id The unique identifier of the chat session to unload
-  /// @return true if chat session was unloaded successfully, false on error
-  bool odai_unload_chat(c_ChatId c_chat_id);
 
 #ifdef __cplusplus
 }

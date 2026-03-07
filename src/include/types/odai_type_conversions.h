@@ -122,6 +122,11 @@ c_ChatMessage to_c(const ChatMessage& cpp);
 /// @return The appropriate MediaType enum.
 MediaType get_media_type_from_mime(const std::string& mime_type);
 
+/// Converts a C++ vector of bytes to a std::string.
+/// @param bytes The vector of bytes to convert.
+/// @return The converted std::string.
+std::string byte_vector_to_string(const std::vector<uint8_t>& bytes);
+
 // This creates to_json() and from_json() functions automatically.
 /// Defines JSON serialization for LLMModelConfig.
 /// Enables automatic conversion between LLMModelConfig and JSON using

@@ -8,6 +8,7 @@
 #include "utils/string_utils.h"
 #include <filesystem>
 #include <nlohmann/json.hpp>
+#include <vector>
 
 /// Redirects llama.cpp log messages to the Odai logging system.
 /// Maps GGML log levels to Odai log levels and filters out debug messages.
@@ -51,6 +52,99 @@ bool OdaiLlamaEngine::initialize_engine()
   llama_log_set(llama_log_redirect, nullptr);
 
   this->m_isInitialized = true;
+
+  return true;
+}
+
+unique_ptr<mtmd_context, MtmdContextDeleter> OdaiLlamaEngine::load_mmproj_for_info(const string& mmproj_path,
+                                                                                   llama_model* model)
+{
+
+  if (mmproj_path.empty())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "empty mmproj path passed");
+    return nullptr;
+  }
+
+  if (model == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "null model passed");
+    return nullptr;
+  }
+
+  mtmd_context_params mparams = mtmd_context_params_default();
+  mparams.use_gpu = false;
+  mparams.print_timings = false;
+  mparams.warmup = false;
+
+  mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_path.c_str(), model, mparams);
+  if (temp_ctx == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from: {}", mmproj_path);
+    return nullptr;
+  }
+  return unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
+}
+
+bool OdaiLlamaEngine::does_model_support_input_data(const vector<InputItem>& items,
+                                                    const LLMModelConfig& llm_model_config, const ModelFiles& files)
+{
+  unique_ptr<mtmd_context, MtmdContextDeleter> temp_ctx = nullptr;
+
+  if (!this->validate_model_files(files))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid model files passed");
+    return false;
+  }
+
+  if (!this->load_language_model(files, llm_model_config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load language model");
+    return false;
+  }
+
+  // Need to temporarily initialize mtmd context to read if mmproj file audio/vision support is there.
+  if (files.m_entries.contains("mmproj_model_path"))
+  {
+    const string& mmproj_path = files.m_entries.at("mmproj_model_path");
+    temp_ctx = load_mmproj_for_info(mmproj_path, this->m_llmModel.get());
+    if (temp_ctx == nullptr)
+    {
+      return false;
+    }
+  }
+
+  bool supports_image = temp_ctx != nullptr ? mtmd_support_vision(temp_ctx.get()) : false;
+  bool supports_audio = temp_ctx != nullptr ? mtmd_support_audio(temp_ctx.get()) : false;
+
+  for (const auto& item : items)
+  {
+    if (item.m_type != InputItemType::PROCESSED_DATA)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "For now backend only supports PROCESSED_DATA type of input items");
+      return false;
+    }
+
+    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
+
+    if (media_type == MediaType::IMAGE && !supports_image)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Model does not support image input");
+      return false;
+    }
+
+    if (media_type == MediaType::AUDIO && !supports_audio)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Model does not support audio input");
+      return false;
+    }
+
+    if (media_type != MediaType::TEXT && media_type != MediaType::IMAGE && media_type != MediaType::AUDIO)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
+      return false;
+    }
+  }
 
   return true;
 }
@@ -140,7 +234,7 @@ bool OdaiLlamaEngine::validate_model_file_entry(const std::unordered_map<std::st
   return true;
 }
 
-bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
+bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
 {
 
   if (files.m_engineType != LLAMA_BACKEND_ENGINE)
@@ -184,12 +278,53 @@ bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files) const
   return true;
 }
 
-std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config) const
+std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config,
+                                                                            const ModelFiles& model_files)
 {
   (void)config;
-  // Currently, the standard llama cpp backend implementation does not fully support multimodal audio
-  // so we return nullopt.
-  return std::nullopt;
+
+  if (!this->validate_model_files(model_files))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid model files passed");
+    return std::nullopt;
+  }
+
+  // Check if mmproj path exists for this model
+  if (!model_files.m_entries.contains("mmproj_model_path"))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "mmproj_model_path not found in model files");
+    return std::nullopt;
+  }
+
+  const string& mmproj_path = model_files.m_entries.at("mmproj_model_path");
+
+  if (!load_language_model(model_files, config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load language model");
+    return std::nullopt;
+  }
+
+  // We need to temporarily initialize mtmd context to read the audio bitrate.
+  auto temp_ctx = load_mmproj_for_info(mmproj_path, this->m_llmModel.get());
+  if (temp_ctx == nullptr)
+  {
+    return std::nullopt;
+  }
+
+  if (!mtmd_support_audio(temp_ctx.get()))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "{} does not support audio", mmproj_path);
+    return std::nullopt;
+  }
+
+  int bitrate = mtmd_get_audio_bitrate(temp_ctx.get());
+
+  if (bitrate <= 0)
+  {
+    return std::nullopt;
+  }
+
+  return OdaiAudioTargetSpec{static_cast<uint32_t>(bitrate), 1};
 }
 
 bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
@@ -244,32 +379,26 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
     return false;
   }
 
+  if ((files == this->m_llmModelFiles) && (config == this->m_llmModelConfig))
+  {
+    ODAI_LOG(ODAI_LOG_INFO, "Model is already loaded with same config");
+    return true;
+  }
+
   if (!this->validate_model_files(files) || files.m_modelType != ModelType::LLM)
   {
     return false;
   }
 
-  std::string path = files.m_entries.at("base_model_path");
+  string base_path = files.m_entries.at("base_model_path");
 
-  if (this->m_llmModelFiles.m_entries.contains("base_model_path") &&
-      this->m_llmModelFiles.m_entries.at("base_model_path") == path)
-  {
-    ODAI_LOG(ODAI_LOG_INFO, "language model {} is already loaded", path);
-    // update config though, some other params might have changed
-    this->m_llmModelConfig = config;
-    this->m_llmModelFiles = files;
-    return true;
-  }
-
-  // Clear all chat contexts since they depend on the old model
-  this->m_chatContext.clear();
-  ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts as new model is being loaded");
+  ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts and mtmd context as new model is being loaded");
 
   llama_model_params llm_model_params = llama_model_default_params();
   llm_model_params.n_gpu_layers = 0; // Load entire model on CPU
   llm_model_params.use_mlock = false;
 
-  this->m_llmModel.reset(llama_model_load_from_file(path.c_str(), llm_model_params));
+  this->m_llmModel.reset(llama_model_load_from_file(base_path.c_str(), llm_model_params));
 
   if (this->m_llmModel == nullptr)
   {
@@ -277,18 +406,10 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
     return false;
   }
 
-  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
-
-  if (this->m_llmVocab == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
-    return false;
-  }
-
   this->m_llmModelConfig = config;
   this->m_llmModelFiles = files;
 
-  ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}", path);
+  ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}", base_path);
   return true;
 }
 
@@ -541,7 +662,8 @@ int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_c
 }
 
 int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& prompt,
-                                                     const SamplerConfig& sampler_config,
+                                                     const LLMModelConfig& llm_model_config,
+                                                     const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                                      OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (!this->m_isInitialized)
@@ -550,15 +672,29 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& pr
     return -1;
   }
 
-  if (this->m_llmModel == nullptr || this->m_llmVocab == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet, so can't generate response");
-    return -1;
-  }
-
   if (callback == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "empty callback is passed so can't stream response");
+    return -1;
+  }
+
+  if (!does_model_support_input_data(prompt, llm_model_config, model_files))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid input data");
+    return -1;
+  }
+
+  if (!this->load_language_model(model_files, llm_model_config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
+    return -1;
+  }
+
+  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
+
+  if (this->m_llmVocab == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
     return -1;
   }
 
@@ -570,28 +706,6 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& pr
     return -1;
   }
 
-  string text_prompt;
-  for (const auto& item : prompt)
-  {
-    if (item.m_type != InputItemType::PROCESSED_DATA)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "For now backend only supports PROCESSED_DATA type of input items");
-      return -1;
-    }
-
-    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
-
-    if (media_type == MediaType::TEXT)
-    {
-      text_prompt.append(item.m_data.begin(), item.m_data.end());
-    }
-    else
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
-      return -1;
-    }
-  }
-
   unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler =
       OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
 
@@ -599,6 +713,14 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const vector<InputItem>& pr
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create sampler");
     return -1;
+  }
+
+  // for now just text only processing
+  string text_prompt;
+  for (const InputItem& item : prompt)
+  {
+    string part_prompt = byte_vector_to_string(item.m_data);
+    text_prompt += part_prompt;
   }
 
   return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, text_prompt, callback, user_data);
@@ -631,7 +753,7 @@ string OdaiLlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
     string text_content;
     for (const auto& item : msg.m_contentItems)
     {
-      if (item.m_type == InputItemType::MEMORY_BUFFER && get_media_type_from_mime(item.m_mimeType) == MediaType::TEXT)
+      if (item.m_type == InputItemType::PROCESSED_DATA && get_media_type_from_mime(item.m_mimeType) == MediaType::TEXT)
       {
         text_content.append(item.m_data.begin(), item.m_data.end());
       }
@@ -690,25 +812,20 @@ string OdaiLlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
   return string(formatted_buffer.data());
 }
 
-bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages)
+unique_ptr<llama_context, LlamaContextDeleter>
+OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages)
 {
 
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
-    return false;
+    return nullptr;
   }
 
   if (chat_id.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "empty chat_id is passed");
-    return false;
-  }
-
-  if (this->m_chatContext.contains(chat_id))
-  {
-    ODAI_LOG(ODAI_LOG_INFO, "chat context for chat_id {} is already loaded", chat_id);
-    return true;
+    return nullptr;
   }
 
   unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
@@ -716,7 +833,7 @@ bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   if (llm_llama_context == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create context");
-    return false;
+    return nullptr;
   }
 
   // Format the chat messages into a prompt string (without generation prompt)
@@ -725,7 +842,7 @@ bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   if (formatted_prompt.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to format chat messages into prompt");
-    return false;
+    return nullptr;
   }
 
   // Load the formatted prompt into the context to build KV cache
@@ -733,33 +850,26 @@ bool OdaiLlamaEngine::load_chat_messages_into_context(const ChatId& chat_id, con
   if (!this->load_into_context(*llm_llama_context, formatted_prompt, next_pos, false))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load formatted prompt into context");
-    return false;
+    return nullptr;
   }
 
-  // Store the context and sampler for this chat session
-  this->m_chatContext[chat_id] = {std::move(llm_llama_context), this->m_llmModelConfig, this->m_llmModelFiles};
-
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context for chat_id {}", chat_id);
-  return true;
+  return llm_llama_context;
 }
 
-int32_t OdaiLlamaEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
+int32_t OdaiLlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
+                                                          const vector<ChatMessage>& chat_history,
+                                                          const vector<InputItem>& prompt,
                                                           const SamplerConfig& sampler_config,
                                                           OdaiStreamRespCallbackFn callback, void* user_data)
 {
-  // Find the cached context and sampler for this chat session
-  auto chat_ctx_iter = this->m_chatContext.find(chat_id);
-  if (chat_ctx_iter == this->m_chatContext.end())
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Chat context not found for chat_id: {}", chat_id);
-    return -1;
-  }
 
-  ChatSessionLLMContext& chat_session = chat_ctx_iter->second;
+  unique_ptr<llama_context, LlamaContextDeleter> chat_context =
+      this->load_chat_messages_into_context(chat_id, chat_history);
 
-  if (chat_session.m_context == nullptr)
+  if (!chat_context)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Chat context is null for chat_id: {}", chat_id);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into cache for chat_id: {}", chat_id);
     return -1;
   }
 
@@ -784,26 +894,7 @@ int32_t OdaiLlamaEngine::generate_streaming_chat_response(const ChatId& chat_id,
   string formatted_prompt = this->format_chat_messages_to_prompt({user_msg}, true);
 
   // Use the cached context and sampler to generate streaming response
-  return this->generate_streaming_response_impl(*chat_session.m_context, *sampler, formatted_prompt, callback,
-                                                user_data);
-}
-
-bool OdaiLlamaEngine::is_chat_context_loaded(const ChatId& chat_id)
-{
-  return this->m_chatContext.contains(chat_id);
-}
-
-bool OdaiLlamaEngine::unload_chat_context(const ChatId& chat_id)
-{
-  auto it = this->m_chatContext.find(chat_id);
-  if (it != this->m_chatContext.end())
-  {
-    this->m_chatContext.erase(it);
-    ODAI_LOG(ODAI_LOG_INFO, "Unloaded chat context for chat_id: {}", chat_id);
-    return true;
-  }
-  ODAI_LOG(ODAI_LOG_WARN, "Chat context not found for chat_id: {}, so nothing to unload", chat_id);
-  return true;
+  return this->generate_streaming_response_impl(*chat_context, *sampler, formatted_prompt, callback, user_data);
 }
 
 OdaiLlamaEngine::~OdaiLlamaEngine()

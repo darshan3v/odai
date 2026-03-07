@@ -18,7 +18,7 @@ public:
   /// Checks if the given audio format is supported by miniaudio.
   /// @param format The audio format extension (e.g., "wav", "mp3", "flac").
   /// @return true if the format is supported, false otherwise.
-  bool is_supported(const std::string& format) const override;
+  bool is_supported(const std::string& format) override;
 
   /// Decodes an audio InputItem and processes it to match the target specification.
   /// @param input The InputItem containing audio data.

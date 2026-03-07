@@ -307,6 +307,11 @@ MediaType get_media_type_from_mime(const string& mime_type)
   return MediaType::INVALID;
 }
 
+string byte_vector_to_string(const vector<uint8_t>& bytes)
+{
+  return string(bytes.begin(), bytes.end());
+}
+
 void to_json(json& j, const ChunkingConfig& p)
 {
   if (std::holds_alternative<FixedSizeChunkingConfig>(p.m_config))

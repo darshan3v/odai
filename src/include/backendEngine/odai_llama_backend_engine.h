@@ -6,6 +6,7 @@
 
 #include <llama.h>
 #include <memory>
+#include <mtmd.h>
 #include <unordered_map>
 #include <vector>
 
@@ -57,13 +58,16 @@ struct LlamaBatchDeleter
   LlamaBatchDeleter() = default; // explicitly default constructor
 };
 
-struct ChatSessionLLMContext
+struct MtmdContextDeleter
 {
-  /// Llama context with loaded KV cache for the chat session
-  unique_ptr<llama_context, LlamaContextDeleter> m_context;
-
-  LLMModelConfig m_llmModelConfig;
-  ModelFiles m_llmModelFiles;
+  void operator()(mtmd_context* ptr) const
+  {
+    if (ptr != nullptr)
+    {
+      mtmd_free(ptr);
+    }
+  }
+  MtmdContextDeleter() = default; // explicitly default constructor
 };
 
 /// Llama.cpp-based implementation of the backend engine for model loading and
@@ -79,8 +83,10 @@ public:
 
   /// Returns the required audio specification for the llama model.
   /// @param config The LLM model configuration to check requirements for.
+  /// @param files The associated model files containing text model and multimodal projectors.
   /// @return Currently std::nullopt as multimodal is not yet fully supported in LLaMA backend here.
-  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config) const override;
+  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config,
+                                                             const ModelFiles& files) override;
 
   /// Validates the model files specifically for the llama.cpp backend engine.
   /// Ensures that the engine type is LLAMA_BACKEND_ENGINE.
@@ -89,47 +95,22 @@ public:
   /// pointing to a valid existing file.
   /// @param files The model files object to validate
   /// @return true if the associated model files are valid, false otherwise
-  bool validate_model_files(const ModelFiles& files) const override;
+  bool validate_model_files(const ModelFiles& files) override;
 
-  /// Loads an embedding model from the specified configuration.
-  /// If the same model is already loaded, only updates the configuration.
-  /// @param files The generic model files containing paths.
-  /// @param config Configuration containing parameters.
-  /// @return true if model loaded successfully, false otherwise
-  bool load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config) override;
-
-  /// Loads a language model from the specified configuration.
-  /// If the same model is already loaded, only updates the configuration.
-  /// @param files The generic model files containing paths.
-  /// @param config Configuration containing parameters.
-  /// @return true if model loaded successfully, false otherwise
-  bool load_language_model(const ModelFiles& files, const LLMModelConfig& config) override;
-
-  /// Generates a streaming response for the given prompt using the loaded
-  /// language model.
-  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA.
+  /// Generates a streaming response for the given prompt
+  /// @note We have implemented the logic to load the model if not already loaded.
+  /// @note The engine expects the input items in the prompt to be of type PROCESSED_DATA.
   /// @param prompt The input prompt to generate a response for
+  /// @param llm_model_config The LLM model configuration to use for generation
+  /// @param model_files The model files to use for generation
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response(const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
+  int32_t generate_streaming_response(const vector<InputItem>& prompt, const LLMModelConfig& llm_model_config,
+                                      const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                       OdaiStreamRespCallbackFn callback, void* user_data) override;
-
-  /// Loads the provided sequence of chat messages into the model's context for
-  /// the specified chat session, to do this it uses the llm_model_config to
-  /// load the model. This will compute the KV cache (key-value memory for
-  /// transformer inference) and keep it in memory, so future generations for
-  /// the same chat can use the existing context efficiently. If the chat
-  /// context is already loaded and cached for the given chat_id, this function
-  /// will return immediately.
-  /// @param chat_id Unique identifier for the chat session to load context for
-  /// @param messages Vector of chat messages (in order) to load into the
-  /// context
-  /// @return true if the context was successfully loaded or already cached,
-  /// false otherwise
-  bool load_chat_messages_into_context(const ChatId& chat_id, const vector<ChatMessage>& messages) override;
 
   /// Generates a streaming chat response using the cached context and sampler
   /// for the given chat session. Loads the query into the cached context and
@@ -146,21 +127,9 @@ public:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
-                                           const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
-                                           void* user_data) override;
-
-  /// Checks if the context for a specific chat session is currently loaded in
-  /// memory.
-  /// @param chat_id Unique identifier for the chat session
-  /// @return true if context is loaded, false otherwise
-  bool is_chat_context_loaded(const ChatId& chat_id) override;
-
-  /// Unloads the context for a specific chat session from memory, freeing
-  /// resources.
-  /// @param chat_id Unique identifier for the chat session
-  /// @return true if unloaded successfully (or was not loaded), false on error
-  bool unload_chat_context(const ChatId& chat_id) override;
+  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<ChatMessage>& chat_history,
+                                           const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
+                                           OdaiStreamRespCallbackFn callback, void* user_data) override;
 
   /// Destructor that frees the llama backend resources.
   ~OdaiLlamaEngine() override;
@@ -181,10 +150,6 @@ private:
   // so no need of unique_ptr
   const llama_vocab* m_llmVocab = nullptr;
 
-  /// Unordered map to store cached chat session data keyed by chat_id
-  /// Each entry contains the context with KV cache, sampler, and metadata
-  unordered_map<ChatId, ChatSessionLLMContext> m_chatContext;
-
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
   /// @param key The entry key to validate (e.g., "base_model_path")
@@ -192,6 +157,36 @@ private:
   /// @return true if the entry is valid or successfully omitted, false otherwise
   static bool validate_model_file_entry(const unordered_map<string, string>& entries, const string& key,
                                         bool is_optional);
+
+  /// Checks if the given input data is valid / supported.
+  /// @param input_items The input items to validate against the model capabilities.
+  /// @param model_files The model files containing mmproj path.
+  /// @return true if the data is valid, false otherwise
+  bool does_model_support_input_data(const vector<InputItem>& input_items, const LLMModelConfig& llm_model_config,
+                                     const ModelFiles& model_files);
+
+  /// Helper to load mtmd context from the multimodal projector file specifically for gathering info.
+  /// This disables GPU use, timings, and warmup to perform a fast, lightweight load
+  /// strictly for querying supported media types or bitrates (not for inference).
+  /// @param mmproj_path Path to the multimodal projector file
+  /// @param model pointer to the llama model
+  /// @return Unique pointer to the mtmd context
+  static unique_ptr<mtmd_context, MtmdContextDeleter> load_mmproj_for_info(const string& mmproj_path,
+                                                                           llama_model* model);
+
+  /// Loads an embedding model from the specified configuration.
+  /// If the same model is already loaded, only updates the configuration.
+  /// @param files The generic model files containing paths.
+  /// @param config Configuration containing parameters.
+  /// @return true if model loaded successfully, false otherwise
+  bool load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config);
+
+  /// Loads a language model from the specified configuration.
+  /// If the same model is already loaded, only updates the configuration.
+  /// @param files The generic model files containing paths.
+  /// @param config Configuration containing parameters.
+  /// @return true if model loaded successfully, false otherwise
+  bool load_language_model(const ModelFiles& files, const LLMModelConfig& config);
 
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for
@@ -267,6 +262,21 @@ private:
   static bool load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
                                             uint32_t& next_pos, bool request_logits_for_last_token);
 
+  /// Loads the provided sequence of chat messages into the model's context for
+  /// the specified chat session, to do this it uses the llm_model_config to
+  /// load the model. This will compute the KV cache (key-value memory for
+  /// transformer inference) and keep it in memory, so future generations for
+  /// the same chat can use the existing context efficiently. If the chat
+  /// context is already loaded and cached for the given chat_id, this function
+  /// will return immediately.
+  /// @param chat_id Unique identifier for the chat session to load context for
+  /// @param messages Vector of chat messages (in order) to load into the
+  /// context
+  /// @return true if the context was successfully loaded or already cached,
+  /// false otherwise
+  unique_ptr<llama_context, LlamaContextDeleter> load_chat_messages_into_context(const ChatId& chat_id,
+                                                                                 const vector<ChatMessage>& messages);
+
   /// Generates the next token using the provided llama context and sampler.
   /// @param model_context Language Model context (has KV cache of old tokens
   /// and other stuff) to use for generation
@@ -300,9 +310,11 @@ private:
   /// Core implementation of streaming response generation that handles token
   /// generation and buffering. Takes an already-initialized context and sampler
   /// to perform the streaming.
+  /// Handles both text-only and multimodal input: if media items are present,
+  /// uses the mtmd pipeline (tokenize → encode chunks → decode embeddings).
   /// @param model_context Llama context with KV cache and token state
   /// @param sampler Sampler chain for token sampling
-  /// @param prompt The input prompt to generate a response for
+  /// @param input_items The input items (text, audio, image) to process
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on

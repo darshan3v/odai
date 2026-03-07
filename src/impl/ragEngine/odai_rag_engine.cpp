@@ -168,40 +168,22 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  ModelFiles details;
-  if (!this->resolve_model_files(llm_model_config.m_modelName, details))
+  ModelFiles model_files;
+  if (!resolve_model_files(llm_model_config.m_modelName, model_files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve details for model: {}", llm_model_config.m_modelName);
     return -1;
   }
 
-  if (!m_backendEngine->load_language_model(details, llm_model_config))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return -1;
-  }
-
   vector<InputItem> processed_prompt = prompt;
-  if (!this->process_multimodal_inputs(processed_prompt, llm_model_config))
+  if (!this->process_multimodal_inputs(processed_prompt, llm_model_config, model_files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load multimodal inputs");
     return -1;
   }
 
-  return m_backendEngine->generate_streaming_response(processed_prompt, sampler_config, callback, user_data);
-}
-
-bool OdaiRagEngine::load_chat_session(const ChatId& chat_id)
-{
-  ChatConfig chat_config;
-
-  if (!m_db->get_chat_config(chat_id, chat_config))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat config, chat_id: {}", chat_id);
-    return false;
-  }
-
-  return this->ensure_chat_session_loaded(chat_id, chat_config);
+  return m_backendEngine->generate_streaming_response(processed_prompt, llm_model_config, model_files, sampler_config,
+                                                      callback, user_data);
 }
 
 int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
@@ -257,16 +239,34 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
              rag_config.m_semanticSpaceName, rag_config.m_scopeId);
   }
 
-  if (!this->ensure_chat_session_loaded(chat_id, chat_config))
+  vector<ChatMessage> chat_history;
+  if (!m_db->get_chat_history(chat_id, chat_history))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to ensure chat session is loaded for chat_id: {}", chat_id);
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat history for chat_id: {}", chat_id);
     return -1;
   }
+
+  ModelFiles model_files;
+  if (!resolve_model_files(chat_config.m_llmModelConfig.m_modelName, model_files))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve details for model: {}", chat_config.m_llmModelConfig.m_modelName);
+    return -1;
+  }
+
+  for (auto& msg : chat_history)
+  {
+    if (!this->process_multimodal_inputs(msg.m_contentItems, chat_config.m_llmModelConfig, model_files))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat history multimodal inputs");
+      return -1;
+    }
+  }
+
   const vector<InputItem>& final_prompt = prompt; // Placeholder until context retrieval is implemented
 
   vector<InputItem> processed_final_prompt = final_prompt;
 
-  if (!this->process_multimodal_inputs(processed_final_prompt, chat_config.m_llmModelConfig))
+  if (!this->process_multimodal_inputs(processed_final_prompt, chat_config.m_llmModelConfig, model_files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to process multimodal inputs");
     return -1;
@@ -296,7 +296,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      chat_id, processed_final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
+      chat_id, chat_history, processed_final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {
@@ -355,16 +355,6 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   return total_tokens;
 }
 
-bool OdaiRagEngine::unload_chat_session(const ChatId& chat_id)
-{
-  if (this->m_backendEngine == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Backend engine is null");
-    return false;
-  }
-  return this->m_backendEngine->unload_chat_context(chat_id);
-}
-
 bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles& details)
 {
   // check cache first
@@ -387,59 +377,11 @@ bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles&
   return false;
 }
 
-bool OdaiRagEngine::ensure_chat_session_loaded(const ChatId& chat_id, const ChatConfig& chat_config)
+bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config,
+                                              const ModelFiles& model_files)
 {
-  // 1. Ensure the correct language model is loaded
-  // This call handles checking if the model is already loaded (fast path),
-  // and if not, it loads it and CLEARS existing contexts (slow path).
-  ModelFiles details;
-  if (!resolve_model_files(chat_config.m_llmModelConfig.m_modelName, details))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to resolve model details for chat {}", chat_id);
-    return false;
-  }
-
-  if (!m_backendEngine->load_language_model(details, chat_config.m_llmModelConfig))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat {}, error : failed to load language Model", chat_id);
-    return false;
-  }
-
-  // 2. Check if context is already loaded
-  if (m_backendEngine->is_chat_context_loaded(chat_id))
-  {
-    // Context is loaded, we are good to go
-    return true;
-  }
-
-  vector<ChatMessage> messages;
-  if (!m_db->get_chat_history(chat_id, messages))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat history for chat_id: {}", chat_id);
-    return false;
-  }
-
-  for (auto& msg : messages)
-  {
-    if (!this->process_multimodal_inputs(msg.m_contentItems, chat_config.m_llmModelConfig))
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to load historic multimodal inputs");
-      return false;
-    }
-  }
-
-  if (!m_backendEngine->load_chat_messages_into_context(chat_id, messages))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat history into context for chat_id: {}", chat_id);
-    return false;
-  }
-
-  return true;
-}
-
-bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config)
-{
-  std::optional<OdaiAudioTargetSpec> audio_spec_opt = m_backendEngine->get_required_audio_spec(llm_model_config);
+  std::optional<OdaiAudioTargetSpec> audio_spec_opt =
+      m_backendEngine->get_required_audio_spec(llm_model_config, model_files);
 
   for (auto& item : prompt_out)
   {
@@ -463,7 +405,7 @@ bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, con
       {
         if (!m_audioDecoder)
         {
-          ODAI_LOG(ODAI_LOG_ERROR, "Target model expects audio but OdaiMiniAudioDecoder is not available");
+          ODAI_LOG(ODAI_LOG_ERROR, "Target model expects audio but OdaiAudioDecoder is not available");
           return false;
         }
 

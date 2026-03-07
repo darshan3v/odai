@@ -268,16 +268,6 @@ void odai_free_chat_id(c_ChatId chat_id)
   }
 }
 
-bool odai_load_chat(const c_ChatId c_chat_id)
-{
-  if (c_chat_id == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
-    return false;
-  }
-  return OdaiSdk::get_instance().load_chat(ChatId(c_chat_id));
-}
-
 bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count)
 {
   if (c_chat_id == nullptr)
@@ -382,14 +372,4 @@ bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_Inp
 
   return OdaiSdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), prompt_items,
                                                                   to_cpp(*c_generator_config), callback, user_data);
-}
-
-bool odai_unload_chat(const c_ChatId c_chat_id)
-{
-  if (c_chat_id == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid chat_id passed");
-    return false;
-  }
-  return OdaiSdk::get_instance().unload_chat(ChatId(c_chat_id));
 }

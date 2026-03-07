@@ -35,7 +35,7 @@ static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded
   return true;
 }
 
-bool OdaiMiniAudioDecoder::is_supported(const string& format) const
+bool OdaiMiniAudioDecoder::is_supported(const string& format)
 {
   string lower_format = to_lower(format);
 

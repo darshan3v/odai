@@ -109,14 +109,6 @@ public:
   /// @return true if chat session was created successfully, false otherwise
   bool create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config, ChatId& chat_id_out);
 
-  /// Loads an existing chat by its ID and loads the chat KV cache into memory,
-  /// along with the Language model Its only purpose is to pre-load a existing
-  /// chat
-  /// @param chatId The unique identifier of the chat session to load
-  /// @return true if chat session was loaded successfully, false if not found
-  /// or on error
-  bool load_chat(const ChatId& chat_id);
-
   /// Retrieves all chat messages for the specified chat session.
   /// @param chatId The chat identifier to retrieve messages for
   /// @param messages Output parameter: vector of ChatMessage
@@ -140,11 +132,6 @@ public:
   bool generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
                                         const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
                                         void* user_data);
-
-  /// Unloads the chat session from memory, freeing up resources.
-  /// @param chatId The unique identifier of the chat session to unload
-  /// @return true if chat session was unloaded successfully, false on error
-  bool unload_chat(const ChatId& chat_id);
 
 private:
   OdaiSdk();

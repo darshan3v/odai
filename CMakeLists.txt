@@ -107,6 +107,19 @@ set(GGML_CUDA OFF CACHE BOOL "" FORCE)
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(llama)
 
+# Build mtmd (multimodal) library from llama.cpp tools.
+# Since LLAMA_BUILD_TOOLS is OFF, we explicitly add this subdirectory.
+# LLAMA_INSTALL_VERSION is needed by mtmd's CMakeLists but is normally set by llama's root CMake.
+if(NOT DEFINED LLAMA_INSTALL_VERSION)
+    set(LLAMA_INSTALL_VERSION "0.0.0")
+endif()
+add_subdirectory(${llama_SOURCE_DIR}/tools/mtmd ${llama_BINARY_DIR}/tools/mtmd)
+
+# Exclude CLI executables from being built
+if(TARGET llama-mtmd-cli)
+    set_target_properties(llama-mtmd-cli PROPERTIES EXCLUDE_FROM_ALL TRUE)
+endif()
+
 set_target_properties(llama PROPERTIES
         LIBRARY_OUTPUT_DIRECTORY "${CMAKE_LIBRARY_OUTPUT_DIRECTORY}"
         ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}"
@@ -194,6 +207,8 @@ target_include_directories(odai PRIVATE ${nlohmann_json_SOURCE_DIR})
 target_include_directories(odai PRIVATE ${xxHash_SOURCE_DIR})
 
 target_compile_definitions(odai PRIVATE BUILDING_ODAI_SHARED)
+# Define XXH_INLINE_ALL to include all xxHash implementations in our build as header only lib, ensuring we get the performance benefits of inlining.
+target_compile_definitions(odai PRIVATE XXH_INLINE_ALL)
 
 # Core linking
 target_link_libraries(odai PRIVATE nlohmann_json)
@@ -205,7 +220,8 @@ target_link_libraries(odai PRIVATE nlohmann_json)
 if(ODAI_ENABLE_LLAMA_BACKEND)
     target_sources(odai PRIVATE src/impl/backendEngine/odai_llama_backend_engine.cpp)
     target_include_directories(odai PRIVATE ${llama_SOURCE_DIR})
-    target_link_libraries(odai PRIVATE llama)
+    target_include_directories(odai PRIVATE ${llama_SOURCE_DIR}/tools/mtmd)
+    target_link_libraries(odai PRIVATE llama mtmd)
     target_compile_definitions(odai PRIVATE ODAI_ENABLE_LLAMA_BACKEND)
 endif()
 
@@ -240,7 +256,7 @@ endif()
 
 if(iporesult)
     message(STATUS "IPO/LTO is supported: enabling")
-    # No need to set IPO for header only libraries like xxHash and miniaudio
+    # No need to set IPO for header only libraries like miniaudio
     # because they are included as source files from the source file which they are included in.
     # so they get optimized as part of the lib including source files.
     

@@ -22,7 +22,7 @@ public:
   /// Provides documentation on what kind of file types/formats are supported.
   /// @param format The audio format extension (e.g., "wav", "mp3", "flac", "ogg").
   /// @return true if the format is supported, false otherwise.
-  virtual bool is_supported(const std::string& format) const = 0;
+  virtual bool is_supported(const std::string& format) = 0;
 
   /// Decodes an audio InputItem and processes it to match the target specification.
   /// @param input The InputItem containing audio data.
