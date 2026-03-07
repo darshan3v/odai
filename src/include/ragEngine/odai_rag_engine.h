@@ -19,19 +19,19 @@ public:
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.
   /// @param name The unique name to assign to the model.
-  /// @param details The Model Registration Details struct containing paths.
-  /// @return true if registration succeeded, false if name exists or details are invalid.
-  bool register_model_files(const ModelName& name, const ModelFiles& details);
+  /// @param model_file_details The Model Registration File Details struct containing paths.
+  /// @return true if registration succeeded, false if name exists or Model File Details are invalid.
+  bool register_model_files(const ModelName& name, const ModelFiles& model_file_details);
 
   /// Updates the registration details for an existing model.
   /// Validates the details and potentially checks checksums based on the flag.
   /// Note: At the Engine/SDK layer, this method expects `details` to contain only
   /// the newly added or updated files. It will be merged with existing details.
   /// @param name The name of the model to update.
-  /// @param details The Model Registration Details struct containing newly updated files.
+  /// @param model_file_details The Model Registration Details struct containing newly updated files.
   /// @param flag Flag indicating how to handle checksum changes.
   /// @return true if update succeeded, false if validation fails or model not found.
-  bool update_model_files(const ModelName& name, const ModelFiles& details, UpdateModelFlag flag);
+  bool update_model_files(const ModelName& name, const ModelFiles& model_file_details, UpdateModelFlag flag);
 
   /// Generates a streaming response for the given query.
   /// The response is streamed incrementally via the callback function.
@@ -106,10 +106,10 @@ public:
 private:
   /// Resolves the file system path for a given model name using cache or
   /// database.
-  /// @param modelName The name of the model.
-  /// @param details Output parameter for the resolved paths.
+  /// @param model_name The name of the model.
+  /// @param model_file_details Output parameter for the resolved file details.
   /// @return true if found, false otherwise.
-  bool resolve_model_files(const ModelName& model_name, ModelFiles& details);
+  bool resolve_model_files(const ModelName& model_name, ModelFiles& model_file_details);
 
   /// Helper to process multimodal inputs and decode/load files into memory buffer
   /// before sending them to the inference engine. This mutates the input items,
@@ -124,6 +124,4 @@ private:
   std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<IOdaiBackendEngine> m_backendEngine;
   std::unique_ptr<IOdaiAudioDecoder> m_audioDecoder;
-
-  unordered_map<string, ModelFiles> m_modelDetailsCache;
 };

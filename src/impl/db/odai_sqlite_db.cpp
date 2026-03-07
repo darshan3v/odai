@@ -183,7 +183,8 @@ bool OdaiSqliteDb::rollback_transaction()
   }
 }
 
-bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums)
+bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                        const string& checksums)
 {
   try
   {
@@ -200,11 +201,11 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
     }
 
     string type_str;
-    if (details.m_modelType == ModelType::LLM)
+    if (model_file_details.m_modelType == ModelType::LLM)
     {
       type_str = "LLM";
     }
-    else if (details.m_modelType == ModelType::EMBEDDING)
+    else if (model_file_details.m_modelType == ModelType::EMBEDDING)
     {
       type_str = "EMBEDDING";
     }
@@ -214,13 +215,13 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
       return false;
     }
 
-    json j = details;
-    string details_json = j.dump();
+    json j = model_file_details;
+    string model_file_details_json = j.dump();
 
-    SQLite::Statement insert(*m_db, "INSERT INTO models (name, details, checksums, type) VALUES (:name, "
-                                    "jsonb(:details), jsonb(:checksums), :type)");
+    SQLite::Statement insert(*m_db, "INSERT INTO models (name, file_details, checksums, type) VALUES (:name, "
+                                    "jsonb(:file_details), jsonb(:checksums), :type)");
     insert.bind(":name", name);
-    insert.bind(":details", details_json);
+    insert.bind(":file_details", model_file_details_json);
     insert.bind(":checksums", checksums);
     insert.bind(":type", type_str);
 
@@ -235,7 +236,7 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
   }
 }
 
-bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
+bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& model_file_details)
 {
   try
   {
@@ -245,14 +246,14 @@ bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
       return false;
     }
 
-    SQLite::Statement query(*m_db, "SELECT json(details) as details FROM models WHERE name = :name LIMIT 1");
+    SQLite::Statement query(*m_db, "SELECT json(file_details) as file_details FROM models WHERE name = :name LIMIT 1");
     query.bind(":name", name);
 
     if (query.executeStep())
     {
-      SQLite::Column details_col = query.getColumn("details");
-      json details_json = json::parse(details_col.getString());
-      details = details_json.get<ModelFiles>();
+      SQLite::Column file_details_col = query.getColumn("file_details");
+      json file_details_json = json::parse(file_details_col.getString());
+      model_file_details = file_details_json.get<ModelFiles>();
       return true;
     }
 
@@ -260,7 +261,7 @@ bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& details)
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model details: {}, Error: {}", name, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model file details: {}, Error: {}", name, e.what());
     return false;
   }
 }
@@ -293,7 +294,8 @@ bool OdaiSqliteDb::get_model_checksums(const ModelName& name, string& checksums)
   }
 }
 
-bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums)
+bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                      const string& new_checksums)
 {
   try
   {
@@ -303,12 +305,13 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
       return false;
     }
 
-    json j = new_details;
-    string details_json = j.dump();
+    json j = new_model_file_details;
+    string new_model_file_details_json = j.dump();
 
     SQLite::Statement update(
-        *m_db, "UPDATE models SET details = jsonb(:details), checksums = jsonb(:checksums) WHERE name = :name");
-    update.bind(":details", details_json);
+        *m_db,
+        "UPDATE models SET file_details = jsonb(:file_details), checksums = jsonb(:checksums) WHERE name = :name");
+    update.bind(":file_details", new_model_file_details_json);
     update.bind(":checksums", new_checksums);
     update.bind(":name", name);
 
@@ -318,7 +321,7 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update model details: {}, Error: {}", name, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, Error: {}", name, e.what());
     return false;
   }
 }

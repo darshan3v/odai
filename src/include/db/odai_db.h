@@ -47,18 +47,19 @@ public:
   virtual bool rollback_transaction() = 0;
 
   /// Registers a new model in the database.
-  /// Stores the model name, details JSON, checksums JSON, and type in the models table.
+  /// Stores the model name, model_files JSON, checksums JSON, and type in the models table.
   /// @param name The unique name to assign to the model
-  /// @param details The generic model registration details
+  /// @param model_file_details The generic model file details
   /// @param checksums_json The computed checksums for the files
   /// @return true if registration succeeded, false on error
-  virtual bool register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums_json) = 0;
+  virtual bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                    const string& checksums_json) = 0;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
-  /// @param details Output parameter to store the model details
+  /// @param model_file_details Output parameter to store the model file details
   /// @return true if model found, false if not found or on error
-  virtual bool get_model_files(const ModelName& name, ModelFiles& details) = 0;
+  virtual bool get_model_files(const ModelName& name, ModelFiles& model_file_details) = 0;
 
   /// Retrieves the stored checksums for a registered model.
   /// @param name The name of the model to look up
@@ -67,14 +68,14 @@ public:
   virtual bool get_model_checksums(const ModelName& name, string& checksums) = 0;
 
   /// Updates the details for an existing model record.
-  /// @note The database layer expects `new_details` and `new_checksums` to contain the complete, comprehensive set of
-  /// all details (both existing and newly added).This will overwrite and replace the previously stored details
+  /// @note The database layer expects `new_file_details` and `new_checksums` to contain the complete, comprehensive set
+  /// of all details (both existing and newly added).This will overwrite and replace the previously stored details
   /// entirely.
   /// @param name The name of the model to update
-  /// @param new_details The complete new registration details to store
+  /// @param new_model_file_details The complete new registration details to store
   /// @param new_checksums The complete new computed checksums
   /// @return true if update succeeded, false on error
-  virtual bool update_model_files(const ModelName& name, const ModelFiles& new_details,
+  virtual bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
                                   const string& new_checksums) = 0;
 
   /// Creates a new semantic space.

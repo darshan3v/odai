@@ -85,16 +85,17 @@ public:
   /// Registers a new model in the database.
   /// Stores the model name, details JSON, checksums JSON, and type in the models table.
   /// @param name The unique name to assign to the model
-  /// @param details The generic model registration details
+  /// @param model_file_details The generic model file details
   /// @param checksums The computed checksums for the files
   /// @return true if registration succeeded, false on error
-  bool register_model_files(const ModelName& name, const ModelFiles& details, const string& checksums) override;
+  bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                            const string& checksums) override;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
-  /// @param details Output parameter to store the model details
+  /// @param model_file_details Output parameter to store the model file details
   /// @return true if model found, false if not found or on error
-  bool get_model_files(const ModelName& name, ModelFiles& details) override;
+  bool get_model_files(const ModelName& name, ModelFiles& model_file_details) override;
 
   /// Retrieves the stored checksums for a registered model.
   /// @param name The name of the model to look up
@@ -106,10 +107,11 @@ public:
   /// Note: This method expects `new_details` and `new_checksums` to contain the
   /// complete and comprehensive details mapping (replacing any existing record entirely).
   /// @param name The name of the model to update
-  /// @param new_details The complete new registration details to store
+  /// @param new_model_file_details The complete new model registration details to store
   /// @param new_checksums The complete new computed checksums
   /// @return true if update succeeded, false on error
-  bool update_model_files(const ModelName& name, const ModelFiles& new_details, const string& new_checksums) override;
+  bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                          const string& new_checksums) override;
 
   /// Creates a new semantic space configuration in the database.
   /// @param config The semantic space configuration to store.
@@ -266,7 +268,7 @@ CREATE TABLE semantic_spaces (
 
 CREATE TABLE models (
     name TEXT NOT NULL PRIMARY KEY,
-    details BLOB NOT NULL,
+    file_details BLOB NOT NULL,
     checksums BLOB NOT NULL,
     type TEXT NOT NULL CHECK(type IN ('LLM', 'EMBEDDING')),
     created_at INTEGER NOT NULL DEFAULT (unixepoch())

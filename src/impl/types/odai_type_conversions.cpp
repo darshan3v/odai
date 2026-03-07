@@ -45,9 +45,9 @@ InputItemType to_cpp_input_item_type(c_InputItemType c)
 
 ModelFiles to_cpp(const c_ModelFiles& c)
 {
-  ModelFiles details;
-  details.m_modelType = to_cpp_model_type(c.m_modelType);
-  details.m_engineType = c.m_engineType;
+  ModelFiles model_file_details;
+  model_file_details.m_modelType = to_cpp_model_type(c.m_modelType);
+  model_file_details.m_engineType = c.m_engineType;
 
   if ((c.m_entries != nullptr) && c.m_entriesCount > 0)
   {
@@ -55,11 +55,11 @@ ModelFiles to_cpp(const c_ModelFiles& c)
     {
       if ((c.m_entries[i].m_key != nullptr) && (c.m_entries[i].m_value != nullptr))
       {
-        details.m_entries[string(c.m_entries[i].m_key)] = string(c.m_entries[i].m_value);
+        model_file_details.m_entries[string(c.m_entries[i].m_key)] = string(c.m_entries[i].m_value);
       }
     }
   }
-  return details;
+  return model_file_details;
 }
 
 InputItem to_cpp(const c_InputItem& c)

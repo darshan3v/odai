@@ -44,27 +44,27 @@ struct c_ModelFiles
   size_t m_entriesCount;
 };
 
-inline void free_members(c_ModelFiles* details)
+inline void free_members(c_ModelFiles* model_file_details)
 {
-  if (details == nullptr)
+  if (model_file_details == nullptr)
   {
     return;
   }
-  if (details->m_entries != nullptr)
+  if (model_file_details->m_entries != nullptr)
   {
-    for (size_t i = 0; i < details->m_entriesCount; ++i)
+    for (size_t i = 0; i < model_file_details->m_entriesCount; ++i)
     {
-      if (details->m_entries[i].m_key != nullptr)
+      if (model_file_details->m_entries[i].m_key != nullptr)
       {
-        free(const_cast<char*>(details->m_entries[i].m_key));
+        free(const_cast<char*>(model_file_details->m_entries[i].m_key));
       }
-      if (details->m_entries[i].m_value != nullptr)
+      if (model_file_details->m_entries[i].m_value != nullptr)
       {
-        free(const_cast<char*>(details->m_entries[i].m_value));
+        free(const_cast<char*>(model_file_details->m_entries[i].m_value));
       }
     }
-    free(details->m_entries);
-    details->m_entries = nullptr;
+    free(model_file_details->m_entries);
+    model_file_details->m_entries = nullptr;
   }
 }
 

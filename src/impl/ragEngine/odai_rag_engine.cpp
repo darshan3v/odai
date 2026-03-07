@@ -64,39 +64,40 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
   ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
 }
 
-bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& details)
+bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& model_file_details)
 {
-  if (!m_backendEngine->validate_model_files(details))
+  if (!m_backendEngine->validate_model_files(model_file_details))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Validation failed for model details: {}", name);
+    ODAI_LOG(ODAI_LOG_ERROR, "file details validation failed for model: {}", name);
     return false;
   }
 
-  string checksums_json = calculate_model_checksums(details);
+  string checksums_json = calculate_model_checksums(model_file_details);
   if (checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
     return false;
   }
 
-  if (m_db->register_model_files(name, details, checksums_json))
+  if (!m_db->register_model_files(name, model_file_details, checksums_json))
   {
-    // Update cache
-    m_modelDetailsCache[name] = details;
-    return true;
-  }
-  return false;
-}
-
-bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_details, UpdateModelFlag flag)
-{
-  if (!m_backendEngine->validate_model_files(new_details))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Validation failed for model details: {}", name);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to register file details for model : {}", name);
     return false;
   }
 
-  string new_checksums_json = calculate_model_checksums(new_details);
+  return true;
+}
+
+bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                       UpdateModelFlag flag)
+{
+  if (!m_backendEngine->validate_model_files(new_model_file_details))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "new file details Validation failed for model: {}", name);
+    return false;
+  }
+
+  string new_checksums_json = calculate_model_checksums(new_model_file_details);
   if (new_checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
@@ -131,7 +132,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
         }
         else
         {
-          ODAI_LOG(ODAI_LOG_INFO, "New key found: {}, adding it to the model details", key);
+          ODAI_LOG(ODAI_LOG_INFO, "New key found: {}, adding it to the model file details", key);
           old_checksums_json_obj[key] = it.value();
         }
       }
@@ -143,13 +144,13 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     }
   }
 
-  if (m_db->update_model_files(name, new_details, new_checksums_json))
+  if (!m_db->update_model_files(name, new_model_file_details, new_checksums_json))
   {
-    // Update cache
-    m_modelDetailsCache[name] = new_details;
-    return true;
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model : {}", name);
+    return false;
   }
-  return false;
+
+  return true;
 }
 
 int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config,
@@ -171,7 +172,7 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
   ModelFiles model_files;
   if (!resolve_model_files(llm_model_config.m_modelName, model_files))
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve details for model: {}", llm_model_config.m_modelName);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to resolve file details for model: {}", llm_model_config.m_modelName);
     return -1;
   }
 
@@ -355,26 +356,16 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   return total_tokens;
 }
 
-bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles& details)
+bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles& model_file_details)
 {
-  // check cache first
-  auto it = m_modelDetailsCache.find(model_name);
-  if (it != m_modelDetailsCache.end())
+
+  if (m_db->get_model_files(model_name, model_file_details))
   {
-    details = it->second;
-    return true;
+    ODAI_LOG(ODAI_LOG_ERROR, "Model not found in registry: {}", model_name);
+    return false;
   }
 
-  // if not in cache, check db
-  if (m_db->get_model_files(model_name, details))
-  {
-    // update cache
-    m_modelDetailsCache[model_name] = details;
-    return true;
-  }
-
-  ODAI_LOG(ODAI_LOG_ERROR, "Model not found in registry: {}", model_name);
-  return false;
+  return true;
 }
 
 bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config,

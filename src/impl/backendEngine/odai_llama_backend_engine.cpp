@@ -215,7 +215,7 @@ bool OdaiLlamaEngine::validate_model_file_entry(const std::unordered_map<std::st
     {
       return true;
     }
-    ODAI_LOG(ODAI_LOG_ERROR, "Missing '{}' in model registration details", key);
+    ODAI_LOG(ODAI_LOG_ERROR, "Missing '{}' in model registration entries", key);
     return false;
   }
 
