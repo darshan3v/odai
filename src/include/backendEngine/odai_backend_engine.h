@@ -14,14 +14,14 @@ public:
   IOdaiBackendEngine(IOdaiBackendEngine&&) = delete;
   IOdaiBackendEngine& operator=(IOdaiBackendEngine&&) = delete;
 
-  /// Initializes the backend engine. Must be called before loading models.
+  /// Initializes the backend engine. Must be called at the very first before calling any other function in this layer
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_engine() = 0;
 
   /// Returns the required audio specification for a specific language model.
   /// @param config The LLM model configuration to check requirements for.
   /// @param files The associated model files containing text model and multimodal projectors.
-  /// @return The required audio spec if the model is multimodal, std::nullopt otherwise.
+  /// @return The required audio spec if the model supports processing audio, std::nullopt otherwise.
   virtual std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config,
                                                                      const ModelFiles& files) = 0;
 
@@ -46,19 +46,18 @@ public:
                                               const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                               OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 
-  /// Generates a streaming chat response for the given query in the given chat session.
-  /// This function expects the chat context is already loaded into the model's context using
-  /// load_chat_messages_into_context.
-  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// Generates a streaming chat response for the given query and given chat history.
+  /// @note The engine expects the input items in the prompt to be of type PROCESSED_DATA
   /// (e.g., pre-decoded audio buffers) rather than file paths.
-  /// @param chat_id Unique identifier for the chat session whose cached context will be used
-  /// @param query The input query/message to generate a response for
+  /// @param prompt The input query/message to generate a response for
+  /// @param chat_history chat_history of the chat
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on error
-  virtual int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<ChatMessage>& chat_history,
-                                                   const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
+  virtual int32_t generate_streaming_chat_response(const vector<InputItem>& prompt,
+                                                   const vector<ChatMessage>& chat_history,
+                                                   const SamplerConfig& sampler_config,
                                                    OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 
   virtual ~IOdaiBackendEngine() = default;

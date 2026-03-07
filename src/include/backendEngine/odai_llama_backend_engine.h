@@ -81,10 +81,9 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_engine() override;
 
-  /// Returns the required audio specification for the llama model.
+  /// Returns the required audio specification for the given GGUF model.
   /// @param config The LLM model configuration to check requirements for.
   /// @param files The associated model files containing text model and multimodal projectors.
-  /// @return Currently std::nullopt as multimodal is not yet fully supported in LLaMA backend here.
   std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config,
                                                              const ModelFiles& files) override;
 
@@ -98,8 +97,7 @@ public:
   bool validate_model_files(const ModelFiles& files) override;
 
   /// Generates a streaming response for the given prompt
-  /// @note We have implemented the logic to load the model if not already loaded.
-  /// @note The engine expects the input items in the prompt to be of type PROCESSED_DATA.
+  /// @note engine expects the input items in the prompt to be of type PROCESSED_DATA.
   /// @param prompt The input prompt to generate a response for
   /// @param llm_model_config The LLM model configuration to use for generation
   /// @param model_files The model files to use for generation
@@ -112,24 +110,19 @@ public:
                                       const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                       OdaiStreamRespCallbackFn callback, void* user_data) override;
 
-  /// Generates a streaming chat response using the cached context and sampler
-  /// for the given chat session. Loads the query into the cached context and
-  /// then continues generation.
-  /// This function expects the chat context is already loaded into the model's context using
-  /// load_chat_messages_into_context.
-  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// Generates a streaming chat response for the given query and chat history.
+  /// @note The engine expects the input items in the prompt to be of type PROCESSED_DATA
   /// (e.g., pre-decoded audio buffers) rather than file paths.
-  /// @param chat_id Unique identifier for the chat session whose cached context
-  /// will be used
-  /// @param query The input query/message to generate a response for
+  /// @param prompt The input query/message to generate a response for
+  /// @param chat_history chat_history of the chat
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<ChatMessage>& chat_history,
-                                           const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
-                                           OdaiStreamRespCallbackFn callback, void* user_data) override;
+  int32_t generate_streaming_chat_response(const vector<InputItem>& prompt, const vector<ChatMessage>& chat_history,
+                                           const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
+                                           void* user_data) override;
 
   /// Destructor that frees the llama backend resources.
   ~OdaiLlamaEngine() override;
@@ -262,20 +255,11 @@ private:
   static bool load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
                                             uint32_t& next_pos, bool request_logits_for_last_token);
 
-  /// Loads the provided sequence of chat messages into the model's context for
-  /// the specified chat session, to do this it uses the llm_model_config to
-  /// load the model. This will compute the KV cache (key-value memory for
-  /// transformer inference) and keep it in memory, so future generations for
-  /// the same chat can use the existing context efficiently. If the chat
-  /// context is already loaded and cached for the given chat_id, this function
-  /// will return immediately.
-  /// @param chat_id Unique identifier for the chat session to load context for
+  /// Loads the provided sequence of chat messages into the model's context
   /// @param messages Vector of chat messages (in order) to load into the
   /// context
-  /// @return true if the context was successfully loaded or already cached,
-  /// false otherwise
-  unique_ptr<llama_context, LlamaContextDeleter> load_chat_messages_into_context(const ChatId& chat_id,
-                                                                                 const vector<ChatMessage>& messages);
+  /// @return true if the context was successfully loaded, false otherwise
+  unique_ptr<llama_context, LlamaContextDeleter> load_chat_messages_into_context(const vector<ChatMessage>& messages);
 
   /// Generates the next token using the provided llama context and sampler.
   /// @param model_context Language Model context (has KV cache of old tokens

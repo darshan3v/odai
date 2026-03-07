@@ -85,6 +85,7 @@ bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles
     return false;
   }
 
+  ODAI_LOG(ODAI_LOG_INFO, "Model files registered successfully for model: {}", name);
   return true;
 }
 
@@ -150,6 +151,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     return false;
   }
 
+  ODAI_LOG(ODAI_LOG_INFO, "Model files updated successfully for model: {}", name);
   return true;
 }
 
@@ -297,7 +299,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      chat_id, chat_history, processed_final_prompt, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
+      processed_final_prompt, chat_history, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {
@@ -359,7 +361,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles& model_file_details)
 {
 
-  if (m_db->get_model_files(model_name, model_file_details))
+  if (!m_db->get_model_files(model_name, model_file_details))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Model not found in registry: {}", model_name);
     return false;
