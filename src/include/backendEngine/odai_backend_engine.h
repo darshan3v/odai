@@ -6,8 +6,19 @@
 /// Abstract base class for backend engines that handle model loading and text generation.
 class IOdaiBackendEngine
 {
+protected:
+  BackendEngineConfig m_backendEngineconfig{};
+
 public:
-  IOdaiBackendEngine() = default;
+  IOdaiBackendEngine(const BackendEngineConfig& config)
+  {
+    if (!config.is_sane())
+    {
+      throw std::invalid_argument("Invalid BackendEngineConfig provided");
+    }
+
+    m_backendEngineconfig = config;
+  };
 
   IOdaiBackendEngine(const IOdaiBackendEngine&) = delete;
   IOdaiBackendEngine& operator=(const IOdaiBackendEngine&) = delete;

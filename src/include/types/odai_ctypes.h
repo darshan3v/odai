@@ -114,12 +114,7 @@ struct c_DbConfig
   /// Path to the database file (for SQLite) or connection string (for other backends).
   /// Must be a full file system path for SQLite. Content URIs (e.g., Android content:// URIs) are not supported.
   const char* m_dbPath;
-};
-
-/// C-style configuration for SDK specific settings
-struct c_SdkConfig
-{
-  /// Global absolute path where SDK should cache media files (e.g. decoded images/audio).
+  /// Global absolute path where DB should cache media files (e.g. images/audio)
   const char* m_cacheDirPath;
 };
 

@@ -109,14 +109,19 @@ struct InputItem
 struct DBConfig
 {
   /// Database type to use (SQLITE_DB, POSTGRES_DB, etc.)
-  DBType m_dbType;
+  DBType m_dbType{};
+
   /// Path to the database file (for SQLite) or connection string (for other
-  /// backends). Must be a full file system path for SQLite. Content URIs (e.g.,
+  /// backends in future). Must be a full file system path for SQLite. Content URIs (e.g.,
   /// Android content:// URIs) are not supported.
   string m_dbPath;
+
+  /// Global absolute path where DB should cache media files (e.g. images/audio).
+  string m_cacheDirPath;
+
   bool is_sane() const
   {
-    if (m_dbPath.empty())
+    if (m_dbPath.empty() || m_cacheDirPath.empty())
     {
       return false;
     }
@@ -128,14 +133,6 @@ struct DBConfig
 
     return true;
   }
-};
-
-struct SdkConfig
-{
-  /// Global absolute path where SDK should cache media files (e.g. decoded images/audio).
-  string m_cacheDirPath;
-
-  bool is_sane() const { return !m_cacheDirPath.empty(); }
 };
 
 /// Configuration structure for backend engine (LLM runtime).

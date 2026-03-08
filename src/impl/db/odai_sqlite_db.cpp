@@ -19,9 +19,13 @@ using namespace std;
 
 extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_api_routines* p_api);
 
-OdaiSqliteDb::OdaiSqliteDb(const DBConfig& db_config, const string& cache_dir_path)
-    : m_dbPath(db_config.m_dbPath), m_cacheDirPath(cache_dir_path)
+OdaiSqliteDb::OdaiSqliteDb(const DBConfig& db_config) : IOdaiDb(db_config)
 {
+  if (db_config.m_dbType != SQLITE_DB)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unsupported DB type in DBConfig for OdaiSqliteDb: {}", db_config.m_dbType);
+    throw std::invalid_argument("Unsupported DB type in DBConfig for OdaiSqliteDb");
+  }
 }
 
 bool OdaiSqliteDb::register_vec_extension()
@@ -60,19 +64,28 @@ bool OdaiSqliteDb::initialize_db()
       return false;
     }
 
+    if (!std::filesystem::exists(m_dbConfig.m_cacheDirPath))
+    {
+      if (!std::filesystem::create_directories(m_dbConfig.m_cacheDirPath))
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create cache directory: {}", m_dbConfig.m_cacheDirPath);
+        return false;
+      }
+    }
+
     bool initialize_schema = false;
 
     // Check if DB file exists
-    if (!filesystem::exists(m_dbPath))
+    if (!filesystem::exists(m_dbConfig.m_dbPath))
     {
       initialize_schema = true;
-      ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_dbPath);
+      ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_dbConfig.m_dbPath);
     }
 
     // create db object only after registering sqlite-vec extension
-    m_db = std::make_unique<SQLite::Database>(m_dbPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+    m_db = std::make_unique<SQLite::Database>(m_dbConfig.m_dbPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
 
-    ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_dbPath);
+    ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_dbConfig.m_dbPath);
 
     if (initialize_schema)
     {
@@ -84,7 +97,7 @@ bool OdaiSqliteDb::initialize_db()
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_dbPath, e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_dbConfig.m_dbPath, e.what());
     return false;
   }
 }
@@ -686,7 +699,7 @@ bool OdaiSqliteDb::process_and_cache_media_item(InputItem& item)
       }
 
       std::string file_name = hash_xxhash + ext;
-      std::filesystem::path full_path = std::filesystem::path(m_cacheDirPath) / file_name;
+      std::filesystem::path full_path = std::filesystem::path(m_dbConfig.m_cacheDirPath) / file_name;
       absolute_path = full_path.string();
       std::ofstream out_file(absolute_path, std::ios::binary);
 
@@ -750,16 +763,6 @@ bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
       // AUDIO_FILE or IMAGE_BUFFER from the user prompt rather than internal decoded data
       // (like AUDIO_PCM). The deduplication and caching mechanisms rely on the raw/compressed
       // data formats to work efficiently.
-
-      // Ensure cache directory exists if not empty
-      if (!m_cacheDirPath.empty() && !std::filesystem::exists(m_cacheDirPath))
-      {
-        if (!std::filesystem::create_directories(m_cacheDirPath))
-        {
-          ODAI_LOG(ODAI_LOG_ERROR, "Failed to create cache directory: {}", m_cacheDirPath);
-          return false;
-        }
-      }
 
       for (auto msg : messages)
       {

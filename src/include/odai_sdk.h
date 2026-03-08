@@ -38,10 +38,8 @@ public:
   /// path
   /// @param backendConfig Configuration structure specifying which backend
   /// engine to use
-  /// @param sdkConfig Configuration structure containing SDK specific settings
   /// @return true if initialization succeeded, false otherwise
-  bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config,
-                      const SdkConfig& sdk_config);
+  bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
   /// Registers a new model with generic files.
   /// @param name The unique name of the model.
@@ -138,7 +136,7 @@ private:
   ~OdaiSdk();
 
   bool m_sdkInitialized = false;
-
+  std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<OdaiLogger> m_logger;
   std::unique_ptr<OdaiRagEngine> m_ragEngine;
 

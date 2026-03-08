@@ -50,20 +50,11 @@ inline bool is_sane(const c_InputItem* item)
 /// Validates that a database configuration is sane and usable.
 /// Checks that the database path is not null.
 /// @param config The database configuration to validate
-/// @return true if the configuration is valid (has a non-null dbPath), false
+/// @return true if the configuration is valid (has a non-null dbPath and cacheDirPath), false
 /// otherwise
 inline bool is_sane(const c_DbConfig* config)
 {
-  return config != nullptr && config->m_dbPath != nullptr;
-}
-
-/// Validates that an SDK configuration is sane and usable.
-/// Checks that the cache directory path is not null.
-/// @param config The SDK configuration to validate
-/// @return true if the configuration is valid (has a non-null cacheDirPath), false otherwise
-inline bool is_sane(const c_SdkConfig* config)
-{
-  return config != nullptr && config->m_cacheDirPath != nullptr;
+  return config != nullptr && config->m_dbPath != nullptr && config->m_cacheDirPath != nullptr;
 }
 
 /// Validates that a backend engine configuration is sane and usable.

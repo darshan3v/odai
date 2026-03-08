@@ -23,13 +23,12 @@
 #include <cstring>
 #include <stdexcept>
 
-OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config,
-                             const SdkConfig& sdk_config)
+OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
   if (db_config.m_dbType == SQLITE_DB)
   {
 #ifdef ODAI_ENABLE_SQLITE_DB
-    m_db = std::make_unique<OdaiSqliteDb>(db_config, sdk_config.m_cacheDirPath);
+    m_db = std::make_unique<OdaiSqliteDb>(db_config);
 #else
     throw std::runtime_error("SQLite DB support not enabled");
 #endif

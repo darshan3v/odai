@@ -35,10 +35,8 @@ extern "C"
   /// Must be called before using any other SDK functions. Creates or opens the database at the specified path.
   /// @param db_config Configuration structure containing the database type and path
   /// @param backend_engine_config Configuration structure specifying which backend engine to use
-  /// @param sdk_config Configuration structure specifying SDK specific settings
   /// @return true if initialization succeeded, false otherwise
-  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config,
-                           const c_SdkConfig* sdk_config);
+  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
 
   /// Registers a new model in the system with the given name and generic files map.
   /// The engine validates the files and a checksum is computed to ensure integrity.

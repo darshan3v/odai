@@ -14,7 +14,7 @@
 class OdaiRagEngine
 {
 public:
-  OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config, const SdkConfig& sdk_config);
+  OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.

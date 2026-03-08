@@ -21,10 +21,7 @@ using namespace nlohmann;
 /// managing chat sessions, and storing chat messages with metadata.
 class OdaiSqliteDb : public IOdaiDb
 {
-
 private:
-  string m_dbPath;
-  string m_cacheDirPath;
   unique_ptr<SQLite::Database> m_db = nullptr;
 
   uint16_t m_transactionDepth = 0;
@@ -52,8 +49,7 @@ public:
   /// Constructs a new ODAISqliteDb instance with the specified database
   /// configuration. The database is not opened until initialize_db() is called.
   /// @param dbConfig Database configuration object.
-  /// @param cache_dir_path Path to the cache directory.
-  OdaiSqliteDb(const DBConfig& db_config, const string& cache_dir_path);
+  OdaiSqliteDb(const DBConfig& db_config);
 
   /// Destructor that cleans up database resources.
   /// ToDo : Not yet implemented
@@ -78,8 +74,7 @@ public:
   bool commit_transaction() override;
 
   /// Rolls back the entire transaction.
-  /// This aborts the current transaction completely regardless of nesting
-  /// depth.
+  /// This aborts the current transaction completely regardless of nesting depth.
   bool rollback_transaction() override;
 
   /// Registers a new model in the database.

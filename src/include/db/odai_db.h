@@ -16,8 +16,19 @@ using namespace nlohmann;
 /// Implementations can use different database backends (e.g., SQLite, PostgreSQL, etc.).
 class IOdaiDb
 {
+protected:
+  DBConfig m_dbConfig;
+
 public:
-  IOdaiDb() = default;
+  IOdaiDb(const DBConfig& db_config)
+  {
+    if (!db_config.is_sane())
+    {
+      throw std::invalid_argument("Invalid DBConfig provided");
+    }
+
+    m_dbConfig = db_config;
+  }
 
   IOdaiDb(const IOdaiDb&) = delete;
   IOdaiDb& operator=(const IOdaiDb&) = delete;

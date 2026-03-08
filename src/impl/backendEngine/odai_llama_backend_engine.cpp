@@ -41,7 +41,15 @@ static void llama_log_redirect(ggml_log_level level, const char* text, void* use
   ODAI_LOG(our_level, "[llama.cpp] {}", text);
 }
 
-OdaiLlamaEngine::OdaiLlamaEngine(const BackendEngineConfig& backend_engine_config) {}
+OdaiLlamaEngine::OdaiLlamaEngine(const BackendEngineConfig& backend_engine_config)
+    : IOdaiBackendEngine(backend_engine_config)
+{
+  if (backend_engine_config.m_engineType != LLAMA_BACKEND_ENGINE)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid BackendEngineConfig provided to OdaiLlamaEngine constructor");
+    throw std::invalid_argument("Invalid BackendEngineConfig provided to OdaiLlamaEngine constructor");
+  }
+}
 
 bool OdaiLlamaEngine::initialize_engine()
 {

@@ -83,12 +83,7 @@ InputItem to_cpp(const c_InputItem& c)
 
 DBConfig to_cpp(const c_DbConfig& c)
 {
-  return {c.m_dbType, string(c.m_dbPath)};
-}
-
-SdkConfig to_cpp(const c_SdkConfig& c)
-{
-  return {string(c.m_cacheDirPath)};
+  return {c.m_dbType, string(c.m_dbPath), string(c.m_cacheDirPath)};
 }
 
 BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
