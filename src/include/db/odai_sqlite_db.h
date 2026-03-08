@@ -33,17 +33,15 @@ private:
   /// @return true if extension registered, false on error
   static bool register_vec_extension();
 
-  /// Processes and caches media items (such as audio or image files and buffers)
-  /// into the media cache directory to prevent storing large blobs directly in the database.
-  ///
-  /// This method calculates the xxhash checksum of the media item. If the item is not
-  /// found in the cache, it is written to the file system. In both cases, the properties
-  /// of the InputItem are modified in-place: its type is updated to FILE_PATH,
-  /// and its data is replaced with the absolute path to the cached file.
-  ///
-  /// @param item The InputItem to process and mutate in place.
-  /// @return true if processing and caching succeeded, false upon an error.
-  bool process_and_cache_media_item(InputItem& item);
+  /// Internal helper to handle media item caching logic for both file paths and memory buffers.
+  /// This will store the given media item in the cache directory and insert the mapping in db and update the item_out
+  /// with the cached file path details.
+  /// @note Here we assume the item being passed is not yet present in media store path
+  /// @param item The media item to store
+  /// @param checksum The pre-computed checksum of the media item to use for file_name and db entry
+  /// @param item_out Output parameter to receive the stored item details, currently we expect the type to be FILE_PATH,
+  /// but this can be extended in future if needed.
+  bool store_media_item_impl(const InputItem& item, const string& checksum, InputItem& item_out);
 
 public:
   /// Constructs a new ODAISqliteDb instance with the specified database
@@ -108,6 +106,16 @@ public:
   bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
                           const string& new_checksums) override;
 
+  /// @brief stores a media item in media store path and store the mapping in database.
+  /// @note we don't store the media if its already present (based on checksum) in media store path, instead we just
+  /// return the existing mapping.
+  /// for in memory text (that is media type text and inputitemtype memory buffer, we directly set item_out and return
+  /// success we don't store)
+  /// @param item The media item to store
+  /// @param item_out Output parameter to receive the stored item details
+  /// @return true if storage succeeded, false on error
+  bool store_media_item(const InputItem& item, InputItem& item_out) override;
+
   /// Creates a new semantic space configuration in the database.
   /// @param config The semantic space configuration to store.
   /// @return true if created successfully, false on error.
@@ -154,37 +162,27 @@ public:
   /// doesn't exist or on error
   bool get_chat_config(const ChatId& chat_id, ChatConfig& chat_config) override;
 
-  /// Retrieves all chat messages for the specified chat session.
-  ///
-  /// Messages are returned in chronological order based on sequence_index.
-  /// Note: Any multimodal inputs (audio/image) that were previously cached
-  /// during insertion will be returned as InputItems with type FILE_PATH.
+  /// @brief Retrieves all chat messages for the specified chat session.
+  /// @note Messages are returned in chronological order based on sequence_index.
+  /// @note Any multimodal inputs (audio/image) that were previously cached
+  /// using store_media_items() will be returned as InputItems with type FILE_PATH.
   /// Their m_data payload will contain the local absolute path string pointing
   /// to the cached file on disk, rather than the raw binary data.
-  ///
   /// @param chat_id The chat identifier to retrieve messages for.
   /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.
   bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages) override;
 
-  /// Inserts multiple chat messages into the database.
-  ///
+  /// @brief Inserts multiple chat messages into the database.
   /// This function attaches messages to an existing chat session. Each message
   /// is assigned an auto-incrementing sequence index for timeline preservation.
-  /// Furthermore, all multimodal inputs (audio/image) inside message contents
-  /// are automatically processed, deduplicated (via xxhash checksum comparison),
-  /// and stored directly onto the filesystem (media cache) rather than stuffing
-  /// large blobs into the chat_messages table. The database stores the file
-  /// paths instead.
-  ///
-  /// IMPORTANT: Media within `messages` must be strictly provided as true format
-  /// sources (FILE_PATH or MEMORY_BUFFER). Pre-processed or decoded audio data
-  /// (`PROCESSED_DATA`) will be rejected since deduplication routines operate on
-  /// raw compressed binary payloads.
-  ///
+  /// @note All multimodal inputs (audio/image) inside message contents
+  /// should be already cached in media store path and the mapping should be present in db.
+  /// therefore, the msgContentItems should have item from store_media_items which will be basically of type file path
+  /// except for text items which would be memory buffer
   /// @param chat_id Unique identifier for the chat session.
-  /// @param messages Vector of ChatMessage objects to insert. Its multimodal items will be modified after caching.
-  /// @return true if all messages were inserted and cached successfully, false on error.
+  /// @param messages Vector of ChatMessage objects to insert.
+  /// @return true if all messages were inserted successfully, false on error.
   bool insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages) override;
 
   /// Closes the database connection and releases resources.

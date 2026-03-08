@@ -72,7 +72,6 @@ inline void free_members(c_ModelFiles* model_file_details)
 typedef uint8_t c_InputItemType;
 #define ODAI_INPUT_ITEM_TYPE_FILE_PATH ((c_InputItemType)0)
 #define ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER ((c_InputItemType)1)
-#define ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA ((c_InputItemType)2)
 #define ODAI_INPUT_ITEM_TYPE_INVALID ((c_InputItemType)UINT8_MAX)
 
 /// C-style structure representing a single input item for generation or chat.
@@ -114,8 +113,8 @@ struct c_DbConfig
   /// Path to the database file (for SQLite) or connection string (for other backends).
   /// Must be a full file system path for SQLite. Content URIs (e.g., Android content:// URIs) are not supported.
   const char* m_dbPath;
-  /// Global absolute path where DB should cache media files (e.g. images/audio)
-  const char* m_cacheDirPath;
+  /// Global absolute path where DB should store media files (e.g. images/audio)
+  const char* m_mediaStorePath;
 };
 
 /// C-style configuration for backend engine (LLM runtime).

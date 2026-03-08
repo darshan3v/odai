@@ -44,7 +44,7 @@ public:
 
   /// Generates a streaming response for the given prompt
   /// The response is streamed incrementally via the callback function.
-  /// Note: The engine expects the input items in the prompt to be of type PROCESSED_DATA
+  /// Note: The engine expects the input media items in the prompt to be of type File Path, and text as Memory Buffer
   /// (e.g., pre-decoded audio or raw buffers) rather than file paths.
   /// @param prompt The input prompt to generate a response for
   /// @param llm_model_config The LLM model configuration to use for generation
@@ -58,8 +58,7 @@ public:
                                               OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 
   /// Generates a streaming chat response for the given query and given chat history.
-  /// @note The engine expects the input items in the prompt to be of type PROCESSED_DATA
-  /// (e.g., pre-decoded audio buffers) rather than file paths.
+  /// @note The engine expects the input media items in the prompt to be of type File Path, and text as Memory Buffer
   /// @param prompt The input query/message to generate a response for
   /// @param chat_history chat_history of the chat
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)

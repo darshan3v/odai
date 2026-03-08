@@ -89,6 +89,15 @@ public:
   virtual bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
                                   const string& new_checksums) = 0;
 
+  /// @brief stores a media item whererver it seems fit and store the mapping in database.
+  /// for in memory text (that is media type text and inputitemtype memory buffer, we should set item_out and directly
+  /// return success and not store anything)
+  /// @param item The media item to store
+  /// @param item_out Output parameter to receive the stored item details. currently we expect the item_out to have item
+  /// type as file path but this can be extended in future if needed.
+  /// @return true if storage succeeded, false on error
+  virtual bool store_media_item(const InputItem& item, InputItem& item_out) = 0;
+
   /// Creates a new semantic space.
   /// @param config The configuration for the semantic space.
   /// @return true if created successfully, false on error.
@@ -142,10 +151,9 @@ public:
   /// Inserts multiple chat messages into the database.
   ///
   /// Each message is assigned a sequence index automatically based on existing messages for the chat.
-  /// Implementations should process multimodal inputs (like AUDIO_BUFFER or IMAGE_BUFFER) by saving
-  /// them to the file system (media cache) rather than storing large binary blobs directly in the database.
-  /// In such cases, the InputItem properties within `messages` may be updated to reflect the new FILE_PATH.
-  ///
+  /// @note we expect that messages contentItems to have input item of type File Path, except for text which would be
+  /// memory buffer caller can store_media_items() to store the media items in and get the new item struct with the new
+  /// file path from stored location.
   /// @note This operation is wrapped in a transaction. If any insertion fails, the entire operation is rolled back.
   /// @param chat_id Unique identifier for the chat session.
   /// @param messages Vector of ChatMessage objects to insert. The objects' contents might be modified (e.g. data

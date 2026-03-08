@@ -83,8 +83,6 @@ enum class InputItemType : std::uint8_t
 {
   FILE_PATH = 0,
   MEMORY_BUFFER = 1,
-  PROCESSED_DATA = 2,
-  INVALID = UINT8_MAX
 };
 
 struct InputItem
@@ -93,17 +91,27 @@ struct InputItem
   std::vector<uint8_t> m_data;
   std::string m_mimeType;
 
-  // Helper to get as string
-  std::string get_text() const
+  /// Identifies the MediaType from a given mime_type string.
+  /// @return The appropriate MediaType enum.
+  MediaType get_media_type() const
   {
-    if (m_data.empty())
+    if (m_mimeType.rfind("text/", 0) == 0)
     {
-      return "";
+      return MediaType::TEXT;
     }
-    return std::string(reinterpret_cast<const char*>(m_data.data()), m_data.size());
+    if (m_mimeType.rfind("image/", 0) == 0)
+    {
+      return MediaType::IMAGE;
+    }
+    if (m_mimeType.rfind("audio/", 0) == 0)
+    {
+      return MediaType::AUDIO;
+    }
+
+    return MediaType::INVALID;
   }
 
-  bool is_sane() const { return !m_data.empty(); }
+  bool is_sane() const { return !m_data.empty() && !m_mimeType.empty() && (get_media_type() != MediaType::INVALID); }
 };
 
 struct DBConfig
@@ -116,12 +124,12 @@ struct DBConfig
   /// Android content:// URIs) are not supported.
   string m_dbPath;
 
-  /// Global absolute path where DB should cache media files (e.g. images/audio).
-  string m_cacheDirPath;
+  /// Global absolute path where DB should store media files (e.g. images/audio).
+  string m_mediaStorePath;
 
   bool is_sane() const
   {
-    if (m_dbPath.empty() || m_cacheDirPath.empty())
+    if (m_dbPath.empty() || m_mediaStorePath.empty())
     {
       return false;
     }
@@ -416,7 +424,7 @@ struct ChatMessage
 {
   /// Role of the message sender ('user', 'assistant', or 'system')
   string m_role;
-  /// The message content items
+  /// The message content items that is the prompt (with / without media items in order)
   vector<InputItem> m_contentItems;
   /// JSON object for additional metadata (citations, context, etc.)
   json m_messageMetadata;

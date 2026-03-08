@@ -177,12 +177,12 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  vector<InputItem> processed_prompt = prompt;
-  if (!this->process_multimodal_inputs(processed_prompt, llm_model_config, model_files))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load multimodal inputs");
-    return -1;
-  }
+  const vector<InputItem>& processed_prompt = prompt;
+  // if (!this->process_multimodal_inputs(processed_prompt, llm_model_config, model_files))
+  // {
+  //   ODAI_LOG(ODAI_LOG_ERROR, "Failed to load multimodal inputs");
+  //   return -1;
+  // }
 
   return m_backendEngine->generate_streaming_response(processed_prompt, llm_model_config, model_files, sampler_config,
                                                       callback, user_data);
@@ -197,6 +197,28 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     ODAI_LOG(ODAI_LOG_ERROR, "Callback is null");
     return -1;
   }
+
+  StreamingBufferContext buffer_ctx;
+  buffer_ctx.m_userCallback = callback;
+  buffer_ctx.m_userData = user_data;
+  buffer_ctx.m_bufferedResponse = "";
+
+  // Internal callback that buffers output and forwards to user callback
+  auto internal_callback = [](const char* token, void* user_data) -> bool
+  {
+    if (token == nullptr || user_data == nullptr)
+    {
+      return false;
+    }
+
+    StreamingBufferContext* ctx = static_cast<StreamingBufferContext*>(user_data);
+
+    // Buffer the token
+    ctx->m_bufferedResponse += string(token);
+
+    // Forward to user callback for streaming
+    return ctx->m_userCallback(token, ctx->m_userData);
+  };
 
   // Retrieve chat configuration from database
   ChatConfig chat_config;
@@ -255,50 +277,24 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     return -1;
   }
 
-  for (auto& msg : chat_history)
+  const vector<InputItem>& prompt_with_context = prompt; // Placeholder until context retrieval is implemented
+
+  vector<InputItem> final_prompt = prompt_with_context;
+
+  for (InputItem& item : final_prompt)
   {
-    if (!this->process_multimodal_inputs(msg.m_contentItems, chat_config.m_llmModelConfig, model_files))
+    InputItem item_out;
+    if (!m_db->store_media_item(item, item_out))
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to load chat history multimodal inputs");
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to store media item");
       return -1;
     }
+    item = item_out;
   }
-
-  const vector<InputItem>& final_prompt = prompt; // Placeholder until context retrieval is implemented
-
-  vector<InputItem> processed_final_prompt = final_prompt;
-
-  if (!this->process_multimodal_inputs(processed_final_prompt, chat_config.m_llmModelConfig, model_files))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to process multimodal inputs");
-    return -1;
-  }
-
-  StreamingBufferContext buffer_ctx;
-  buffer_ctx.m_userCallback = callback;
-  buffer_ctx.m_userData = user_data;
-  buffer_ctx.m_bufferedResponse = "";
-
-  // Internal callback that buffers output and forwards to user callback
-  auto internal_callback = [](const char* token, void* user_data) -> bool
-  {
-    if (token == nullptr || user_data == nullptr)
-    {
-      return false;
-    }
-
-    StreamingBufferContext* ctx = static_cast<StreamingBufferContext*>(user_data);
-
-    // Buffer the token
-    ctx->m_bufferedResponse += string(token);
-
-    // Forward to user callback for streaming
-    return ctx->m_userCallback(token, ctx->m_userData);
-  };
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      processed_final_prompt, chat_history, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
+      final_prompt, chat_history, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {
@@ -311,8 +307,8 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   ChatMessage user_msg;
   user_msg.m_role = "user";
-  // We MUST pass the original 'prompt' to the DB so that we serialize
-  // the true reference/buffer (e.g., AUDIO_FILE) and not the internal decoded data
+  // we pass the modified prompt (here modification means we replace media item with item that we get from
+  // store_media_items()) that way we only store and pass file path and not file themselves
   user_msg.m_contentItems = final_prompt;
   // we should update message_metadata with citations if any from RAG context
   user_msg.m_messageMetadata = json::object();
@@ -331,24 +327,10 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   assistant_msg.m_messageMetadata = json::object();
   messages_to_save.push_back(assistant_msg);
 
-  if (!m_db->begin_transaction())
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to begin transaction for chat_id: {}", chat_id);
-    return -1;
-  }
-
   // Save messages to database
   if (!m_db->insert_chat_messages(chat_id, messages_to_save))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to save messages to database for chat_id: {}", chat_id);
-    m_db->rollback_transaction();
-    return -1;
-  }
-
-  if (!m_db->commit_transaction())
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to commit transaction for chat_id: {}", chat_id);
-    m_db->rollback_transaction();
     return -1;
   }
 
@@ -378,18 +360,11 @@ bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, con
   for (auto& item : prompt_out)
   {
 
-    if (item.m_type == InputItemType::PROCESSED_DATA)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Undefined, we expect unprocessed data in this function");
-      return false;
-    }
-
-    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
+    MediaType media_type = item.get_media_type();
 
     if (media_type == MediaType::TEXT)
     {
       // no special processing needed for text
-      item.m_type = InputItemType::PROCESSED_DATA;
     }
     else if (media_type == MediaType::AUDIO)
     {
@@ -416,7 +391,6 @@ bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, con
         std::memcpy(pcm_bytes.data(), decoded_audio.m_samples.data(), byte_size);
 
         item.m_data = std::move(pcm_bytes);
-        item.m_type = InputItemType::PROCESSED_DATA;
       }
       else
       {

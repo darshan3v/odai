@@ -19,11 +19,6 @@ string calculate_file_checksum(const string& path);
 /// @return A 16-character hexadecimal string representing the checksum, or an empty string if data is empty.
 string calculate_data_checksum(const vector<uint8_t>& data);
 
-/// Identifies the MediaType from a given mime_type string.
-/// @param mime_type The mime type string to evaluate.
-/// @return The appropriate MediaType enum.
-MediaType get_media_type_from_mime(const string& mime_type);
-
 /// Calculates checksums for all files in a ModelFiles struct.
 /// @param files The Model Files struct containing paths.
 /// @return A JSON string containing key-value pairs of checksums, or empty string on error.

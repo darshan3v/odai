@@ -93,7 +93,7 @@ void odai_free_semantic_space_config(c_SemanticSpaceConfig* config)
   free_members(config);
 }
 
-bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* spaces_count)
+bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count)
 {
   if (spaces_out == nullptr || spaces_count == nullptr)
   {
@@ -134,7 +134,7 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* space
   return true;
 }
 
-void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, size_t count)
+void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, uint16_t count)
 {
   if (spaces == nullptr)
   {
@@ -179,7 +179,7 @@ bool odai_add_document(const char* content, const c_DocumentId document_id,
 }
 
 int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const c_InputItem* c_prompt_items,
-                                         size_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
+                                         uint16_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
                                          OdaiStreamRespCallbackFn c_callback, void* c_user_data)
 {
 
@@ -209,6 +209,7 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid input item at index {}", i);
       return -1;
     }
+
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }
 
@@ -260,7 +261,7 @@ void odai_free_chat_id(c_ChatId chat_id)
   }
 }
 
-bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count)
+bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count)
 {
   if (c_chat_id == nullptr)
   {
@@ -308,7 +309,7 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
   return true;
 }
 
-void odai_free_chat_messages(c_ChatMessage* c_messages, size_t count)
+void odai_free_chat_messages(c_ChatMessage* c_messages, uint16_t count)
 {
   if (c_messages == nullptr)
   {
@@ -330,7 +331,7 @@ void odai_free_chat_messages(c_ChatMessage* c_messages, size_t count)
 }
 
 bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
-                                           size_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
+                                           uint16_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
                                            OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (c_chat_id == nullptr)

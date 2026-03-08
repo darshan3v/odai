@@ -36,11 +36,9 @@ InputItemType to_cpp_input_item_type(c_InputItemType c)
     return InputItemType::FILE_PATH;
   case ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER:
     return InputItemType::MEMORY_BUFFER;
-  case ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA:
-    return InputItemType::PROCESSED_DATA;
-  default:
-    return InputItemType::INVALID;
   }
+
+  return InputItemType::FILE_PATH;
 }
 
 ModelFiles to_cpp(const c_ModelFiles& c)
@@ -83,7 +81,7 @@ InputItem to_cpp(const c_InputItem& c)
 
 DBConfig to_cpp(const c_DbConfig& c)
 {
-  return {c.m_dbType, string(c.m_dbPath), string(c.m_cacheDirPath)};
+  return {c.m_dbType, string(c.m_dbPath), string(c.m_mediaStorePath)};
 }
 
 BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
@@ -195,8 +193,6 @@ c_InputItemType to_c(const InputItemType& cpp)
     return ODAI_INPUT_ITEM_TYPE_FILE_PATH;
   case InputItemType::MEMORY_BUFFER:
     return ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER;
-  case InputItemType::PROCESSED_DATA:
-    return ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA;
   default:
     return ODAI_INPUT_ITEM_TYPE_INVALID;
   }
@@ -283,23 +279,6 @@ c_ChatMessage to_c(const ChatMessage& cpp)
   result.m_createdAt = cpp.m_createdAt;
 
   return result;
-}
-
-MediaType get_media_type_from_mime(const string& mime_type)
-{
-  if (mime_type.find("text") != string::npos)
-  {
-    return MediaType::TEXT;
-  }
-  if (mime_type.find("image") != string::npos)
-  {
-    return MediaType::IMAGE;
-  }
-  if (mime_type.find("audio") != string::npos)
-  {
-    return MediaType::AUDIO;
-  }
-  return MediaType::INVALID;
 }
 
 string byte_vector_to_string(const vector<uint8_t>& bytes)

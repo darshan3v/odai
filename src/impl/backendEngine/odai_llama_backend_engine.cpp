@@ -116,13 +116,13 @@ bool OdaiLlamaEngine::does_model_support_input_data(const vector<InputItem>& ite
 
   for (const auto& item : items)
   {
-    if (item.m_type != InputItemType::PROCESSED_DATA)
+    MediaType media_type = item.get_media_type();
+
+    if (media_type == MediaType::INVALID)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "For now backend only supports PROCESSED_DATA type of input items");
+      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
       return false;
     }
-
-    MediaType media_type = get_media_type_from_mime(item.m_mimeType);
 
     if (media_type == MediaType::IMAGE && !supports_image)
     {
@@ -136,9 +136,15 @@ bool OdaiLlamaEngine::does_model_support_input_data(const vector<InputItem>& ite
       return false;
     }
 
-    if (media_type != MediaType::TEXT && media_type != MediaType::IMAGE && media_type != MediaType::AUDIO)
+    if (media_type == MediaType::TEXT && item.m_type != InputItemType::MEMORY_BUFFER)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
+      ODAI_LOG(ODAI_LOG_ERROR, "Text input items must be provided as MEMORY_BUFFER");
+      return false;
+    }
+
+    if ((media_type == MediaType::IMAGE || media_type == MediaType::AUDIO) && item.m_type != InputItemType::FILE_PATH)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Image / Audio input items must be provided as File Path");
       return false;
     }
   }
@@ -386,6 +392,13 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
     return false;
   }
 
+  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
+
+  if (this->m_llmVocab == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
+    return false;
+  }
   this->m_llmModelConfig = config;
   this->m_llmModelFiles = files;
 
@@ -743,7 +756,8 @@ string OdaiLlamaEngine::format_chat_messages_to_prompt(const vector<ChatMessage>
     string text_content;
     for (const auto& item : msg.m_contentItems)
     {
-      if (item.m_type == InputItemType::PROCESSED_DATA && get_media_type_from_mime(item.m_mimeType) == MediaType::TEXT)
+      MediaType media_type = item.get_media_type();
+      if (media_type == MediaType::TEXT)
       {
         text_content.append(item.m_data.begin(), item.m_data.end());
       }

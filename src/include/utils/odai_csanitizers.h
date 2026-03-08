@@ -40,7 +40,7 @@ inline bool is_sane(const c_InputItem* item)
   {
     return false;
   }
-  if (item->m_type > ODAI_INPUT_ITEM_TYPE_PROCESSED_DATA)
+  if ((item->m_type != ODAI_INPUT_ITEM_TYPE_FILE_PATH) && (item->m_type != ODAI_INPUT_ITEM_TYPE_MEMORY_BUFFER))
   {
     return false;
   }
@@ -50,11 +50,11 @@ inline bool is_sane(const c_InputItem* item)
 /// Validates that a database configuration is sane and usable.
 /// Checks that the database path is not null.
 /// @param config The database configuration to validate
-/// @return true if the configuration is valid (has a non-null dbPath and cacheDirPath), false
+/// @return true if the configuration is valid (has a non-null dbPath and mediaStorePath), false
 /// otherwise
 inline bool is_sane(const c_DbConfig* config)
 {
-  return config != nullptr && config->m_dbPath != nullptr && config->m_cacheDirPath != nullptr;
+  return config != nullptr && config->m_dbPath != nullptr && config->m_mediaStorePath != nullptr;
 }
 
 /// Validates that a backend engine configuration is sane and usable.

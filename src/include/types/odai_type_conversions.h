@@ -24,7 +24,7 @@ ModelFiles to_cpp(const c_ModelFiles& c);
 InputItem to_cpp(const c_InputItem& c);
 
 /// Converts a C-style database configuration to C++ style.
-/// Creates a new C++ DBConfig by copying the database type and path and cacheDirPath from the C
+/// Creates a new C++ DBConfig by copying the database type and path and mediaStorePath from the C
 /// struct.
 /// @param c C-style database configuration to convert
 /// @return C++ DBConfig with the converted configuration
@@ -110,11 +110,6 @@ c_SemanticSpaceConfig to_c(const SemanticSpaceConfig& cpp);
 /// @param cpp C++ ChatMessage to convert
 /// @return C-style c_ChatMessage with allocated strings
 c_ChatMessage to_c(const ChatMessage& cpp);
-
-/// Identifies the MediaType from a given mime_type string.
-/// @param mime_type The mime type string to evaluate.
-/// @return The appropriate MediaType enum.
-MediaType get_media_type_from_mime(const std::string& mime_type);
 
 /// Converts a C++ vector of bytes to a std::string.
 /// @param bytes The vector of bytes to convert.

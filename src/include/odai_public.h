@@ -75,12 +75,12 @@ extern "C"
   /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
   /// @param spaces_count Output parameter: number of spaces returned.
   /// @return true if successful, false on error.
-  bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, size_t* spaces_count);
+  bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count);
 
   /// Frees memory allocated by odai_list_semantic_spaces.
   /// @param spaces Array of c_SemanticSpaceConfig to free.
   /// @param count Number of items in the array.
-  void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, size_t count);
+  void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, uint16_t count);
 
   /// Deletes a semantic space configuration.
   /// @param name The name of the semantic space to delete.
@@ -108,7 +108,7 @@ extern "C"
   /// @return Total number of tokens generated, or -1 on error. Returns -1 if callback returns false to cancel
   /// streaming.
   int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const c_InputItem* c_prompt_items,
-                                           size_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
+                                           uint16_t prompt_items_count, const c_SamplerConfig* c_sampler_config,
                                            OdaiStreamRespCallbackFn c_callback, void* c_user_data);
 
   /// Creates a new chat session with the specified configuration.
@@ -133,13 +133,13 @@ extern "C"
   /// @param c_messages_out Output parameter: pointer to array of i_ChatMessage (allocated by this function)
   /// @param messages_count Output parameter: number of messages retrieved
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error
-  bool odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, size_t* messages_count);
+  bool odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count);
 
   /// Frees memory allocated for an array of i_ChatMessage structures.
   /// Should be called after odai_get_chat_history to free allocated strings.
   /// @param messages Array of i_ChatMessage structures to free
   /// @param count Number of messages in the array
-  void odai_free_chat_messages(c_ChatMessage* messages, size_t count);
+  void odai_free_chat_messages(c_ChatMessage* messages, uint16_t count);
 
   /// Generates a streaming response for an existing chat session.
   /// @param c_chat_id The unique identifier of the chat session
@@ -150,7 +150,7 @@ extern "C"
   /// @param user_data Opaque pointer passed back to the callback
   /// @return true if generation starts successfully, false if chat not found or on error
   bool odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
-                                             size_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
+                                             uint16_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
                                              OdaiStreamRespCallbackFn callback, void* user_data);
 
 #ifdef __cplusplus

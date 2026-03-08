@@ -46,7 +46,13 @@ bool OdaiMiniAudioDecoder::decode_to_spec(const InputItem& input, const OdaiAudi
                                           OdaiDecodedAudio& decoded_audio)
 {
 
-  MediaType media_type = get_media_type_from_mime(input.m_mimeType);
+  if (!input.is_sane())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Input item is not sane for decoding");
+    return false;
+  }
+
+  MediaType media_type = input.get_media_type();
 
   if (media_type != MediaType::AUDIO)
   {

@@ -7,6 +7,7 @@
 
 #include "types/odai_type_conversions.h"
 
+#include "types/odai_types.h"
 #include "utils/odai_helpers.h"
 #include "xxhash.h"
 #include <fstream>
@@ -64,11 +65,11 @@ bool OdaiSqliteDb::initialize_db()
       return false;
     }
 
-    if (!std::filesystem::exists(m_dbConfig.m_cacheDirPath))
+    if (!std::filesystem::exists(m_dbConfig.m_mediaStorePath))
     {
-      if (!std::filesystem::create_directories(m_dbConfig.m_cacheDirPath))
+      if (!std::filesystem::create_directories(m_dbConfig.m_mediaStorePath))
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create cache directory: {}", m_dbConfig.m_cacheDirPath);
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to create media store directory: {}", m_dbConfig.m_mediaStorePath);
         return false;
       }
     }
@@ -335,6 +336,122 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, Error: {}", name, e.what());
+    return false;
+  }
+}
+
+bool OdaiSqliteDb::store_media_item_impl(const InputItem& item, const string& checksum, InputItem& item_out)
+{
+  try
+  {
+    // store the media item in cache dir and the mapping in db
+    const string& file_name = checksum; // using checksum as file name to avoid duplicates
+    string file_path = m_dbConfig.m_mediaStorePath + "/" + file_name;
+
+    if (item.m_type == InputItemType::FILE_PATH)
+    {
+      // copy the file to cache dir
+      std::filesystem::copy_file(byte_vector_to_string(item.m_data), file_path,
+                                 std::filesystem::copy_options::overwrite_existing);
+    }
+    else if (item.m_type == InputItemType::MEMORY_BUFFER)
+    {
+      // write the buffer to a file in cache dir
+      std::ofstream out_file(file_path, std::ios::binary);
+      out_file.write(reinterpret_cast<const char*>(item.m_data.data()), item.m_data.size());
+      out_file.close();
+    }
+    else
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItem type for storing media item");
+      return false;
+    }
+
+    // insert the mapping in db
+    SQLite::Statement insert(*m_db, "INSERT INTO media_cache (hash_xxhash, mime_type, absolute_path, file_name) VALUES "
+                                    "(:checksum, :mime_type, :absolute_path, :file_name)");
+    insert.bind(":checksum", checksum);
+    insert.bind(":mime_type", item.m_mimeType);
+    insert.bind(":absolute_path", file_path);
+    insert.bind(":file_name", file_name);
+    insert.exec();
+
+    item_out.m_type = InputItemType::FILE_PATH;
+    item_out.m_data = vector<uint8_t>(file_path.begin(), file_path.end());
+
+    return true;
+  }
+  catch (const std::exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to store media item: {}", e.what());
+    return false;
+  }
+}
+
+bool OdaiSqliteDb::store_media_item(const InputItem& item, InputItem& item_out)
+{
+  try
+  {
+    if (m_db == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
+      return false;
+    }
+
+    if (!item.is_sane())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid input item passed");
+      return false;
+    }
+
+    MediaType media_type = item.get_media_type();
+
+    if (media_type == MediaType::IMAGE || media_type == MediaType::AUDIO)
+    {
+      string checksum;
+
+      if (item.m_type == InputItemType::FILE_PATH)
+      {
+        checksum = calculate_file_checksum(byte_vector_to_string(item.m_data));
+      }
+      else if (item.m_type == InputItemType::MEMORY_BUFFER)
+      {
+        checksum = calculate_data_checksum(item.m_data);
+      }
+      else
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItem type for storing media item");
+        return false;
+      }
+
+      // check in db if we already have a mapping for this checksum, if yes return that path instead of storing again
+      SQLite::Statement query(*m_db, "SELECT file_path FROM media_cache WHERE checksum = :checksum LIMIT 1");
+      query.bind(":checksum", checksum);
+
+      if (query.executeStep())
+      {
+        item_out.m_type = InputItemType::FILE_PATH;
+        item_out.m_data = vector<uint8_t>(query.getColumn("file_path").getString().begin(),
+                                          query.getColumn("file_path").getString().end());
+        return true;
+      }
+
+      // store the media item in cache dir and the mapping in db
+      return store_media_item_impl(item, checksum, item_out);
+    }
+    if (media_type == MediaType::TEXT && item.m_type == InputItemType::MEMORY_BUFFER)
+    {
+      item_out =
+          item; // for text media type with memory buffer, we don't need to store, we can directly use the buffer as is
+      return true;
+    }
+
+    ODAI_LOG(ODAI_LOG_ERROR, "Unsupported media / input type for item with mime type: {}", item.m_mimeType);
+    return false;
+  }
+  catch (const std::exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to store media item: {}", e.what());
     return false;
   }
 }
@@ -640,98 +757,6 @@ bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
   }
 }
 
-bool OdaiSqliteDb::process_and_cache_media_item(InputItem& item)
-{
-  if (item.m_type == InputItemType::PROCESSED_DATA)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Please give the raw media data and not decoded media data");
-    return false;
-  }
-
-  MediaType media_type = get_media_type_from_mime(item.m_mimeType);
-
-  if (media_type == MediaType::AUDIO || media_type == MediaType::IMAGE)
-  {
-    std::string absolute_path;
-
-    if (item.m_data.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Empty data passed for media item");
-      return false;
-    }
-
-    // Let's compute xxhash
-    std::string hash_xxhash;
-    if (item.m_type == InputItemType::FILE_PATH)
-    {
-      std::string file_path(item.m_data.begin(), item.m_data.end());
-      hash_xxhash = calculate_file_checksum(file_path);
-    }
-    else
-    {
-      hash_xxhash = calculate_data_checksum(item.m_data);
-    }
-
-    if (hash_xxhash.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksum for media item");
-      return false;
-    }
-
-    SQLite::Statement query_cache(*m_db, "SELECT absolute_path FROM media_cache WHERE hash_xxhash = ? LIMIT 1");
-    query_cache.bind(1, hash_xxhash);
-
-    if (query_cache.executeStep())
-    {
-      absolute_path = query_cache.getColumn(0).getString();
-    }
-    else
-    {
-      // Write to disk
-      std::string ext = ".bin";
-      if (media_type == MediaType::AUDIO)
-      {
-        ext = ".audio";
-      }
-      else if (media_type == MediaType::IMAGE)
-      {
-        ext = ".img";
-      }
-
-      std::string file_name = hash_xxhash + ext;
-      std::filesystem::path full_path = std::filesystem::path(m_dbConfig.m_cacheDirPath) / file_name;
-      absolute_path = full_path.string();
-      std::ofstream out_file(absolute_path, std::ios::binary);
-
-      if (!out_file.is_open())
-      {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to open file for writing: {}", absolute_path);
-        return false;
-      }
-
-      out_file.write(reinterpret_cast<const char*>(item.m_data.data()), item.m_data.size());
-      out_file.close();
-
-      SQLite::Statement insert_cache(
-          *m_db, "INSERT INTO media_cache (id, hash_xxhash, mime_type, absolute_path, file_name) VALUES (?, "
-                 "?, ?, ?, ?)");
-      insert_cache.bind(1, "mc_" + hash_xxhash);
-      insert_cache.bind(2, hash_xxhash);
-      insert_cache.bind(3, item.m_mimeType);
-      insert_cache.bind(4, absolute_path);
-      insert_cache.bind(5, file_name);
-      insert_cache.exec();
-    }
-
-    // Convert to FILE type and replace data with absolute path
-    item.m_type = InputItemType::FILE_PATH;
-    item.m_data.clear();
-    item.m_data.insert(item.m_data.end(), absolute_path.begin(), absolute_path.end());
-  }
-
-  return true;
-}
-
 bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages)
 {
   try
@@ -759,30 +784,37 @@ bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
                  "VALUES (:chat_id, :role, :content, jsonb(:message_metadata), "
                  "COALESCE((SELECT MAX(sequence_index) + 1 FROM chat_messages WHERE chat_id = :chat_id), 0))");
 
-      // IMPORTANT: This function must always receive the original (true) data types like
-      // AUDIO_FILE or IMAGE_BUFFER from the user prompt rather than internal decoded data
-      // (like AUDIO_PCM). The deduplication and caching mechanisms rely on the raw/compressed
-      // data formats to work efficiently.
+      // this fn is given messages where message content items are coming from db's store_media_items
 
-      for (auto msg : messages)
+      for (const auto& msg : messages)
       {
-        for (auto& item : msg.m_contentItems)
+
+        for (const auto& item : msg.m_contentItems)
         {
-          if (!process_and_cache_media_item(item))
+          MediaType media_type = item.get_media_type();
+
+          if (media_type == MediaType::TEXT && item.m_type != InputItemType::MEMORY_BUFFER)
           {
-            ODAI_LOG(ODAI_LOG_ERROR, "Failed to process and cache media item");
+            ODAI_LOG(ODAI_LOG_ERROR, "Text should only be passed as memory buffer");
             return false;
           }
-        }
 
-        insert_message.bind(":chat_id", chat_id);
-        insert_message.bind(":role", msg.m_role);
-        json content_json = msg.m_contentItems;
-        insert_message.bind(":content", content_json.dump());
-        insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
-        insert_message.exec();
-        insert_message.reset(); // Reset for next iteration
-        insert_message.clearBindings();
+          if ((media_type == MediaType::AUDIO || media_type == MediaType::IMAGE) &&
+              (item.m_type != InputItemType::FILE_PATH))
+          {
+            ODAI_LOG(ODAI_LOG_ERROR, "Media items should only be passed as file paths");
+            return false;
+          }
+
+          insert_message.bind(":chat_id", chat_id);
+          insert_message.bind(":role", msg.m_role);
+          json content_json = msg.m_contentItems;
+          insert_message.bind(":content", content_json.dump());
+          insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
+          insert_message.exec();
+          insert_message.reset(); // Reset for next iteration
+          insert_message.clearBindings();
+        }
       }
 
       commit_transaction();
