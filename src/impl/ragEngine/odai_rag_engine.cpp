@@ -2,10 +2,6 @@
 #include "types/odai_types.h"
 #include <vector>
 
-#ifdef ODAI_ENABLE_MINIAUDIO
-#include "audioEngine/odai_miniaudio_decoder.h"
-#endif
-
 #include "backendEngine/odai_backend_engine.h"
 
 #ifdef ODAI_ENABLE_LLAMA_BACKEND
@@ -20,7 +16,6 @@
 #include "types/odai_common_types.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_helpers.h"
-#include <cstring>
 #include <stdexcept>
 
 OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config)
@@ -38,13 +33,6 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
   {
     throw std::runtime_error("Failed to initialize db in RAG engine");
   }
-
-#ifdef ODAI_ENABLE_MINIAUDIO
-  m_audioDecoder = std::make_unique<OdaiMiniAudioDecoder>();
-  ODAI_LOG(ODAI_LOG_INFO, "OdaiMiniAudioDecoder initialized in RAG engine");
-#else
-  throw std::runtime_error("MiniAudio support not enabled");
-#endif
 
   if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
   {
@@ -178,11 +166,6 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
   }
 
   const vector<InputItem>& processed_prompt = prompt;
-  // if (!this->process_multimodal_inputs(processed_prompt, llm_model_config, model_files))
-  // {
-  //   ODAI_LOG(ODAI_LOG_ERROR, "Failed to load multimodal inputs");
-  //   return -1;
-  // }
 
   return m_backendEngine->generate_streaming_response(processed_prompt, llm_model_config, model_files, sampler_config,
                                                       callback, user_data);
@@ -346,58 +329,6 @@ bool OdaiRagEngine::resolve_model_files(const ModelName& model_name, ModelFiles&
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Model not found in registry: {}", model_name);
     return false;
-  }
-
-  return true;
-}
-
-bool OdaiRagEngine::process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config,
-                                              const ModelFiles& model_files)
-{
-  std::optional<OdaiAudioTargetSpec> audio_spec_opt =
-      m_backendEngine->get_required_audio_spec(llm_model_config, model_files);
-
-  for (auto& item : prompt_out)
-  {
-
-    MediaType media_type = item.get_media_type();
-
-    if (media_type == MediaType::TEXT)
-    {
-      // no special processing needed for text
-    }
-    else if (media_type == MediaType::AUDIO)
-    {
-      if (audio_spec_opt.has_value())
-      {
-        if (!m_audioDecoder)
-        {
-          ODAI_LOG(ODAI_LOG_ERROR, "Target model expects audio but OdaiAudioDecoder is not available");
-          return false;
-        }
-
-        OdaiDecodedAudio decoded_audio;
-        bool decode_success = m_audioDecoder->decode_to_spec(item, audio_spec_opt.value(), decoded_audio);
-
-        if (!decode_success)
-        {
-          ODAI_LOG(ODAI_LOG_ERROR, "Failed to decode input audio item");
-          return false;
-        }
-
-        // Convert float array to uint8_t byte array for transport
-        size_t byte_size = decoded_audio.m_samples.size() * sizeof(float);
-        std::vector<uint8_t> pcm_bytes(byte_size);
-        std::memcpy(pcm_bytes.data(), decoded_audio.m_samples.data(), byte_size);
-
-        item.m_data = std::move(pcm_bytes);
-      }
-      else
-      {
-        ODAI_LOG(ODAI_LOG_ERROR, "Input contains audio but backend model does not support it.");
-        return false;
-      }
-    }
   }
 
   return true;

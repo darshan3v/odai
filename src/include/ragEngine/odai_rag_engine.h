@@ -111,17 +111,6 @@ private:
   /// @return true if found, false otherwise.
   bool resolve_model_files(const ModelName& model_name, ModelFiles& model_file_details);
 
-  /// Helper to process multimodal inputs and decode/load files into memory buffer
-  /// before sending them to the inference engine. This mutates the input items,
-  /// converting formats like AUDIO_FILE into an internal processed data format.
-  /// Thus, the returned / mutated prompt contains decoded/processed data meant exclusively
-  /// for the backend engine and should NOT be persisted to the database.
-  /// @param prompt Items to process.
-  /// @param llm_model_config The target LlmModelConfig used.
-  bool process_multimodal_inputs(vector<InputItem>& prompt_out, const LLMModelConfig& llm_model_config,
-                                 const ModelFiles& model_files);
-
   std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<IOdaiBackendEngine> m_backendEngine;
-  std::unique_ptr<IOdaiAudioDecoder> m_audioDecoder;
 };

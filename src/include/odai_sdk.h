@@ -142,6 +142,10 @@ private:
 
 public:
   OdaiLogger* get_logger() { return m_logger.get(); }
+
+  /// @return returns a new AudioDecoder instance that the library was built with, if it was built with none then
+  /// returns nullptr
+  static std::unique_ptr<IOdaiAudioDecoder> get_new_odai_audio_decoder_instance();
 };
 
 #define ODAI_LOG(level, fmt, ...)                                                                                      \

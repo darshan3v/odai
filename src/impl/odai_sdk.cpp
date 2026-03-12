@@ -1,4 +1,5 @@
 #include "odai_sdk.h"
+#include "audioEngine/odai_miniaudio_decoder.h"
 #include "ragEngine/odai_rag_engine.h"
 
 #include "types/odai_common_types.h"
@@ -13,6 +14,15 @@ OdaiSdk& OdaiSdk::get_instance()
 {
   static OdaiSdk instance;
   return instance;
+}
+
+std::unique_ptr<IOdaiAudioDecoder> get_new_odai_audio_decoder_instance()
+{
+#ifdef ODAI_ENABLE_MINIAUDIO
+  return make_unique<OdaiMiniAudioDecoder>();
+#else
+  return nullptr;
+#endif
 }
 
 OdaiSdk::OdaiSdk()
