@@ -238,8 +238,6 @@ if(ODAI_ENABLE_MINIAUDIO)
     # Miniaudio is header only, no target linking needed
     target_compile_definitions(odai PRIVATE ODAI_ENABLE_MINIAUDIO)
 
-    target_compile_definitions(odai PRIVATE MINIAUDIO_IMPLEMENTATION)
-
     target_compile_definitions(odai PRIVATE MA_NO_VORBIS)
     target_compile_definitions(odai PRIVATE MA_NO_OPUS)
     target_compile_definitions(odai PRIVATE MA_NO_DEVICE_IO)

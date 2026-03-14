@@ -81,12 +81,6 @@ public:
   /// @return true if initialization succeeded, false otherwise
   bool initialize_engine() override;
 
-  /// Returns the required audio specification for the given GGUF model.
-  /// @param config The LLM model configuration to check requirements for.
-  /// @param files The associated model files containing text model and multimodal projectors.
-  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config,
-                                                             const ModelFiles& files) override;
-
   /// Validates the model files specifically for the llama.cpp backend engine.
   /// Ensures that the engine type is LLAMA_BACKEND_ENGINE.
   /// For LLM models, expects at most 2 entries: a mandatory 'base_model_path' and an optional 'mmproj_model_path', both
@@ -114,12 +108,15 @@ public:
   /// @note The engine expects the input media items in the prompt to be of type File Path, and text as Memory Buffer
   /// @param prompt The input query/message to generate a response for
   /// @param chat_history chat_history of the chat
+  /// @param llm_model_config The LLM model configuration to use for generation
+  /// @param model_files The model files to use for generation
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
   int32_t generate_streaming_chat_response(const vector<InputItem>& prompt, const vector<ChatMessage>& chat_history,
+                                           const LLMModelConfig& llm_model_config, const ModelFiles& model_files,
                                            const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data) override;
 
@@ -142,6 +139,8 @@ private:
   // so no need of unique_ptr
   const llama_vocab* m_llmVocab = nullptr;
 
+  unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
   /// @param key The entry key to validate (e.g., "base_model_path")
@@ -157,14 +156,10 @@ private:
   bool does_model_support_input_data(const vector<InputItem>& input_items, const LLMModelConfig& llm_model_config,
                                      const ModelFiles& model_files);
 
-  /// Helper to load mtmd context from the multimodal projector file specifically for gathering info.
-  /// This disables GPU use, timings, and warmup to perform a fast, lightweight load
-  /// strictly for querying supported media types or bitrates (not for inference).
-  /// @param mmproj_path Path to the multimodal projector file
-  /// @param model pointer to the llama model
-  /// @return Unique pointer to the mtmd context
-  static unique_ptr<mtmd_context, MtmdContextDeleter> load_mmproj_for_info(const string& mmproj_path,
-                                                                           llama_model* model);
+  /// Returns the required audio specification for the given GGUF model.
+  /// @param config The LLM model configuration to check requirements for.
+  /// @param files The associated model files containing text model and multimodal projectors.
+  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config, const ModelFiles& files);
 
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
@@ -243,6 +238,17 @@ private:
   static bool load_into_context(llama_context& model_context, const vector<llama_token>& tokens, uint32_t& next_pos,
                                 bool request_logits_for_last_token);
 
+  /// Loads the given prompt string and its accompanying mtmd bitmaps into the provided llama context.
+  /// Handles chunking logic with mtmd internally if there are multimodal bitmaps.
+  /// @param model_context Language Model context
+  /// @param prompt The prompt string to load
+  /// @param bitmaps The vector of extracted mtmd bitmaps
+  /// @param next_pos This will be updated to the indicate next position after loading
+  /// @param request_logits_for_last_token Whether to request logits for the last token
+  /// @return true if loading succeeded, false otherwise
+  bool load_into_context(llama_context& model_context, const string& prompt, const vector<mtmd::bitmap>& bitmaps,
+                         uint32_t& next_pos, bool request_logits_for_last_token);
+
   /// Helper function that performs the common logic for loading tokens into
   /// context.
   /// @param model_context Language Model context to load tokens into
@@ -287,8 +293,14 @@ private:
   /// @param messages Vector of chat messages to format
   /// @param add_generation_prompt Whether to add generation prompt (set to true
   /// when expecting model response)
-  /// @return Formatted prompt string, or empty string on error
-  string format_chat_messages_to_prompt(const vector<ChatMessage>& messages, bool add_generation_prompt);
+  /// @return Formatted prompt string.
+  string format_chat_messages_to_prompt(const vector<std::pair<string, string>>& messages, bool add_generation_prompt);
+
+  /// Processes input items to extract formatted text and multimodal bitmaps.
+  /// @todo Replace current mtmd image decoding logic with our custom internal image decoder
+  /// @param items The input items to process
+  /// @return A pair containing the formatted text string and extracted mtmd bitmaps, or nullopt on failure.
+  std::optional<std::pair<string, vector<mtmd::bitmap>>> process_input_items(const vector<InputItem>& items);
 
   /// Core implementation of streaming response generation that handles token
   /// generation and buffering. Takes an already-initialized context and sampler
@@ -303,7 +315,8 @@ private:
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
   int32_t generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler, const string& prompt,
-                                           OdaiStreamRespCallbackFn callback, void* user_data);
+                                           const vector<mtmd::bitmap>& bitmaps, OdaiStreamRespCallbackFn callback,
+                                           void* user_data);
 };
 
 #endif // ODAI_ENABLE_LLAMA_BACKEND

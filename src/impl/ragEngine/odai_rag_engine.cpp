@@ -277,7 +277,8 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
 
   // Generate streaming response with internal buffering callback
   int32_t total_tokens = m_backendEngine->generate_streaming_chat_response(
-      final_prompt, chat_history, generator_config.m_samplerConfig, internal_callback, &buffer_ctx);
+      final_prompt, chat_history, chat_config.m_llmModelConfig, model_files, generator_config.m_samplerConfig,
+      internal_callback, &buffer_ctx);
 
   if (total_tokens < 0)
   {

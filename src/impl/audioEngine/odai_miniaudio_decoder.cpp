@@ -1,8 +1,17 @@
-#include "audioEngine/odai_miniaudio_decoder.h"
-#include "miniaudio.h"
 #include "odai_sdk.h"
 #include "types/odai_type_conversions.h"
 #include "utils/string_utils.h"
+
+#include "audioEngine/odai_miniaudio_decoder.h"
+
+#define MINIAUDIO_IMPLEMENTATION
+// This forces ALL miniaudio functions and global variables to be 'static'
+// (internal to this specific C++ file). It completely hides them from the linker.
+#define MA_API static
+// The hack to hide the leaky global variable that miniaudio forgot to prefix
+#define MA_ATOMIC_GLOBAL_LOCK odai_ma_atomic_global_lock
+#include "miniaudio.h"
+#undef MA_API
 
 // Helper function to handle reading from either an initialized from-file or from-memory decoder
 static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded_audio)

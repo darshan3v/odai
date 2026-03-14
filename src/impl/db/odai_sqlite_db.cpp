@@ -376,6 +376,7 @@ bool OdaiSqliteDb::store_media_item_impl(const InputItem& item, const string& ch
     insert.bind(":file_name", file_name);
     insert.exec();
 
+    item_out.m_mimeType = item.m_mimeType;
     item_out.m_type = InputItemType::FILE_PATH;
     item_out.m_data = vector<uint8_t>(file_path.begin(), file_path.end());
 
@@ -425,14 +426,16 @@ bool OdaiSqliteDb::store_media_item(const InputItem& item, InputItem& item_out)
       }
 
       // check in db if we already have a mapping for this checksum, if yes return that path instead of storing again
-      SQLite::Statement query(*m_db, "SELECT file_path FROM media_cache WHERE checksum = :checksum LIMIT 1");
-      query.bind(":checksum", checksum);
+      SQLite::Statement query(
+          *m_db, "SELECT mime_type, absolute_path FROM media_cache WHERE hash_xxhash = :hash_xxhash LIMIT 1");
+      query.bind(":hash_xxhash", checksum);
 
       if (query.executeStep())
       {
+        string abs_path = query.getColumn("absolute_path").getString();
         item_out.m_type = InputItemType::FILE_PATH;
-        item_out.m_data = vector<uint8_t>(query.getColumn("file_path").getString().begin(),
-                                          query.getColumn("file_path").getString().end());
+        item_out.m_data = vector<uint8_t>(abs_path.begin(), abs_path.end());
+        item_out.m_mimeType = query.getColumn("mime_type").getString();
         return true;
       }
 

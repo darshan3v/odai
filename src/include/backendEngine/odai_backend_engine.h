@@ -29,13 +29,6 @@ public:
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_engine() = 0;
 
-  /// Returns the required audio specification for a specific language model.
-  /// @param config The LLM model configuration to check requirements for.
-  /// @param files The associated model files containing text model and multimodal projectors.
-  /// @return The required audio spec if the model supports processing audio, std::nullopt otherwise.
-  virtual std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config,
-                                                                     const ModelFiles& files) = 0;
-
   /// Validates the given model registration paths for this specific backend engine.
   /// @note Implementations should document the expected model files in this function's documentation.
   /// @param files The generic model paths to validate.
@@ -61,13 +54,16 @@ public:
   /// @note The engine expects the input media items in the prompt to be of type File Path, and text as Memory Buffer
   /// @param prompt The input query/message to generate a response for
   /// @param chat_history chat_history of the chat
+  /// @param llm_model_config The LLM model configuration to use for generation
+  /// @param model_files The model files to use for generation
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on error
   virtual int32_t generate_streaming_chat_response(const vector<InputItem>& prompt,
                                                    const vector<ChatMessage>& chat_history,
-                                                   const SamplerConfig& sampler_config,
+                                                   const LLMModelConfig& llm_model_config,
+                                                   const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                                    OdaiStreamRespCallbackFn callback, void* user_data) = 0;
 
   virtual ~IOdaiBackendEngine() = default;

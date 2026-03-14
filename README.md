@@ -92,6 +92,7 @@ cmake --build --preset android-arm64-release
 -   ✅ **Chat**: Stateful chat sessions with history persistence and system prompts.
 -   ✅ **RAG Core**: Vector store basis, semantic search, and context retrieval.
 -   ✅ **Data Isolation**: Semantic Spaces and Scoping are functional.
+-   ✅ **Multi-Modal Support**: Support for image and audio inputs using the experimental `mtmd` backend API.
 
 ### Limitations (Work in Progress)
 -   ❌ **Document Ingestion**: Logic for parsing files (PDF, raw text) and chunking them is **not yet implemented**.
@@ -105,11 +106,7 @@ cmake --build --preset android-arm64-release
 2.  **Task-Based RAG**:
     -   Simplify RAG for developers. Instead of manual configuration, developers will provide a `TaskType`, and the SDK will automatically determine the optimal Chunking, Parsing, Retrieval, and Generation strategies.
 
-3.  **Multi-Modal Support**:
-    -   **Vision API**: Support for image inputs (e.g., LLaVA, BakLLaVA).
-    -   **Voice API**: Audio transcription (Whisper) and TTS integration.
-
-4.  **Structured Output & Tool Calling**:
+3.  **Structured Output & Tool Calling**:
     -   Force the LLM to output valid JSON matching a schema.
     -   Enable the model to "call" external tools defined by the developer.
 

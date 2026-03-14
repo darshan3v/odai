@@ -16,7 +16,7 @@ OdaiSdk& OdaiSdk::get_instance()
   return instance;
 }
 
-std::unique_ptr<IOdaiAudioDecoder> get_new_odai_audio_decoder_instance()
+std::unique_ptr<IOdaiAudioDecoder> OdaiSdk::get_new_odai_audio_decoder_instance()
 {
 #ifdef ODAI_ENABLE_MINIAUDIO
   return make_unique<OdaiMiniAudioDecoder>();
