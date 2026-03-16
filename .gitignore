@@ -4,8 +4,6 @@ out/
 *.gguf
 compile_commands.json
 main
-main.cpp
 odai_jni.cpp
 *.log
 *.db
-ToDo.md
