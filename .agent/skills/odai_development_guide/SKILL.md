@@ -254,3 +254,21 @@ Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 - **`lint.sh`** - Enforce naming conventions using clang-tidy (`lint.sh [OPTIONS]`)
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
+## 8. Header Management
+
+To maintain a clean and build-efficient codebase, follow these rules for managing header dependencies and avoiding circular includes.
+
+### 8.1 Prefer Forward Declarations
+Whenever a header file only needs to know that a class exists (e.g., for pointers, references, or `std::unique_ptr`), use a forward declaration instead of including the full header.
+
+```cpp
+class IOdaiDb; // Correct: Forward declaration
+```
+
+### 8.2 Minimize Include Surface
+- Only include what is strictly necessary for the header to compile independently.
+- Move feature-specific includes to the `.cpp` file.
+- Use the Pimpl pattern or abstract interfaces for complex internal components.
+
+### 8.3 Macro/Singleton Decoupling
+Avoid direct dependencies on the singleton `OdaiSdk` inside macros or common headers. Use bridge functions (like `GetOdaiLogger()`) declared in low-level headers and implemented in the SDK layer to provide access to global services.

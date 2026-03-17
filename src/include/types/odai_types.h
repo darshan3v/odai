@@ -9,34 +9,33 @@
 #include <unordered_map>
 #include <variant>
 
-using namespace std;
-using namespace nlohmann;
+// typedefs and enums
 
 /// Strong type for chat session identifiers.
 /// Provides type safety for chat session IDs.
-typedef string ChatId;
+typedef std::string ChatId;
 
 /// Strong type for document identifiers.
 /// Provides type safety for document IDs.
-typedef string DocumentId;
+typedef std::string DocumentId;
 
 /// Strong type for scope identifiers (used for RAG context grouping).
 /// Provides type safety for scope IDs.
-typedef string ScopeId;
+typedef std::string ScopeId;
 
 /// Strong type for semantic space names.
-typedef string SemanticSpaceName;
+typedef std::string SemanticSpaceName;
 
 /// Strong type for model names.
-typedef string ModelName;
+typedef std::string ModelName;
 
-enum ModelType
+enum ModelType : std::uint8_t
 {
-  EMBEDDING,
-  LLM
+  EMBEDDING = 0,
+  LLM = 1
 };
 
-enum UpdateModelFlag
+enum UpdateModelFlag : std::uint8_t
 {
   STRICT_MATCH = ODAI_UPDATE_STRICT_MATCH,
   ALLOW_MISMATCH = ODAI_UPDATE_ALLOW_MISMATCH
@@ -54,6 +53,23 @@ struct OdaiDecodedAudio
 {
   std::vector<float> m_samples;
   uint32_t m_sampleRate{};
+  uint8_t m_channels{};
+};
+
+/// Specifies the desired output format for the decoded image.
+struct OdaiImageTargetSpec
+{
+  uint32_t m_maxWidth{};  // Maximum allowed width (0 to keep original)
+  uint32_t m_maxHeight{}; // Maximum allowed height (0 to keep original)
+  uint8_t m_channels{};   // Desired number of channels (e.g., 3 for RGB, 4 for RGBA, 0 to keep original)
+};
+
+/// Holds the raw pixel data and metadata after decoding an image.
+struct OdaiDecodedImage
+{
+  std::vector<uint8_t> m_pixels;
+  uint32_t m_width{};
+  uint32_t m_height{};
   uint8_t m_channels{};
 };
 
@@ -122,10 +138,10 @@ struct DBConfig
   /// Path to the database file (for SQLite) or connection string (for other
   /// backends in future). Must be a full file system path for SQLite. Content URIs (e.g.,
   /// Android content:// URIs) are not supported.
-  string m_dbPath;
+  std::string m_dbPath;
 
   /// Global absolute path where DB should store media files (e.g. images/audio).
-  string m_mediaStorePath;
+  std::string m_mediaStorePath;
 
   bool is_sane() const
   {
@@ -399,7 +415,7 @@ struct ChatConfig
   /// Whether chat messages should be persisted to the database
   bool m_persistence{};
   /// System prompt that defines the assistant's behavior and instructions
-  string m_systemPrompt;
+  std::string m_systemPrompt;
   /// Configuration for the language model used in this chat session
   LLMModelConfig m_llmModelConfig;
 
@@ -423,11 +439,11 @@ struct ChatConfig
 struct ChatMessage
 {
   /// Role of the message sender ('user', 'assistant', or 'system')
-  string m_role;
+  std::string m_role;
   /// The message content items that is the prompt (with / without media items in order)
-  vector<InputItem> m_contentItems;
+  std::vector<InputItem> m_contentItems;
   /// JSON object for additional metadata (citations, context, etc.)
-  json m_messageMetadata;
+  nlohmann::json m_messageMetadata;
   /// Unix timestamp when the message was created
   uint64_t m_createdAt{};
 
@@ -456,7 +472,7 @@ struct ChatMessage
 
 struct StreamingBufferContext
 {
-  string m_bufferedResponse;
+  std::string m_bufferedResponse;
   OdaiStreamRespCallbackFn m_userCallback{};
   void* m_userData{};
 };

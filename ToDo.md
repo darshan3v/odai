@@ -44,6 +44,7 @@
 - [ ] Understand why android builds are resulting in large binary
 - [ ] Build llama.cpp with CUDA for linux and OpenCL for adreno for Android
 - [ ] Build llama.cpp with extra available optimization like dotprod etc.., but think on how to build and distribute
+- [ ] Have to make Pre-commit hook with clang efficient runnig scripts/lint.sh on all files is too much intensive
 
 
 ### Android / Mobile
@@ -53,3 +54,8 @@
 - [ ] Test if JNI Logging support is working
 - [ ] May be makes sense to use some KMP Logging library
 - [ ] After Library gets mature, think about thread safety in logging
+
+
+### ToDo
+- [ ] Reduce header dependency
+- [ ] enforce no using namespace by using clang

@@ -4,8 +4,7 @@
 #include "types/odai_ctypes.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_csanitizers.h"
-
-using namespace std;
+#include <cstdint>
 
 void odai_set_logger(OdaiLogCallbackFn callback, void* user_data)
 {
@@ -101,7 +100,7 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spa
     return false;
   }
 
-  vector<SemanticSpaceConfig> spaces;
+  std::vector<SemanticSpaceConfig> spaces;
   if (!OdaiSdk::get_instance().list_semantic_spaces(spaces))
   {
     *spaces_out = nullptr;
@@ -162,7 +161,7 @@ bool odai_delete_semantic_space(const c_SemanticSpaceName name)
     ODAI_LOG(ODAI_LOG_ERROR, "invalid space name passed");
     return false;
   }
-  return OdaiSdk::get_instance().delete_semantic_space(string(name));
+  return OdaiSdk::get_instance().delete_semantic_space(std::string(name));
 }
 
 bool odai_add_document(const char* content, const c_DocumentId document_id,
@@ -174,7 +173,7 @@ bool odai_add_document(const char* content, const c_DocumentId document_id,
     return false;
   }
 
-  return OdaiSdk::get_instance().add_document(string(content), DocumentId(document_id),
+  return OdaiSdk::get_instance().add_document(std::string(content), DocumentId(document_id),
                                               SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
 }
 
@@ -201,7 +200,7 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
     return -1;
   }
 
-  vector<InputItem> prompt_items;
+  std::vector<InputItem> prompt_items;
   for (size_t i = 0; i < prompt_items_count; ++i)
   {
     if (!is_sane(&c_prompt_items[i]))
@@ -275,7 +274,7 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
     return false;
   }
 
-  vector<ChatMessage> messages;
+  std::vector<ChatMessage> messages;
   if (!OdaiSdk::get_instance().get_chat_history(ChatId(c_chat_id), messages))
   {
     *c_messages_out = nullptr;
@@ -330,35 +329,35 @@ void odai_free_chat_messages(c_ChatMessage* c_messages, uint16_t count)
   }
 }
 
-bool odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
-                                           uint16_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
-                                           OdaiStreamRespCallbackFn callback, void* user_data)
+int32_t odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
+                                              uint16_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
+                                              OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (c_chat_id == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid chat_id passed");
-    return false;
+    return -1;
   }
 
   if (c_prompt_items == nullptr || prompt_items_count == 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid query passed");
-    return false;
+    return -1;
   }
 
   if (!is_sane(c_generator_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid generator config passed");
-    return false;
+    return -1;
   }
 
-  vector<InputItem> prompt_items;
+  std::vector<InputItem> prompt_items;
   for (size_t i = 0; i < prompt_items_count; ++i)
   {
     if (!is_sane(&c_prompt_items[i]))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid input item at index {}", i);
-      return false;
+      return -1;
     }
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }

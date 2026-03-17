@@ -124,8 +124,8 @@ NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(LLMModelConfig, m_modelName)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(EmbeddingModelConfig, m_modelName)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(FixedSizeChunkingConfig, m_chunkSize, m_chunkOverlap)
 
-void to_json(json& j, const ChunkingConfig& p);
-void from_json(const json& j, ChunkingConfig& p);
+void to_json(nlohmann::json& j, const ChunkingConfig& p);
+void from_json(const nlohmann::json& j, ChunkingConfig& p);
 
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(InputItem, m_type, m_data, m_mimeType)
 NLOHMANN_DEFINE_TYPE_NON_INTRUSIVE(SemanticSpaceConfig, m_name, m_embeddingModelConfig, m_chunkingConfig, m_dimensions)

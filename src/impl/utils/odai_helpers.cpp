@@ -8,17 +8,15 @@
 #include "xxhash.h"
 #include <nlohmann/json.hpp>
 
-using namespace std;
-
 ChatId generate_chat_id()
 {
   // Simple random ID generation
-  return string("chat_") + to_string(rand()) + "_" + "t" + to_string(time(nullptr));
+  return std::string("chat_") + std::to_string(rand()) + "_" + "t" + std::to_string(time(nullptr));
 }
 
-string calculate_file_checksum(const string& path)
+std::string calculate_file_checksum(const std::string& path)
 {
-  ifstream file(path, ios::binary);
+  std::ifstream file(path, std::ios::binary);
   if (!file.is_open())
   {
     return "";
@@ -34,7 +32,7 @@ string calculate_file_checksum(const string& path)
   XXH3_64bits_reset(state);
 
   const uint32_t buffer_size = static_cast<const uint32_t>(64 * 1024); // 64KB buffer
-  vector<char> buffer(buffer_size);
+  std::vector<char> buffer(buffer_size);
 
   while (file.read(buffer.data(), buffer_size))
   {
@@ -46,12 +44,12 @@ string calculate_file_checksum(const string& path)
   XXH64_hash_t hash = XXH3_64bits_digest(state);
   XXH3_freeState(state);
 
-  stringstream ss;
-  ss << hex << setw(16) << setfill('0') << hash;
+  std::stringstream ss;
+  ss << std::hex << std::setw(16) << std::setfill('0') << hash;
   return ss.str();
 }
 
-string calculate_data_checksum(const vector<uint8_t>& data)
+std::string calculate_data_checksum(const std::vector<uint8_t>& data)
 {
   if (data.empty())
   {
@@ -60,17 +58,17 @@ string calculate_data_checksum(const vector<uint8_t>& data)
 
   XXH64_hash_t hash = XXH3_64bits(data.data(), data.size());
 
-  stringstream ss;
-  ss << hex << setw(16) << setfill('0') << hash;
+  std::stringstream ss;
+  ss << std::hex << std::setw(16) << std::setfill('0') << hash;
   return ss.str();
 }
 
-string calculate_model_checksums(const ModelFiles& files)
+std::string calculate_model_checksums(const ModelFiles& files)
 {
   nlohmann::json checksums_json;
   for (const auto& [key, path] : files.m_entries)
   {
-    string checksum = calculate_file_checksum(path);
+    std::string checksum = calculate_file_checksum(path);
     if (!checksum.empty())
     {
       checksums_json[key] = checksum;

@@ -4,16 +4,16 @@
 
 #include "utils/string_utils.h"
 
-string to_lower(const string& str)
+std::string to_lower(const std::string& str)
 {
-  string lower_str = str;
+  std::string lower_str = str;
   std::transform(lower_str.begin(), lower_str.end(), lower_str.begin(),
                  [](unsigned char chr) { return std::tolower(chr); });
   return lower_str;
 }
 
 // Helper: Returns the length of the string that is safe to send as valid UTF-8
-size_t get_safe_utf8_length(const string& buffer)
+size_t get_safe_utf8_length(const std::string& buffer)
 {
   size_t len = buffer.size();
   if (len == 0)

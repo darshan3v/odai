@@ -5,8 +5,15 @@
 #include <vector>
 
 #include "odai_logger.h"
-#include "ragEngine/odai_rag_engine.h"
 #include "types/odai_types.h"
+
+// Forward declarations to reduce header dependency surface
+class IOdaiDb;
+class OdaiRagEngine;
+class IOdaiAudioDecoder;
+class IOdaiImageDecoder;
+struct DBConfig;
+struct BackendEngineConfig;
 
 /// C++ Entry point for ODAI SDK
 class OdaiSdk
@@ -70,12 +77,12 @@ public:
   /// Lists all available semantic spaces.
   /// @param spaces Output parameter to store list of space names.
   /// @return true if successful, false on error.
-  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces);
 
   /// Deletes a semantic space.
   /// @param name The name of the semantic space to delete.
   /// @return true if deleted successfully, false on error.
-  bool delete_semantic_space(const string& name);
+  bool delete_semantic_space(const std::string& name);
 
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// @param content The text content of the document to add
@@ -83,19 +90,19 @@ public:
   /// @param semanticSpaceName Name of the semantic space to use
   /// @param scopeId Scope identifier to group documents
   /// @return true if document was added successfully, false otherwise
-  bool add_document(const string& content, const DocumentId& document_id, const SemanticSpaceName& semantic_space_name,
-                    const ScopeId& scope_id) const;
+  bool add_document(const std::string& content, const DocumentId& document_id,
+                    const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const;
 
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG
   /// @param llmModelConfig The Language Model and its config to be used for
   /// response generation
-  /// @param query The input query/prompt
+  /// @param prompt The input query/prompt
   /// @param samplerConfig Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
   /// @return Total number of tokens generated, or -1 on error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
+  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const std::vector<InputItem>& prompt,
                                       const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                       void* user_data);
 
@@ -112,24 +119,22 @@ public:
   /// @param messages Output parameter: vector of ChatMessage
   /// @return true if messages retrieved successfully, false if chat_id doesn't
   /// exist or on error
-  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages);
+  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages);
 
   /// Generates a streaming chat response for the given query in the specified
   /// chat session. It will load  languagde model mentioned in chat config and
   /// load the chat history into context and then input the query and generate
   /// response
   /// @param chatId The unique identifier of the chat session
-  /// @param query The input query/message
+  /// @param prompt The input query/message
   /// @param generatorConfig Configuration for the generator (Sampler, RAG
   /// settings, etc.)
-  /// @param scopeId Scope identifier to filter documents during RAG retrieval
-  /// (ignored if RAG is disabled in config)
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
-  /// @return true if response was generated successfully, false on error
-  bool generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
-                                        const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
-                                        void* user_data);
+  /// @return Total number of tokens generated, or -1 on error
+  int32_t generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
+                                           const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
+                                           void* user_data);
 
 private:
   OdaiSdk();
@@ -146,8 +151,8 @@ public:
   /// @return returns a new AudioDecoder instance that the library was built with, if it was built with none then
   /// returns nullptr
   static std::unique_ptr<IOdaiAudioDecoder> get_new_odai_audio_decoder_instance();
-};
 
-#define ODAI_LOG(level, fmt, ...)                                                                                      \
-  if (auto logger = OdaiSdk::get_instance().get_logger())                                                              \
-  logger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+  /// @return returns a new ImageDecoder instance that the library was built with, if it was built with none then
+  /// returns nullptr
+  static std::unique_ptr<IOdaiImageDecoder> get_new_odai_image_decoder_instance();
+};

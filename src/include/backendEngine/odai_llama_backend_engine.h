@@ -7,7 +7,6 @@
 #include <llama.h>
 #include <memory>
 #include <mtmd.h>
-#include <unordered_map>
 #include <vector>
 
 struct LlamaModelDeleter
@@ -100,7 +99,7 @@ public:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response(const vector<InputItem>& prompt, const LLMModelConfig& llm_model_config,
+  int32_t generate_streaming_response(const std::vector<InputItem>& prompt, const LLMModelConfig& llm_model_config,
                                       const ModelFiles& model_files, const SamplerConfig& sampler_config,
                                       OdaiStreamRespCallbackFn callback, void* user_data) override;
 
@@ -115,7 +114,8 @@ public:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const vector<InputItem>& prompt, const vector<ChatMessage>& chat_history,
+  int32_t generate_streaming_chat_response(const std::vector<InputItem>& prompt,
+                                           const std::vector<ChatMessage>& chat_history,
                                            const LLMModelConfig& llm_model_config, const ModelFiles& model_files,
                                            const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data) override;
@@ -132,28 +132,28 @@ private:
   ModelFiles m_embeddingModelFiles;
   ModelFiles m_llmModelFiles;
 
-  unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
-  unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
+  std::unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
+  std::unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
 
   // managed automatically by llama.cpp
   // so no need of unique_ptr
   const llama_vocab* m_llmVocab = nullptr;
 
-  unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+  std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
   /// @param key The entry key to validate (e.g., "base_model_path")
   /// @param is_optional If true, the entry is not required. If present and not empty, it must be a valid file.
   /// @return true if the entry is valid or successfully omitted, false otherwise
-  static bool validate_model_file_entry(const unordered_map<string, string>& entries, const string& key,
-                                        bool is_optional);
+  static bool validate_model_file_entry(const std::unordered_map<std::string, std::string>& entries,
+                                        const std::string& key, bool is_optional);
 
   /// Checks if the given input data is valid / supported.
   /// @param input_items The input items to validate against the model capabilities.
   /// @param model_files The model files containing mmproj path.
   /// @return true if the data is valid, false otherwise
-  bool does_model_support_input_data(const vector<InputItem>& input_items, const LLMModelConfig& llm_model_config,
+  bool does_model_support_input_data(const std::vector<InputItem>& input_items, const LLMModelConfig& llm_model_config,
                                      const ModelFiles& model_files);
 
   /// Returns the required audio specification for the given GGUF model.
@@ -178,21 +178,21 @@ private:
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for
   /// @return Unique pointer to the context, or nullptr on error
-  unique_ptr<llama_context, LlamaContextDeleter> get_new_llama_context(ModelType model_type);
+  std::unique_ptr<llama_context, LlamaContextDeleter> get_new_llama_context(ModelType model_type);
 
   /// Creates a new sampler chain for language model generation.
   /// The sampler uses top-k, top-p, and greedy sampling strategies from the
   /// config.
   /// @param config Configuration for the sampler
   /// @return Unique pointer to the sampler, or nullptr on error
-  static unique_ptr<llama_sampler, LlamaSamplerDeleter> get_new_llm_llama_sampler(const SamplerConfig& config);
+  static std::unique_ptr<llama_sampler, LlamaSamplerDeleter> get_new_llm_llama_sampler(const SamplerConfig& config);
 
   /// Tokenizes an input string into llama tokens using the appropriate model.
   /// @param input The string to tokenize
   /// @param is_first Whether this is the first prompt
   /// @param model_type Type of model (LLM or EMBEDDING) to use for tokenization
   /// @return Vector of tokens, or empty vector on error
-  vector<llama_token> tokenize(const string& input, bool is_first, ModelType model_type);
+  std::vector<llama_token> tokenize(const std::string& input, bool is_first, ModelType model_type);
 
   /// Adds tokens to a llama batch for processing. we set the logits request for
   /// the last token.
@@ -203,13 +203,13 @@ private:
   /// @param seq_id Sequence ID to assign to the tokens
   /// @param set_logit_request_for_last_token Whether to request logits for the
   /// last token added
-  static void add_tokens_to_batch(const vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
+  static void add_tokens_to_batch(const std::vector<llama_token>& tokens, llama_batch& batch, uint32_t& start_pos,
                                   llama_seq_id seq_id, bool set_logit_request_for_last_token);
 
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize
   /// @return Detokenized string, or empty string on error
-  string detokenize(const vector<llama_token>& tokens);
+  std::string detokenize(const std::vector<llama_token>& tokens);
 
   /// Loads the given prompt into the provided llama context.
   /// If the context already has some other context (Eg: some message hisotry)
@@ -222,7 +222,7 @@ private:
   /// last token in the prompt, (do it if you are generating next token after
   /// this)
   /// @return true if loading succeeded, false otherwise
-  bool load_into_context(llama_context& model_context, const string& prompt, uint32_t& next_pos,
+  bool load_into_context(llama_context& model_context, const std::string& prompt, uint32_t& next_pos,
                          bool request_logits_for_last_token);
 
   /// Loads the given tokens into the provided llama context.
@@ -235,8 +235,8 @@ private:
   /// @param request_logits_for_last_token Whether to request logits for the
   /// last token, (do it if you are generating next token after this)
   /// @return true if loading succeeded, false otherwise
-  static bool load_into_context(llama_context& model_context, const vector<llama_token>& tokens, uint32_t& next_pos,
-                                bool request_logits_for_last_token);
+  static bool load_into_context(llama_context& model_context, const std::vector<llama_token>& tokens,
+                                uint32_t& next_pos, bool request_logits_for_last_token);
 
   /// Loads the given prompt string and its accompanying mtmd bitmaps into the provided llama context.
   /// Handles chunking logic with mtmd internally if there are multimodal bitmaps.
@@ -246,8 +246,9 @@ private:
   /// @param next_pos This will be updated to the indicate next position after loading
   /// @param request_logits_for_last_token Whether to request logits for the last token
   /// @return true if loading succeeded, false otherwise
-  bool load_into_context(llama_context& model_context, const string& prompt, const vector<mtmd::bitmap>& bitmaps,
-                         uint32_t& next_pos, bool request_logits_for_last_token);
+  bool load_into_context(llama_context& model_context, const std::string& prompt,
+                         const std::vector<mtmd::bitmap>& bitmaps, uint32_t& next_pos,
+                         bool request_logits_for_last_token);
 
   /// Helper function that performs the common logic for loading tokens into
   /// context.
@@ -257,14 +258,15 @@ private:
   /// @param request_logits_for_last_token Whether to request logits for the
   /// last token
   /// @return true if loading succeeded, false otherwise
-  static bool load_tokens_into_context_impl(llama_context& model_context, const vector<llama_token>& tokens,
+  static bool load_tokens_into_context_impl(llama_context& model_context, const std::vector<llama_token>& tokens,
                                             uint32_t& next_pos, bool request_logits_for_last_token);
 
   /// Loads the provided sequence of chat messages into the model's context
   /// @param messages Vector of chat messages (in order) to load into the
   /// context
   /// @return true if the context was successfully loaded, false otherwise
-  unique_ptr<llama_context, LlamaContextDeleter> load_chat_messages_into_context(const vector<ChatMessage>& messages);
+  std::unique_ptr<llama_context, LlamaContextDeleter>
+  load_chat_messages_into_context(const std::vector<ChatMessage>& messages);
 
   /// Generates the next token using the provided llama context and sampler.
   /// @param model_context Language Model context (has KV cache of old tokens
@@ -285,7 +287,7 @@ private:
   /// @param output_buffer Accumulated output buffer (unsafe tail remains after
   /// return)
   /// @return Safe UTF-8 string that can be sent to client
-  string flush_utf8_safe_output(vector<llama_token>& buffered_tokens, string& output_buffer);
+  std::string flush_utf8_safe_output(std::vector<llama_token>& buffered_tokens, std::string& output_buffer);
 
   /// Formats a vector of chat messages into a single prompt string using the
   /// model's chat template. Uses llama_chat_apply_template to apply the model's
@@ -294,13 +296,15 @@ private:
   /// @param add_generation_prompt Whether to add generation prompt (set to true
   /// when expecting model response)
   /// @return Formatted prompt string.
-  string format_chat_messages_to_prompt(const vector<std::pair<string, string>>& messages, bool add_generation_prompt);
+  std::string format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
+                                             bool add_generation_prompt);
 
   /// Processes input items to extract formatted text and multimodal bitmaps.
   /// @todo Replace current mtmd image decoding logic with our custom internal image decoder
   /// @param items The input items to process
   /// @return A pair containing the formatted text string and extracted mtmd bitmaps, or nullopt on failure.
-  std::optional<std::pair<string, vector<mtmd::bitmap>>> process_input_items(const vector<InputItem>& items);
+  std::optional<std::pair<std::string, std::vector<mtmd::bitmap>>>
+  process_input_items(const std::vector<InputItem>& items);
 
   /// Core implementation of streaming response generation that handles token
   /// generation and buffering. Takes an already-initialized context and sampler
@@ -314,9 +318,9 @@ private:
   /// @param user_data User-provided data passed to the callback
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler, const string& prompt,
-                                           const vector<mtmd::bitmap>& bitmaps, OdaiStreamRespCallbackFn callback,
-                                           void* user_data);
+  int32_t generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
+                                           const std::string& prompt, const std::vector<mtmd::bitmap>& bitmaps,
+                                           OdaiStreamRespCallbackFn callback, void* user_data);
 };
 
 #endif // ODAI_ENABLE_LLAMA_BACKEND

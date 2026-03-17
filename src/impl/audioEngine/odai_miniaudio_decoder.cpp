@@ -1,4 +1,4 @@
-#include "odai_sdk.h"
+#include "odai_logger.h"
 #include "types/odai_type_conversions.h"
 #include "utils/string_utils.h"
 
@@ -8,9 +8,12 @@
 // This forces ALL miniaudio functions and global variables to be 'static'
 // (internal to this specific C++ file). It completely hides them from the linker.
 #define MA_API static
-// The hack to hide the leaky global variable that miniaudio forgot to prefix
-#define MA_ATOMIC_GLOBAL_LOCK odai_ma_atomic_global_lock
+#define ma_atomic_global_lock odai_ma_atomic_global_lock
+// The leaky global variable that miniaudio forgot to prefix ma_atomic_global_lock
+// The above solution is not the most beautiful way, we have to get upstream to fix it
+// ToDo -> We have to create a upstream request to fix it
 #include "miniaudio.h"
+#undef ma_atomic_global_lock
 #undef MA_API
 
 // Helper function to handle reading from either an initialized from-file or from-memory decoder
@@ -44,30 +47,16 @@ static bool read_pcm_from_decoder(ma_decoder& decoder, OdaiDecodedAudio& decoded
   return true;
 }
 
-bool OdaiMiniAudioDecoder::is_supported(const string& format)
+bool OdaiMiniAudioDecoder::is_supported(const std::string& format)
 {
-  string lower_format = to_lower(format);
+  std::string lower_format = to_lower(format);
 
-  return lower_format == "wav" || lower_format == "mp3" || lower_format == "flac";
+  return (lower_format == "wav" || lower_format == "mp3" || lower_format == "flac");
 }
 
-bool OdaiMiniAudioDecoder::decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
-                                          OdaiDecodedAudio& decoded_audio)
+bool OdaiMiniAudioDecoder::do_decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
+                                             OdaiDecodedAudio& decoded_audio)
 {
-
-  if (!input.is_sane())
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Input item is not sane for decoding");
-    return false;
-  }
-
-  MediaType media_type = input.get_media_type();
-
-  if (media_type != MediaType::AUDIO)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Input item is not an audio file");
-    return false;
-  }
 
   ma_decoder_config decoder_config =
       ma_decoder_config_init(ma_format_f32, target_spec.m_channels, target_spec.m_sampleRate);

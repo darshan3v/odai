@@ -1,15 +1,24 @@
 #pragma once
 
-#include <memory>
+#include "types/odai_types.h"
 #include <string>
 #include <vector>
 
 #include <nlohmann/json.hpp>
 
-#include "types/odai_types.h"
+// Forward declarations
+struct ModelFiles;
+struct InputItem;
+struct SemanticSpaceConfig;
+struct ChatConfig;
+struct ChatMessage;
 
-using namespace std;
-using namespace nlohmann;
+// Typedefs from odai_types.h (since we can't include it fully)
+typedef std::string ChatId;
+typedef std::string DocumentId;
+typedef std::string ScopeId;
+typedef std::string SemanticSpaceName;
+typedef std::string ModelName;
 
 /// Abstract interface for database backends managing RAG (Retrieval-Augmented Generation) chat sessions and messages.
 /// Provides functionality for managing chat sessions, storing chat messages with metadata, and more.
@@ -64,7 +73,7 @@ public:
   /// @param checksums_json The computed checksums for the files
   /// @return true if registration succeeded, false on error
   virtual bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                                    const string& checksums_json) = 0;
+                                    const std::string& checksums_json) = 0;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
@@ -76,7 +85,7 @@ public:
   /// @param name The name of the model to look up
   /// @param checksums Output parameter to store the model checksums
   /// @return true if model found, false if not found or on error
-  virtual bool get_model_checksums(const ModelName& name, string& checksums) = 0;
+  virtual bool get_model_checksums(const ModelName& name, std::string& checksums) = 0;
 
   /// Updates the details for an existing model record.
   /// @note The database layer expects `new_file_details` and `new_checksums` to contain the complete, comprehensive set
@@ -87,7 +96,7 @@ public:
   /// @param new_checksums The complete new computed checksums
   /// @return true if update succeeded, false on error
   virtual bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                                  const string& new_checksums) = 0;
+                                  const std::string& new_checksums) = 0;
 
   /// @brief stores a media item whererver it seems fit and store the mapping in database.
   /// for in memory text (that is media type text and inputitemtype memory buffer, we should set item_out and directly
@@ -112,7 +121,7 @@ public:
   /// Lists all available semantic spaces.
   /// @param spaces Output parameter to store list of space configs.
   /// @return true if successful, false on error.
-  virtual bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces) = 0;
+  virtual bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces) = 0;
 
   /// Deletes a semantic space.
   /// @param name The name of the semantic space to delete.
@@ -146,7 +155,7 @@ public:
   /// @param chat_id The chat identifier to retrieve messages for.
   /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.
-  virtual bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages) = 0;
+  virtual bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages) = 0;
 
   /// Inserts multiple chat messages into the database.
   ///
@@ -159,7 +168,7 @@ public:
   /// @param messages Vector of ChatMessage objects to insert. The objects' contents might be modified (e.g. data
   /// replaced by file paths).
   /// @return true if all messages inserted successfully, false on error.
-  virtual bool insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages) = 0;
+  virtual bool insert_chat_messages(const ChatId& chat_id, const std::vector<ChatMessage>& messages) = 0;
 
   /// Closes the database connection and releases resources.
   virtual void close() = 0;

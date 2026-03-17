@@ -148,10 +148,11 @@ extern "C"
   /// @param c_generator_config Configuration governing both RAG (if used) and generation sampling
   /// @param callback Function to be called for each generated text chunk
   /// @param user_data Opaque pointer passed back to the callback
-  /// @return true if generation starts successfully, false if chat not found or on error
-  bool odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
-                                             uint16_t prompt_items_count, const c_GeneratorConfig* c_generator_config,
-                                             OdaiStreamRespCallbackFn callback, void* user_data);
+  /// @return Total number of tokens generated, or -1 on error
+  int32_t odai_generate_streaming_chat_response(c_ChatId c_chat_id, const c_InputItem* c_prompt_items,
+                                                uint16_t prompt_items_count,
+                                                const c_GeneratorConfig* c_generator_config,
+                                                OdaiStreamRespCallbackFn callback, void* user_data);
 
 #ifdef __cplusplus
 }

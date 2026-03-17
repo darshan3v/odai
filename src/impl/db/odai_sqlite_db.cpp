@@ -12,11 +12,7 @@
 #include "xxhash.h"
 #include <fstream>
 
-using namespace nlohmann;
-
 // SQLiteCpp uses try catch handling heavily so we use them here a lot
-
-using namespace std;
 
 extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_api_routines* p_api);
 
@@ -77,7 +73,7 @@ bool OdaiSqliteDb::initialize_db()
     bool initialize_schema = false;
 
     // Check if DB file exists
-    if (!filesystem::exists(m_dbConfig.m_dbPath))
+    if (!std::filesystem::exists(m_dbConfig.m_dbPath))
     {
       initialize_schema = true;
       ODAI_LOG(ODAI_LOG_INFO, "Database file does not exist. It will be created at {}", m_dbConfig.m_dbPath);
@@ -198,7 +194,7 @@ bool OdaiSqliteDb::rollback_transaction()
 }
 
 bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                                        const string& checksums)
+                                        const std::string& checksums)
 {
   try
   {
@@ -214,7 +210,7 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
       return false;
     }
 
-    string type_str;
+    std::string type_str;
     if (model_file_details.m_modelType == ModelType::LLM)
     {
       type_str = "LLM";
@@ -229,8 +225,8 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
       return false;
     }
 
-    json j = model_file_details;
-    string model_file_details_json = j.dump();
+    nlohmann::json j = model_file_details;
+    std::string model_file_details_json = j.dump();
 
     SQLite::Statement insert(*m_db, "INSERT INTO models (name, file_details, checksums, type) VALUES (:name, "
                                     "jsonb(:file_details), jsonb(:checksums), :type)");
@@ -266,7 +262,7 @@ bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& model_file
     if (query.executeStep())
     {
       SQLite::Column file_details_col = query.getColumn("file_details");
-      json file_details_json = json::parse(file_details_col.getString());
+      nlohmann::json file_details_json = nlohmann::json::parse(file_details_col.getString());
       model_file_details = file_details_json.get<ModelFiles>();
       return true;
     }
@@ -280,7 +276,7 @@ bool OdaiSqliteDb::get_model_files(const ModelName& name, ModelFiles& model_file
   }
 }
 
-bool OdaiSqliteDb::get_model_checksums(const ModelName& name, string& checksums)
+bool OdaiSqliteDb::get_model_checksums(const ModelName& name, std::string& checksums)
 {
   try
   {
@@ -309,7 +305,7 @@ bool OdaiSqliteDb::get_model_checksums(const ModelName& name, string& checksums)
 }
 
 bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                                      const string& new_checksums)
+                                      const std::string& new_checksums)
 {
   try
   {
@@ -319,8 +315,8 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
       return false;
     }
 
-    json j = new_model_file_details;
-    string new_model_file_details_json = j.dump();
+    nlohmann::json j = new_model_file_details;
+    std::string new_model_file_details_json = j.dump();
 
     SQLite::Statement update(
         *m_db,
@@ -340,13 +336,13 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
   }
 }
 
-bool OdaiSqliteDb::store_media_item_impl(const InputItem& item, const string& checksum, InputItem& item_out)
+bool OdaiSqliteDb::store_media_item_impl(const InputItem& item, const std::string& checksum, InputItem& item_out)
 {
   try
   {
     // store the media item in cache dir and the mapping in db
-    const string& file_name = checksum; // using checksum as file name to avoid duplicates
-    string file_path = m_dbConfig.m_mediaStorePath + "/" + file_name;
+    const std::string& file_name = checksum; // using checksum as file name to avoid duplicates
+    std::string file_path = m_dbConfig.m_mediaStorePath + "/" + file_name;
 
     if (item.m_type == InputItemType::FILE_PATH)
     {
@@ -378,7 +374,7 @@ bool OdaiSqliteDb::store_media_item_impl(const InputItem& item, const string& ch
 
     item_out.m_mimeType = item.m_mimeType;
     item_out.m_type = InputItemType::FILE_PATH;
-    item_out.m_data = vector<uint8_t>(file_path.begin(), file_path.end());
+    item_out.m_data = std::vector<uint8_t>(file_path.begin(), file_path.end());
 
     return true;
   }
@@ -409,7 +405,7 @@ bool OdaiSqliteDb::store_media_item(const InputItem& item, InputItem& item_out)
 
     if (media_type == MediaType::IMAGE || media_type == MediaType::AUDIO)
     {
-      string checksum;
+      std::string checksum;
 
       if (item.m_type == InputItemType::FILE_PATH)
       {
@@ -432,9 +428,9 @@ bool OdaiSqliteDb::store_media_item(const InputItem& item, InputItem& item_out)
 
       if (query.executeStep())
       {
-        string abs_path = query.getColumn("absolute_path").getString();
+        std::string abs_path = query.getColumn("absolute_path").getString();
         item_out.m_type = InputItemType::FILE_PATH;
-        item_out.m_data = vector<uint8_t>(abs_path.begin(), abs_path.end());
+        item_out.m_data = std::vector<uint8_t>(abs_path.begin(), abs_path.end());
         item_out.m_mimeType = query.getColumn("mime_type").getString();
         return true;
       }
@@ -475,8 +471,8 @@ bool OdaiSqliteDb::create_semantic_space(const SemanticSpaceConfig& config)
       return false;
     }
 
-    json j = config;
-    string config_json = j.dump();
+    nlohmann::json j = config;
+    std::string config_json = j.dump();
 
     SQLite::Statement insert(*m_db, "INSERT INTO semantic_spaces (name, config) VALUES (:name, jsonb(:config))");
     insert.bind(":name", config.m_name);
@@ -513,7 +509,7 @@ bool OdaiSqliteDb::get_semantic_space_config(const SemanticSpaceName& name, Sema
     }
 
     SQLite::Column config_col = query.getColumn("config");
-    json config_json = json::parse(config_col.getString());
+    nlohmann::json config_json = nlohmann::json::parse(config_col.getString());
     config = config_json.get<SemanticSpaceConfig>();
 
     return true;
@@ -525,7 +521,7 @@ bool OdaiSqliteDb::get_semantic_space_config(const SemanticSpaceName& name, Sema
   }
 }
 
-bool OdaiSqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+bool OdaiSqliteDb::list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces)
 {
   try
   {
@@ -542,7 +538,7 @@ bool OdaiSqliteDb::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
     while (query.executeStep())
     {
       SQLite::Column config_col = query.getColumn("config");
-      json config_json = json::parse(config_col.getString());
+      nlohmann::json config_json = nlohmann::json::parse(config_col.getString());
       spaces.push_back(config_json.get<SemanticSpaceConfig>());
     }
 
@@ -617,8 +613,8 @@ bool OdaiSqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_con
       return false;
     }
 
-    json j = chat_config;
-    string chat_config_json = j.dump();
+    nlohmann::json j = chat_config;
+    std::string chat_config_json = j.dump();
 
     begin_transaction();
 
@@ -634,7 +630,7 @@ bool OdaiSqliteDb::create_chat(const ChatId& chat_id, const ChatConfig& chat_con
     system_msg.m_role = "system";
     system_msg.m_contentItems.push_back(
         {InputItemType::MEMORY_BUFFER,
-         vector<uint8_t>(chat_config.m_systemPrompt.begin(), chat_config.m_systemPrompt.end()), "text/plain"});
+         std::vector<uint8_t>(chat_config.m_systemPrompt.begin(), chat_config.m_systemPrompt.end()), "text/plain"});
     system_msg.m_messageMetadata = {};
     insert_chat_messages(chat_id, {system_msg});
 
@@ -679,7 +675,7 @@ bool OdaiSqliteDb::get_chat_config(const ChatId& chat_id, ChatConfig& chat_confi
       return false;
     }
 
-    json chat_config_json = json::parse(chat_config_col.getString());
+    nlohmann::json chat_config_json = nlohmann::json::parse(chat_config_col.getString());
 
     chat_config = chat_config_json.get<ChatConfig>();
 
@@ -692,7 +688,7 @@ bool OdaiSqliteDb::get_chat_config(const ChatId& chat_id, ChatConfig& chat_confi
   }
 }
 
-bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
+bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages)
 {
   try
   {
@@ -726,8 +722,8 @@ bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
 
       msg.m_role = role_col.getString();
 
-      json content_json = json::parse(content_col.getString());
-      msg.m_contentItems = content_json.get<vector<InputItem>>();
+      nlohmann::json content_json = nlohmann::json::parse(content_col.getString());
+      msg.m_contentItems = content_json.get<std::vector<InputItem>>();
 
       // Handle NULL message_metadata by defaulting to empty JSON object
       if (metadata_col.isNull())
@@ -736,7 +732,7 @@ bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
       }
       else
       {
-        msg.m_messageMetadata = json::parse(metadata_col.getString());
+        msg.m_messageMetadata = nlohmann::json::parse(metadata_col.getString());
       }
 
       // Cast to uint64_t since Unix timestamps are always non-negative
@@ -760,7 +756,7 @@ bool OdaiSqliteDb::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& 
   }
 }
 
-bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages)
+bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const std::vector<ChatMessage>& messages)
 {
   try
   {
@@ -808,16 +804,16 @@ bool OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const vector<Chat
             ODAI_LOG(ODAI_LOG_ERROR, "Media items should only be passed as file paths");
             return false;
           }
-
-          insert_message.bind(":chat_id", chat_id);
-          insert_message.bind(":role", msg.m_role);
-          json content_json = msg.m_contentItems;
-          insert_message.bind(":content", content_json.dump());
-          insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
-          insert_message.exec();
-          insert_message.reset(); // Reset for next iteration
-          insert_message.clearBindings();
         }
+
+        insert_message.bind(":chat_id", chat_id);
+        insert_message.bind(":role", msg.m_role);
+        nlohmann::json content_json = msg.m_contentItems;
+        insert_message.bind(":content", content_json.dump());
+        insert_message.bind(":message_metadata", msg.m_messageMetadata.dump());
+        insert_message.exec();
+        insert_message.reset(); // Reset for next iteration
+        insert_message.clearBindings();
       }
 
       commit_transaction();

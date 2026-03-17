@@ -8,6 +8,7 @@ This document outlines key technical reasoning, build system quirks, and "gotcha
         - [Miniaudio (Header-Only STB-style)](#miniaudio-header-only-stb-style)
         - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-cc-library)
         - [mtmd (Explicit Subdirectory with LLAMA_INSTALL_VERSION)](#mtmd-explicit-subdirectory-with-llama_install_version)
+        - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
         - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
 - [mtmd API Quirks](#mtmd-api-quirks)
     - [mtmd_get_audio_bitrate Returns Sample Rate](#mtmd_get_audio_bitrate-returns-sample-rate)
@@ -56,8 +57,24 @@ add_subdirectory(${llama_SOURCE_DIR}/tools/mtmd ${llama_BINARY_DIR}/tools/mtmd)
 
 **Why `LLAMA_INSTALL_VERSION`?** mtmd's `CMakeLists.txt` uses `VERSION ${LLAMA_INSTALL_VERSION}` in `set_target_properties`. This variable is normally set by llama.cpp's root CMake, but since `LLAMA_BUILD_TOOLS` is OFF, the tools subdirectory is never processed by llama's own build — so the variable is undefined. An undefined variable causes CMake's `set_target_properties` to fail with "incorrect number of arguments" (empty string = missing arg). Setting it to `"0.0.0"` is safe because we build mtmd as a **static library** (`BUILD_SHARED_LIBS` is OFF at that point), and the `VERSION` property on a static lib is a no-op — it only matters for shared library versioned symlinks (`libfoo.so.X.Y.Z`), which don't apply here.
 
+#### Best Practice: Dedicated Implementation File (Header-Only)
+The preferred way to handle header-only libraries (STB-style) in this SDK is to use a **dedicated implementation file**. Instead of defining the implementation macro (like `#define MINIAUDIO_IMPLEMENTATION`) in a functional component like `odai_miniaudio_decoder.cpp`, create a separate file in `src/impl/headerOnlyLib/`.
+
+*   **Example (`src/impl/headerOnlyLib/odai_miniaudio_impl.cpp`):**
+    ```cpp
+    #define MINIAUDIO_IMPLEMENTATION
+    #include "miniaudio.h"
+    ```
+*   **Why:**
+    *   **Encapsulation:** The heavy implementation code is compiled once in its own translation unit.
+    *   **Prevention of Duplicate Symbols:** Since the implementation exists in only one `.cpp` file, you won't accidentally generate multiple copies if you include the header elsewhere.
+    *   **Faster Rebuilds:** Modifying your functional logic (e.g., `odai_miniaudio_decoder.cpp`) doesn't require the compiler to re-process the massive header implementation.
+
 #### Duplicate Symbol Errors (Header-Only Libraries)
 When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (`odai`), you might encounter duplicate symbol linker errors if both libraries try to compile the `MINIAUDIO_IMPLEMENTATION` or if one compiles it globally and the other tries to link to it.
+
+> [!TIP]
+> Use the [Dedicated Implementation File](#best-practice-dedicated-implementation-file-header-only) approach mentioned above as the primary fix.
 
 *   **Symptom:** Linker errors like `ld.lld: error: duplicate symbol: ma_atomic_global_lock` defined in multiple objects, or undefined references when trying to call miniaudio functions after removing the implementation macro.
 *   **Reason:** Header-only libraries like `miniaudio.h` generate their implementation code when `#define MINIAUDIO_IMPLEMENTATION` is set. However, if multiple translation units generate it globally, the linker complains about duplicate symbols. If you remove the macro, you'll get undefined reference errors because the compiler doesn't have the function implementations available for linking in your translation unit.

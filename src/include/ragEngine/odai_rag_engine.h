@@ -1,11 +1,14 @@
 #pragma once
 
-#include "audioEngine/odai_audio_decoder.h"
 #include "backendEngine/odai_backend_engine.h"
 #include "db/odai_db.h"
 #include "types/odai_types.h"
-#include <memory>
-#include <unordered_map>
+#include <vector>
+
+// Forward declarations
+class IOdaiAudioDecoder;
+struct DBConfig;
+struct BackendEngineConfig;
 
 /// RAG (Retrieval-Augmented Generation) engine that combines embedding and
 /// language models for context-aware text generation. Manages the
@@ -44,7 +47,7 @@ public:
   /// @param user_data User-provided data passed to the callback function
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const vector<InputItem>& prompt,
+  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const std::vector<InputItem>& prompt,
                                       const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
                                       void* user_data);
 
@@ -61,7 +64,7 @@ public:
   /// @param user_data User-provided data passed to the callback function
   /// @return Total number of tokens generated (excluding EOG token), or -1 on
   /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
+  int32_t generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
                                            const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
                                            void* user_data);
 
@@ -79,7 +82,7 @@ public:
   /// Retrieves a list of all existing semantic spaces in the database.
   /// @param spaces Output parameter populated with configurations of all semantic spaces
   /// @return true if successful, false on error
-  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces);
+  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces);
 
   /// Deletes an existing semantic space and its associated data from the database.
   /// @param name The name of the semantic space to delete
@@ -96,7 +99,7 @@ public:
   /// @param chat_id Unique identifier for the chat session
   /// @param messages Output parameter populated with the chronological sequence of chat messages
   /// @return true if successful, false on error or if chat_id not found
-  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages);
+  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages);
 
   /// Checks if a chat session with the specified identifier already exists in the database.
   /// @param chat_id Unique identifier for the chat session to check

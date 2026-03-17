@@ -12,9 +12,6 @@
 #include "db/odai_db.h"
 #include "types/odai_types.h"
 
-using namespace std;
-using namespace nlohmann;
-
 /// SQLite implementation of ODAIDb interface for managing RAG
 /// (Retrieval-Augmented Generation) chat sessions and messages. Provides
 /// functionality for initializing SQLite database with vector extensions,
@@ -22,7 +19,7 @@ using namespace nlohmann;
 class OdaiSqliteDb : public IOdaiDb
 {
 private:
-  unique_ptr<SQLite::Database> m_db = nullptr;
+  std::unique_ptr<SQLite::Database> m_db = nullptr;
 
   uint16_t m_transactionDepth = 0;
   std::unique_ptr<SQLite::Transaction> m_transaction = nullptr;
@@ -41,7 +38,7 @@ private:
   /// @param checksum The pre-computed checksum of the media item to use for file_name and db entry
   /// @param item_out Output parameter to receive the stored item details, currently we expect the type to be FILE_PATH,
   /// but this can be extended in future if needed.
-  bool store_media_item_impl(const InputItem& item, const string& checksum, InputItem& item_out);
+  bool store_media_item_impl(const InputItem& item, const std::string& checksum, InputItem& item_out);
 
 public:
   /// Constructs a new ODAISqliteDb instance with the specified database
@@ -82,7 +79,7 @@ public:
   /// @param checksums The computed checksums for the files
   /// @return true if registration succeeded, false on error
   bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                            const string& checksums) override;
+                            const std::string& checksums) override;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
@@ -94,7 +91,7 @@ public:
   /// @param name The name of the model to look up
   /// @param checksums Output parameter to store the model checksums
   /// @return true if model found, false if not found or on error
-  bool get_model_checksums(const ModelName& name, string& checksums) override;
+  bool get_model_checksums(const ModelName& name, std::string& checksums) override;
 
   /// Updates the details for an existing model record.
   /// Note: This method expects `new_details` and `new_checksums` to contain the
@@ -104,7 +101,7 @@ public:
   /// @param new_checksums The complete new computed checksums
   /// @return true if update succeeded, false on error
   bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                          const string& new_checksums) override;
+                          const std::string& new_checksums) override;
 
   /// @brief stores a media item in media store path and store the mapping in database.
   /// @note we don't store the media if its already present (based on checksum) in media store path, instead we just
@@ -130,7 +127,7 @@ public:
   /// Lists all available semantic spaces from the database.
   /// @param spaces Vector to be populated with the list of semantic spaces.
   /// @return true if listed successfully, false on error.
-  bool list_semantic_spaces(vector<SemanticSpaceConfig>& spaces) override;
+  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces) override;
 
   /// Deletes a semantic space configuration from the database.
   /// @param name The name of the semantic space to delete.
@@ -171,7 +168,7 @@ public:
   /// @param chat_id The chat identifier to retrieve messages for.
   /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
   /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.
-  bool get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages) override;
+  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages) override;
 
   /// @brief Inserts multiple chat messages into the database.
   /// This function attaches messages to an existing chat session. Each message
@@ -183,13 +180,13 @@ public:
   /// @param chat_id Unique identifier for the chat session.
   /// @param messages Vector of ChatMessage objects to insert.
   /// @return true if all messages were inserted successfully, false on error.
-  bool insert_chat_messages(const ChatId& chat_id, const vector<ChatMessage>& messages) override;
+  bool insert_chat_messages(const ChatId& chat_id, const std::vector<ChatMessage>& messages) override;
 
   /// Closes the database connection and releases resources.
   void close() override;
 
 private:
-  inline static string db_schema = R"(
+  inline static std::string db_schema = R"(
         
 CREATE TABLE chats (
     chat_id        TEXT PRIMARY KEY,

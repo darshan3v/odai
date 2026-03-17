@@ -1,7 +1,5 @@
 #include "odai_logger.h"
 
-using namespace std;
-
 void OdaiLogger::set_logger(OdaiLogCallbackFn callback, void* user_data)
 {
   this->m_callback = callback;

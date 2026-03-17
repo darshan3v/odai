@@ -205,6 +205,14 @@ static bool test_semantic_spaces()
     std::cout << "Semantic space '" << space_name << "' created.\n";
   }
 
+  const char* space_name2 = "test_space2";
+  c_SemanticSpaceConfig space_config2 = {const_cast<char*>(space_name2), embedding_conf, chunk_config, EMBEDDING_DIM};
+
+  if (odai_create_semantic_space(&space_config2))
+  {
+    std::cout << "Semantic space '" << space_name2 << "' created.\n";
+  }
+
   // List to verify creation
   c_SemanticSpaceConfig* spaces_list = nullptr;
   uint16_t spaces_count = 0;
@@ -215,8 +223,8 @@ static bool test_semantic_spaces()
   }
 
   // Delete Space
-  std::cout << "Deleting semantic space '" << space_name << "'...\n";
-  if (odai_delete_semantic_space(const_cast<char*>(space_name)))
+  std::cout << "Deleting semantic space '" << space_name2 << "'...\n";
+  if (odai_delete_semantic_space(const_cast<char*>(space_name2)))
   {
     std::cout << "Successfully deleted semantic space.\n";
   }
@@ -248,7 +256,11 @@ static bool test_streaming_text(const char* model_name)
                       const_cast<char*>("text/plain")};
 
   std::cout << "Assistant: ";
-  odai_generate_streaming_response(&llm_conf, &item, 1, &sampler_conf, stream_callback, nullptr);
+  if (odai_generate_streaming_response(&llm_conf, &item, 1, &sampler_conf, stream_callback, nullptr) == -1)
+  {
+    std::cout << "Failed to generate streaming response\n";
+    return false;
+  }
   std::cout << "\n";
 
   return true;
@@ -268,7 +280,12 @@ static bool test_streaming_image(const char* model_name)
   }};
 
   std::cout << "Assistant: ";
-  odai_generate_streaming_response(&llm_conf, items.data(), items.size(), &sampler_conf, stream_callback, nullptr);
+  if (odai_generate_streaming_response(&llm_conf, items.data(), items.size(), &sampler_conf, stream_callback,
+                                       nullptr) == -1)
+  {
+    std::cout << "Failed to generate streaming response\n";
+    return false;
+  }
   std::cout << "\n";
 
   return true;
@@ -288,7 +305,12 @@ static bool test_streaming_audio(const char* model_name)
   }};
 
   std::cout << "Assistant: ";
-  odai_generate_streaming_response(&llm_conf, items.data(), items.size(), &sampler_conf, stream_callback, nullptr);
+  if (odai_generate_streaming_response(&llm_conf, items.data(), items.size(), &sampler_conf, stream_callback,
+                                       nullptr) == -1)
+  {
+    std::cout << "Failed to generate streaming response\n";
+    return false;
+  }
   std::cout << "\n";
 
   return true;
@@ -322,7 +344,12 @@ static bool test_chat_multimodal(const char* model_name)
   }};
 
   std::cout << "User: " << p1_text << "\nAssistant: ";
-  odai_generate_streaming_chat_response(chat_id, prompt1.data(), prompt1.size(), &gen_config, stream_callback, nullptr);
+  if (odai_generate_streaming_chat_response(chat_id, prompt1.data(), prompt1.size(), &gen_config, stream_callback,
+                                            nullptr) == -1)
+  {
+    std::cerr << "Failed to generate streaming chat response\n";
+    return false;
+  }
   std::cout << "\n";
 
   // Turn 2: Audio prompt
@@ -333,7 +360,12 @@ static bool test_chat_multimodal(const char* model_name)
   }};
 
   std::cout << "\nUser: " << p2_text << "\nAssistant: ";
-  odai_generate_streaming_chat_response(chat_id, prompt2.data(), prompt2.size(), &gen_config, stream_callback, nullptr);
+  if (odai_generate_streaming_chat_response(chat_id, prompt2.data(), prompt2.size(), &gen_config, stream_callback,
+                                            nullptr) == -1)
+  {
+    std::cerr << "Failed to generate streaming chat response\n";
+    return false;
+  }
   std::cout << "\n";
 
   // Turn 3: Follow-up joke
@@ -342,7 +374,11 @@ static bool test_chat_multimodal(const char* model_name)
                          const_cast<char*>("text/plain")};
 
   std::cout << "\nUser: " << p3_text << "\nAssistant: ";
-  odai_generate_streaming_chat_response(chat_id, &prompt3, 1, &gen_config, stream_callback, nullptr);
+  if (odai_generate_streaming_chat_response(chat_id, &prompt3, 1, &gen_config, stream_callback, nullptr) == -1)
+  {
+    std::cerr << "Failed to generate streaming chat response\n";
+    return false;
+  }
   std::cout << "\n";
 
   // History

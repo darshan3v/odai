@@ -2,7 +2,9 @@
 
 #include <string>
 
-#include "types/odai_types.h"
+class InputItem;
+struct OdaiAudioTargetSpec;
+struct OdaiDecodedAudio;
 
 /// Pure virtual interface for decoding audio files.
 class IOdaiAudioDecoder
@@ -27,6 +29,15 @@ public:
   /// @param target_spec The required output's spec.
   /// @param decoded_audio The output decoded audio.
   /// @return true if decoding was successful, false otherwise.
-  virtual bool decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
-                              OdaiDecodedAudio& decoded_audio) = 0;
+  bool decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec, OdaiDecodedAudio& decoded_audio);
+
+protected:
+  /// Core implementation of decode_to_spec to be provided by the derived class.
+  /// Input validation (sanity constraints, media type, empty data) is already handled by the base class.
+  /// @param input The validated InputItem containing audio data.
+  /// @param target_spec The required output's spec.
+  /// @param decoded_audio The output decoded audio.
+  /// @return true if decoding was successful, false otherwise.
+  virtual bool do_decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
+                                 OdaiDecodedAudio& decoded_audio) = 0;
 };

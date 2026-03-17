@@ -57,6 +57,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 option(ODAI_ENABLE_LLAMA_BACKEND "Enable Llama.cpp backend engine" ON)
 option(ODAI_ENABLE_SQLITE_DB "Enable SQLite Database backend" ON)
 option(ODAI_ENABLE_MINIAUDIO "Enable Miniaudio Audio decoding engine" ON)
+option(ODAI_ENABLE_STB_IMAGE "Enable stb_image Image decoding engine" ON)
 
 # -----------------------------------------------------------------
 # 3. Core Dependencies (Always included)
@@ -183,6 +184,17 @@ set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(miniaudio)
 endif()
 
+if(ODAI_ENABLE_STB_IMAGE)
+    message(STATUS ">>> Enabling stb_image Image decoder")
+FetchContent_Declare(
+    stb
+    GIT_REPOSITORY https://github.com/nothings/stb.git
+    GIT_TAG        master
+)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+FetchContent_MakeAvailable(stb)
+endif()
+
 # BUILD_SHARED_LIBS default for our project
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 
@@ -197,6 +209,8 @@ set(ODAI_CORE_SOURCES
     src/impl/utils/odai_helpers.cpp
     src/impl/utils/string_utils.cpp
     src/impl/ragEngine/odai_rag_engine.cpp
+    src/impl/audioEngine/odai_audio_decoder.cpp
+    src/impl/imageEngine/odai_image_decoder.cpp
 )
 
 add_library(odai SHARED ${ODAI_CORE_SOURCES})
@@ -245,7 +259,14 @@ if(ODAI_ENABLE_MINIAUDIO)
     target_compile_definitions(odai PRIVATE MA_NO_NODE_GRAPH)
     target_compile_definitions(odai PRIVATE MA_NO_ENGINE)
     target_compile_definitions(odai PRIVATE MA_NO_GENERATION)
-    
+
+endif()
+
+if(ODAI_ENABLE_STB_IMAGE)
+    target_sources(odai PRIVATE src/impl/imageEngine/odai_stb_image_decoder.cpp)
+    target_include_directories(odai PRIVATE ${stb_SOURCE_DIR})
+    # stb is header only, no target linking needed
+    target_compile_definitions(odai PRIVATE ODAI_ENABLE_STB_IMAGE)
 endif()
 
 # -----------------------------------------------------------------

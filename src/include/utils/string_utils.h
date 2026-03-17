@@ -3,16 +3,14 @@
 #include <cstddef>
 #include <string>
 
-using namespace std;
-
 /// Converts a given string to lowercase.
 /// @param str The string to convert.
 /// @return A new string containing the lowercase version of the input.
-string to_lower(const string& str);
+std::string to_lower(const std::string& str);
 
 /// Returns the length of the string that is safe to send as valid UTF-8.
 /// Scans backwards from the end of the string to ensure the last character is complete.
 /// If the string ends with an incomplete multi-byte UTF-8 sequence, returns the length excluding the incomplete bytes.
 /// @param buffer The string buffer to check
 /// @return The safe length in bytes that represents complete UTF-8 characters, or 0 if buffer is empty
-size_t get_safe_utf8_length(const string& buffer);
+size_t get_safe_utf8_length(const std::string& buffer);

@@ -53,7 +53,7 @@ ModelFiles to_cpp(const c_ModelFiles& c)
     {
       if ((c.m_entries[i].m_key != nullptr) && (c.m_entries[i].m_value != nullptr))
       {
-        model_file_details.m_entries[string(c.m_entries[i].m_key)] = string(c.m_entries[i].m_value);
+        model_file_details.m_entries[std::string(c.m_entries[i].m_key)] = std::string(c.m_entries[i].m_value);
       }
     }
   }
@@ -81,7 +81,7 @@ InputItem to_cpp(const c_InputItem& c)
 
 DBConfig to_cpp(const c_DbConfig& c)
 {
-  return {c.m_dbType, string(c.m_dbPath), string(c.m_mediaStorePath)};
+  return {c.m_dbType, std::string(c.m_dbPath), std::string(c.m_mediaStorePath)};
 }
 
 BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
@@ -91,12 +91,12 @@ BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
 
 EmbeddingModelConfig to_cpp(const c_EmbeddingModelConfig& c)
 {
-  return {string(c.m_modelName)};
+  return {std::string(c.m_modelName)};
 }
 
 LLMModelConfig to_cpp(const c_LlmModelConfig& c)
 {
-  return {string(c.m_modelName)};
+  return {std::string(c.m_modelName)};
 }
 
 ChunkingConfig to_cpp(const c_ChunkingConfig& c)
@@ -116,7 +116,7 @@ ChunkingConfig to_cpp(const c_ChunkingConfig& c)
 SemanticSpaceConfig to_cpp(const c_SemanticSpaceConfig& c)
 {
   SemanticSpaceConfig config;
-  config.m_name = string(c.m_name);
+  config.m_name = std::string(c.m_name);
   config.m_embeddingModelConfig = to_cpp(c.m_embeddingModelConfig);
   config.m_chunkingConfig = to_cpp(c.m_chunkingConfig);
   config.m_dimensions = c.m_dimensions;
@@ -146,11 +146,11 @@ GeneratorRagConfig to_cpp(const c_GeneratorRagConfig& source)
   config.m_retrievalConfig = to_cpp(source.m_retrievalConfig);
   if (source.m_semanticSpaceName != nullptr)
   {
-    config.m_semanticSpaceName = string(source.m_semanticSpaceName);
+    config.m_semanticSpaceName = std::string(source.m_semanticSpaceName);
   }
   if (source.m_scopeId != nullptr)
   {
-    config.m_scopeId = string(source.m_scopeId);
+    config.m_scopeId = std::string(source.m_scopeId);
   }
   return config;
 }
@@ -175,7 +175,7 @@ GeneratorConfig to_cpp(const c_GeneratorConfig& source)
 
 ChatConfig to_cpp(const c_ChatConfig& c)
 {
-  return {c.m_persistence, string(c.m_systemPrompt), to_cpp(c.m_llmModelConfig)};
+  return {c.m_persistence, std::string(c.m_systemPrompt), to_cpp(c.m_llmModelConfig)};
 }
 
 c_EmbeddingModelConfig to_c(const EmbeddingModelConfig& cpp)
@@ -273,7 +273,7 @@ c_ChatMessage to_c(const ChatMessage& cpp)
   }
 
   // Allocate and copy message_metadata as JSON string
-  string metadata_json = cpp.m_messageMetadata.dump();
+  std::string metadata_json = cpp.m_messageMetadata.dump();
   result.m_messageMetadata = strdup(metadata_json.c_str());
 
   result.m_createdAt = cpp.m_createdAt;
@@ -281,21 +281,21 @@ c_ChatMessage to_c(const ChatMessage& cpp)
   return result;
 }
 
-string byte_vector_to_string(const vector<uint8_t>& bytes)
+std::string byte_vector_to_string(const std::vector<uint8_t>& bytes)
 {
-  return string(bytes.begin(), bytes.end());
+  return std::string(bytes.begin(), bytes.end());
 }
 
-void to_json(json& j, const ChunkingConfig& p)
+void to_json(nlohmann::json& j, const ChunkingConfig& p)
 {
   if (std::holds_alternative<FixedSizeChunkingConfig>(p.m_config))
   {
-    j = json{{"strategy", FIXED_SIZE_CHUNKING}};
+    j = nlohmann::json{{"strategy", FIXED_SIZE_CHUNKING}};
     j["config"] = std::get<FixedSizeChunkingConfig>(p.m_config);
   }
 }
 
-void from_json(const json& j, ChunkingConfig& p)
+void from_json(const nlohmann::json& j, ChunkingConfig& p)
 {
   ChunkingStrategy strategy = 0;
   j.at("strategy").get_to(strategy);

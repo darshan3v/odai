@@ -59,7 +59,7 @@ bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles
     return false;
   }
 
-  string checksums_json = calculate_model_checksums(model_file_details);
+  std::string checksums_json = calculate_model_checksums(model_file_details);
   if (checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
@@ -85,7 +85,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     return false;
   }
 
-  string new_checksums_json = calculate_model_checksums(new_model_file_details);
+  std::string new_checksums_json = calculate_model_checksums(new_model_file_details);
   if (new_checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
@@ -94,7 +94,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
 
   if (flag == UpdateModelFlag::STRICT_MATCH)
   {
-    string old_checksums_json;
+    std::string old_checksums_json;
     if (!m_db->get_model_checksums(name, old_checksums_json))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}", name);
@@ -108,7 +108,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
 
       for (auto it = new_checksums_json_obj.begin(); it != new_checksums_json_obj.end(); ++it)
       {
-        const string& key = it.key();
+        const std::string& key = it.key();
         if (old_checksums_json_obj.contains(key))
         {
           if (old_checksums_json_obj[key] != it.value())
@@ -143,7 +143,8 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
 }
 
 int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config,
-                                                   const vector<InputItem>& prompt, const SamplerConfig& sampler_config,
+                                                   const std::vector<InputItem>& prompt,
+                                                   const SamplerConfig& sampler_config,
                                                    OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (callback == nullptr)
@@ -165,13 +166,13 @@ int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_mod
     return -1;
   }
 
-  const vector<InputItem>& processed_prompt = prompt;
+  const std::vector<InputItem>& processed_prompt = prompt;
 
   return m_backendEngine->generate_streaming_response(processed_prompt, llm_model_config, model_files, sampler_config,
                                                       callback, user_data);
 }
 
-int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, const vector<InputItem>& prompt,
+int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
                                                         const GeneratorConfig& generator_config,
                                                         OdaiStreamRespCallbackFn callback, void* user_data)
 {
@@ -197,7 +198,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     StreamingBufferContext* ctx = static_cast<StreamingBufferContext*>(user_data);
 
     // Buffer the token
-    ctx->m_bufferedResponse += string(token);
+    ctx->m_bufferedResponse += std::string(token);
 
     // Forward to user callback for streaming
     return ctx->m_userCallback(token, ctx->m_userData);
@@ -246,7 +247,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
              rag_config.m_semanticSpaceName, rag_config.m_scopeId);
   }
 
-  vector<ChatMessage> chat_history;
+  std::vector<ChatMessage> chat_history;
   if (!m_db->get_chat_history(chat_id, chat_history))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat history for chat_id: {}", chat_id);
@@ -260,9 +261,9 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
     return -1;
   }
 
-  const vector<InputItem>& prompt_with_context = prompt; // Placeholder until context retrieval is implemented
+  const std::vector<InputItem>& prompt_with_context = prompt; // Placeholder until context retrieval is implemented
 
-  vector<InputItem> final_prompt = prompt_with_context;
+  std::vector<InputItem> final_prompt = prompt_with_context;
 
   for (InputItem& item : final_prompt)
   {
@@ -287,7 +288,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   }
 
   // Prepare messages to save
-  vector<ChatMessage> messages_to_save;
+  std::vector<ChatMessage> messages_to_save;
 
   ChatMessage user_msg;
   user_msg.m_role = "user";
@@ -295,7 +296,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   // store_media_items()) that way we only store and pass file path and not file themselves
   user_msg.m_contentItems = final_prompt;
   // we should update message_metadata with citations if any from RAG context
-  user_msg.m_messageMetadata = json::object();
+  user_msg.m_messageMetadata = nlohmann::json::object();
   messages_to_save.push_back(user_msg);
 
   // ToDo in message_metadata add citations if any from RAG context
@@ -308,7 +309,7 @@ int32_t OdaiRagEngine::generate_streaming_chat_response(const ChatId& chat_id, c
   ChatMessage assistant_msg;
   assistant_msg.m_role = "assistant";
   assistant_msg.m_contentItems = {assistant_item};
-  assistant_msg.m_messageMetadata = json::object();
+  assistant_msg.m_messageMetadata = nlohmann::json::object();
   messages_to_save.push_back(assistant_msg);
 
   // Save messages to database
@@ -345,7 +346,7 @@ bool OdaiRagEngine::get_semantic_space_config(const SemanticSpaceName& name, Sem
   return m_db->get_semantic_space_config(name, config);
 }
 
-bool OdaiRagEngine::list_semantic_spaces(vector<SemanticSpaceConfig>& spaces)
+bool OdaiRagEngine::list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces)
 {
   return m_db->list_semantic_spaces(spaces);
 }
@@ -360,7 +361,7 @@ bool OdaiRagEngine::create_chat(const ChatId& chat_id, const ChatConfig& chat_co
   return m_db->create_chat(chat_id, chat_config);
 }
 
-bool OdaiRagEngine::get_chat_history(const ChatId& chat_id, vector<ChatMessage>& messages)
+bool OdaiRagEngine::get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages)
 {
   return m_db->get_chat_history(chat_id, messages);
 }

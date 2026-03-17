@@ -15,9 +15,10 @@ public:
   OdaiMiniAudioDecoder(OdaiMiniAudioDecoder&&) = delete;
   OdaiMiniAudioDecoder& operator=(OdaiMiniAudioDecoder&&) = delete;
 
-  /// Checks if the given audio format is supported by miniaudio.
-  /// @param format The audio format extension (e.g., "wav", "mp3", "flac").
-  /// @return true if the format is supported, false otherwise.
+  /// Checks if the given audio format is supported by this decoder.
+  /// Formats typically supported by this decoder: "wav", "mp3", "flac"
+  /// @param format The format to check (e.g. extension like "wav" or "mp3")
+  /// @return true if the format is supported, false otherwise
   bool is_supported(const std::string& format) override;
 
   /// Decodes an audio InputItem and processes it to match the target specification.
@@ -25,8 +26,8 @@ public:
   /// @param target_spec The required output's spec.
   /// @param decoded_audio The output decoded audio.
   /// @return true if decoding was successful, false otherwise.
-  bool decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
-                      OdaiDecodedAudio& decoded_audio) override;
+  bool do_decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
+                         OdaiDecodedAudio& decoded_audio) override;
 };
 
 #endif // ODAI_ENABLE_MINIAUDIO

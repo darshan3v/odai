@@ -6,6 +6,13 @@
 
 #include "odai_public.h"
 
+class OdaiLogger;
+
+/// Bridge function to retrieve the global logger instance without requiring odai_sdk.h.
+/// This prevents circular dependencies between the logger macro and the SDK.
+/// @return Pointer to the active OdaiLogger instance, or nullptr if not available.
+OdaiLogger* get_odai_logger();
+
 /// Logger class that provides formatted logging functionality with configurable
 /// log levels and callbacks. Supports format string arguments and automatically
 /// prefixes log messages with "[odai]".
@@ -67,5 +74,6 @@ public:
   }
 };
 
-// Global logger is now managed by ODAISdk singleton in odai_sdk.h
-// Macro ODAI_LOG is also defined there
+#define ODAI_LOG(level, fmt, ...)                                                                                      \
+  if (auto logger = get_odai_logger())                                                                                 \
+  logger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)
