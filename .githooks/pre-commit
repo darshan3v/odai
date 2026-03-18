@@ -28,10 +28,23 @@ fi
 # Call format.sh with the files
 "$PROJECT_ROOT/scripts/format.sh" "${FILE_ARRAY[@]}"
 
-# 2. Lint and Fix ALL files
+# 2. Lint and Fix ALL files, then verify
 # As requested, we run full lint to ensure holistic consistency (e.g. header changes affecting cpp)
 echo "Linting and fixing all files..."
 "$PROJECT_ROOT/scripts/lint.sh" --fix
+
+# Turn off set -e to catch the error and show a custom message
+set +e
+echo "Verifying fixes..."
+"$PROJECT_ROOT/scripts/lint.sh"
+LINT_EXIT=$?
+set -e
+
+if [ $LINT_EXIT -ne 0 ]; then
+    echo ""
+    echo "❌ Code linting failed! Please fix the errors mentioned above before committing."
+    exit 1
+fi
 
 # 3. Check for unstaged changes
 # If the tools made any changes, they will appear as unstaged changes.

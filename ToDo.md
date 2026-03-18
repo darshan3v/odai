@@ -2,7 +2,7 @@
 
 - [ ] May be make a agent which can go through all the source files, and let us know if anything redundant, what can be removed, what can be optimized , what can be refactored etc.., because its very much required to maintain code quality as we are growing
 - [ ] Ask AI to redocument every functions at once, and may be make some index, architecute.md that will be useful for it
-- [ ] Update devleopment guide so that its in sync with clang tidy
+- [ ] Update development guide so that its in sync with clang tidy
 
 ### Language / Structure Specific
 
@@ -13,7 +13,6 @@
 - [ ] Our ODAIDb (sqlite impl) is not thread safe, since db, statement, transaction, if at all we want to make it thread safe then one db object per thread, or use mutex locks
 - [ ] Update defaults of structs, structs like Generator Config all needs to have good defaults
 - [ ] Some functions like register model return false if model already registered , we need to properly express it with rich types
-- [ ] Maybe can have a async variant of odai_generate_streaming_response
 
 ### Features / Bugs
 
@@ -22,10 +21,9 @@
 - [ ] Think on how to manage multiple chat sessions, may be LRU cache of chat sessions in backend engine, check mem constraints and handle accordingly
 - [ ] Also see about serializing chat sessions to disk, so that way we can restore them later
 - [ ] since we have removed contextWindowSize from config obj, and are using hardcoded ctx params size of 4096 for llm and mebedding models, think, Handle max tokens in llama context from sampler
-- [ ] Add MultiModal Support
-    - [ ] Replace `mtmd` image decoding logic with custom internal image decoder
 - [ ] Add Structured Output Support
 - [ ] Add a commit option in generating_streaming_chat_response, so that we can use it to try generate multiple answers without appending in chat history, useful for HYDE like thing 
+- [ ] Currently we are not handling reasoning tokens separately, we are just using it as a normal token, think on how to handle it properly
 - [ ] Update CreateSemanticSpace fn to auto infer dimensions from embedding model, also make sure to create necessary embedding model tables etc.., also update deleteSemanticSpace fn to delete the embedding model tables etc..
 - [ ] For now everything is exposed via Public interface, later we will come up with a method so that people can just give Task Profile and then we will have a configuration for that task profile which we will use, making it simple
 - [ ] Add RAG support
@@ -34,6 +32,7 @@
     - [ ] Integrate embedding model to embed chunks and store in vector DB
     - [ ] Store something in DB to identify which embedding model was used to embed the documents
     - [ ] Implement vector storage and retrieval using sqlite vector extension
+- [ ] Maybe can have a async variant of odai_generate_streaming_response
 
 
 ### Build System
@@ -55,7 +54,5 @@
 - [ ] May be makes sense to use some KMP Logging library
 - [ ] After Library gets mature, think about thread safety in logging
 
-
 ### ToDo
 - [ ] Reduce header dependency
-- [ ] enforce no using namespace by using clang

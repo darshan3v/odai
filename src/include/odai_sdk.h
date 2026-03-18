@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "odai_logger.h"
+#include "types/odai_result.h"
 #include "types/odai_types.h"
 
 // Forward declarations to reduce header dependency surface
@@ -51,8 +52,8 @@ public:
   /// Registers a new model with generic files.
   /// @param name The unique name of the model.
   /// @param files The Model Files struct containing paths.
-  /// @return true if registered successfully, false otherwise.
-  bool register_model_files(const ModelName& name, const ModelFiles& files);
+  /// @return empty expected if registered successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> register_model_files(const ModelName& name, const ModelFiles& files);
 
   /// Updates the registration files for a model.
   /// Only the files explicitly provided in `files` will be updated and validated.
@@ -60,8 +61,8 @@ public:
   /// @param name The name of the model.
   /// @param files The Model Files struct containing paths to update.
   /// @param flag Flag indicating how to handle checksum changes.
-  /// @return true if updated successfully, false otherwise.
-  bool update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag);
+  /// @return empty expected if updated successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag);
 
   /// Creates a new semantic space.
   /// @param config The configuration for the semantic space.

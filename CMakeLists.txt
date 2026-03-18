@@ -77,10 +77,23 @@ FetchContent_MakeAvailable(nlohmann_json)
 FetchContent_Declare(
     xxHash
     GIT_REPOSITORY https://github.com/Cyan4973/xxHash.git
-    GIT_TAG        v0.8.2
+    GIT_TAG        v0.8.3
 )
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(xxHash)
+
+# --- Setup tl::expected ---
+FetchContent_Declare(
+    tl_expected
+    GIT_REPOSITORY https://github.com/TartanLlama/expected.git
+    GIT_TAG        v1.3.1
+)
+# Disable tl::expected's internal tests to speed up build
+set(EXPECTED_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "" FORCE)
+
+FetchContent_MakeAvailable(tl_expected)
 
 # -----------------------------------------------------------------
 # 4. Optional Dependencies
@@ -91,7 +104,7 @@ if(ODAI_ENABLE_LLAMA_BACKEND)
 FetchContent_Declare(
     llama
     GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git
-    GIT_TAG        b7656 
+    GIT_TAG        b8407
 )
 
 # Disable llama.cpp's internal examples/tests to speed up build
@@ -100,6 +113,7 @@ set(LLAMA_BUILD_TOOLS OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
 set(LLAMA_BUILD_SERVER OFF CACHE BOOL "" FORCE)
 set(LLAMA_TOOLS_INSTALL OFF CACHE BOOL "" FORCE)
+set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
 
 set(GGML_NATIVE_DEFAULT OFF CACHE BOOL "" FORCE)
 set(GGML_OPENMP OFF CACHE BOOL "" FORCE)
@@ -219,6 +233,7 @@ add_library(odai SHARED ${ODAI_CORE_SOURCES})
 target_include_directories(odai PUBLIC src/include)
 target_include_directories(odai PRIVATE ${nlohmann_json_SOURCE_DIR})
 target_include_directories(odai PRIVATE ${xxHash_SOURCE_DIR})
+target_include_directories(odai PRIVATE ${tl_expected_SOURCE_DIR}/include)
 
 target_compile_definitions(odai PRIVATE BUILDING_ODAI_SHARED)
 # Define XXH_INLINE_ALL to include all xxHash implementations in our build as header only lib, ensuring we get the performance benefits of inlining.

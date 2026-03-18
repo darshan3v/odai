@@ -193,21 +193,21 @@ bool OdaiSqliteDb::rollback_transaction()
   }
 }
 
-bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                                        const std::string& checksums)
+OdaiResult<void> OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                                    const std::string& checksums)
 {
   try
   {
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
     if (checksums.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Empty checksums passed for model: {}", name);
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
     std::string type_str;
@@ -222,7 +222,7 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
     else
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     nlohmann::json j = model_file_details;
@@ -237,12 +237,23 @@ bool OdaiSqliteDb::register_model_files(const ModelName& name, const ModelFiles&
 
     insert.exec();
 
-    return true;
+    return {};
+  }
+  catch (const SQLite::Exception& e)
+  {
+    int ext_code = e.getExtendedErrorCode();
+    if (ext_code == SQLITE_CONSTRAINT_PRIMARYKEY || ext_code == SQLITE_CONSTRAINT_UNIQUE)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Model already exists: {}, DB Error: {}", name, e.what());
+      return tl::unexpected(OdaiResultEnum::ALREADY_EXISTS);
+    }
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to register model: {}, SQLite Error: {}", name, e.what());
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to register model: {}, Error: {}", name, e.what());
-    return false;
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 }
 
@@ -304,15 +315,15 @@ bool OdaiSqliteDb::get_model_checksums(const ModelName& name, std::string& check
   }
 }
 
-bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                                      const std::string& new_checksums)
+OdaiResult<void> OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                                  const std::string& new_checksums)
 {
   try
   {
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
     nlohmann::json j = new_model_file_details;
@@ -325,14 +336,24 @@ bool OdaiSqliteDb::update_model_files(const ModelName& name, const ModelFiles& n
     update.bind(":checksums", new_checksums);
     update.bind(":name", name);
 
-    update.exec();
+    int rows_modified = update.exec();
+    if (rows_modified == 0)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "No model found to update for: {}", name);
+      return tl::unexpected(OdaiResultEnum::NOT_FOUND);
+    }
 
-    return true;
+    return {};
+  }
+  catch (const SQLite::Exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, SQLite Error: {}", name, e.what());
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, Error: {}", name, e.what());
-    return false;
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 }
 

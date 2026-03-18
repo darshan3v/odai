@@ -5,6 +5,7 @@
 #include "backendEngine/odai_llama_backend_engine.h"
 #include "imageEngine/odai_image_decoder.h"
 
+#include "mtmd.h"
 #include "odai_sdk.h"
 
 #include "types/odai_common_types.h"
@@ -272,14 +273,14 @@ std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(cons
     return std::nullopt;
   }
 
-  int bitrate = mtmd_get_audio_bitrate(this->m_mtmdContext.get());
+  int sample_rate = mtmd_get_audio_sample_rate(this->m_mtmdContext.get());
 
-  if (bitrate <= 0)
+  if (sample_rate <= 0)
   {
     return std::nullopt;
   }
 
-  return OdaiAudioTargetSpec{static_cast<uint32_t>(bitrate), 1};
+  return OdaiAudioTargetSpec{static_cast<uint32_t>(sample_rate), 1};
 }
 
 bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)

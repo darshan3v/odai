@@ -2,6 +2,15 @@
 
 #include <cstdint>
 
+/// Odai Result Types
+typedef uint32_t c_OdaiResult;
+#define ODAI_SUCCESS (c_OdaiResult)0
+#define ODAI_ALREADY_EXISTS (c_OdaiResult)1
+#define ODAI_NOT_FOUND (c_OdaiResult)2
+#define ODAI_VALIDATION_FAILED (c_OdaiResult)3
+#define ODAI_INVALID_ARGUMENT (c_OdaiResult)4
+#define ODAI_INTERNAL_ERROR (c_OdaiResult)5
+
 /// Callback function type for streaming response tokens.
 /// Called for each chunk generated during streaming response generation.
 /// @param token The generated utf-8 resp string to append to the response

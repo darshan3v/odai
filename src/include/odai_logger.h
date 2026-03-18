@@ -75,5 +75,5 @@ public:
 };
 
 #define ODAI_LOG(level, fmt, ...)                                                                                      \
-  if (auto logger = get_odai_logger())                                                                                 \
+  if (OdaiLogger* logger = get_odai_logger())                                                                          \
   logger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)

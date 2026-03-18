@@ -2,6 +2,7 @@
 
 #include "backendEngine/odai_backend_engine.h"
 #include "db/odai_db.h"
+#include "types/odai_result.h"
 #include "types/odai_types.h"
 #include <vector>
 
@@ -23,8 +24,9 @@ public:
   /// The backend engine validates the paths and computes checksums.
   /// @param name The unique name to assign to the model.
   /// @param model_file_details The Model Registration File Details struct containing paths.
-  /// @return true if registration succeeded, false if name exists or Model File Details are invalid.
-  bool register_model_files(const ModelName& name, const ModelFiles& model_file_details);
+  /// @return empty expected if registration succeeded, or an unexpected OdaiResultEnum indicating an error (e.g. name
+  /// exists, or invalid details).
+  OdaiResult<void> register_model_files(const ModelName& name, const ModelFiles& model_file_details);
 
   /// Updates the registration details for an existing model.
   /// Validates the details and potentially checks checksums based on the flag.
@@ -33,8 +35,10 @@ public:
   /// @param name The name of the model to update.
   /// @param model_file_details The Model Registration Details struct containing newly updated files.
   /// @param flag Flag indicating how to handle checksum changes.
-  /// @return true if update succeeded, false if validation fails or model not found.
-  bool update_model_files(const ModelName& name, const ModelFiles& model_file_details, UpdateModelFlag flag);
+  /// @return empty expected if update succeeded, or an unexpected OdaiResultEnum indicating an error (e.g. validation
+  /// fails, or model not found).
+  OdaiResult<void> update_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                      UpdateModelFlag flag);
 
   /// Generates a streaming response for the given query.
   /// The response is streamed incrementally via the callback function.

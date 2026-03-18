@@ -112,14 +112,14 @@ bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
   }
 }
 
-bool OdaiSdk::register_model_files(const ModelName& name, const ModelFiles& files)
+OdaiResult<void> OdaiSdk::register_model_files(const ModelName& name, const ModelFiles& files)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
     return m_ragEngine->register_model_files(name, files);
@@ -127,18 +127,18 @@ bool OdaiSdk::register_model_files(const ModelName& name, const ModelFiles& file
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 }
 
-bool OdaiSdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
+OdaiResult<void> OdaiSdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
     return m_ragEngine->update_model_files(name, files, flag);
@@ -146,7 +146,7 @@ bool OdaiSdk::update_model_files(const ModelName& name, const ModelFiles& files,
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 }
 

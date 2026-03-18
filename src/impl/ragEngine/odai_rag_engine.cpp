@@ -51,45 +51,46 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
   ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
 }
 
-bool OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& model_file_details)
+OdaiResult<void> OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& model_file_details)
 {
   if (!m_backendEngine->validate_model_files(model_file_details))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "file details validation failed for model: {}", name);
-    return false;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   std::string checksums_json = calculate_model_checksums(model_file_details);
   if (checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
-    return false;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
-  if (!m_db->register_model_files(name, model_file_details, checksums_json))
+  OdaiResult<void> db_res = m_db->register_model_files(name, model_file_details, checksums_json);
+  if (!db_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to register file details for model : {}", name);
-    return false;
+    return db_res;
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "Model files registered successfully for model: {}", name);
-  return true;
+  return {};
 }
 
-bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                                       UpdateModelFlag flag)
+OdaiResult<void> OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                                   UpdateModelFlag flag)
 {
   if (!m_backendEngine->validate_model_files(new_model_file_details))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "new file details Validation failed for model: {}", name);
-    return false;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   std::string new_checksums_json = calculate_model_checksums(new_model_file_details);
   if (new_checksums_json.empty())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
-    return false;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   if (flag == UpdateModelFlag::STRICT_MATCH)
@@ -98,13 +99,13 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     if (!m_db->get_model_checksums(name, old_checksums_json))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}", name);
-      return false;
+      return tl::unexpected(OdaiResultEnum::NOT_FOUND);
     }
 
     try
     {
-      auto new_checksums_json_obj = nlohmann::json::parse(new_checksums_json);
-      auto old_checksums_json_obj = nlohmann::json::parse(old_checksums_json);
+      nlohmann::json new_checksums_json_obj = nlohmann::json::parse(new_checksums_json);
+      nlohmann::json old_checksums_json_obj = nlohmann::json::parse(old_checksums_json);
 
       for (auto it = new_checksums_json_obj.begin(); it != new_checksums_json_obj.end(); ++it)
       {
@@ -115,7 +116,7 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
           {
             ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {} on key: {}. Expected: {}, Got: {}", name, key,
                      old_checksums_json_obj[key].dump(), it.value().dump());
-            return false;
+            return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
           }
         }
         else
@@ -128,18 +129,19 @@ bool OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& 
     catch (...)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to parse/compare checksum JSONs");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
   }
 
-  if (!m_db->update_model_files(name, new_model_file_details, new_checksums_json))
+  OdaiResult<void> db_res = m_db->update_model_files(name, new_model_file_details, new_checksums_json);
+  if (!db_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model : {}", name);
-    return false;
+    return db_res;
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "Model files updated successfully for model: {}", name);
-  return true;
+  return {};
 }
 
 int32_t OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config,

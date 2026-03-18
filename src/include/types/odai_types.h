@@ -41,6 +41,15 @@ enum UpdateModelFlag : std::uint8_t
   ALLOW_MISMATCH = ODAI_UPDATE_ALLOW_MISMATCH
 };
 
+enum class OdaiResultEnum : std::uint32_t
+{
+  ALREADY_EXISTS = ODAI_ALREADY_EXISTS,
+  NOT_FOUND = ODAI_NOT_FOUND,
+  VALIDATION_FAILED = ODAI_VALIDATION_FAILED,
+  INVALID_ARGUMENT = ODAI_INVALID_ARGUMENT,
+  INTERNAL_ERROR = ODAI_INTERNAL_ERROR
+};
+
 /// Specifies the desired output format for the decoded audio.
 struct OdaiAudioTargetSpec
 {
@@ -453,6 +462,7 @@ struct ChatMessage
     {
       return false;
     }
+
     if (m_contentItems.empty())
     {
       return false;
@@ -465,7 +475,6 @@ struct ChatMessage
         return false;
       }
     }
-
     return true;
   }
 };

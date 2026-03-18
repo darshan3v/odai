@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types/odai_result.h"
 #include "types/odai_types.h"
 #include <string>
 #include <vector>
@@ -71,9 +72,9 @@ public:
   /// @param name The unique name to assign to the model
   /// @param model_file_details The generic model file details
   /// @param checksums_json The computed checksums for the files
-  /// @return true if registration succeeded, false on error
-  virtual bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                                    const std::string& checksums_json) = 0;
+  /// @return empty expected if registration succeeded, or an unexpected OdaiResultEnum indicating the error
+  virtual OdaiResult<void> register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                                const std::string& checksums_json) = 0;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
@@ -94,9 +95,9 @@ public:
   /// @param name The name of the model to update
   /// @param new_model_file_details The complete new registration details to store
   /// @param new_checksums The complete new computed checksums
-  /// @return true if update succeeded, false on error
-  virtual bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                                  const std::string& new_checksums) = 0;
+  /// @return empty expected if update succeeded, or an unexpected OdaiResultEnum indicating the error
+  virtual OdaiResult<void> update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                              const std::string& new_checksums) = 0;
 
   /// @brief stores a media item whererver it seems fit and store the mapping in database.
   /// for in memory text (that is media type text and inputitemtype memory buffer, we should set item_out and directly

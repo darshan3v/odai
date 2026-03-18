@@ -137,7 +137,7 @@ static bool test_registration()
   c_ModelFileEntry embedding_entry = {"base_model_path", EMBEDDING_MODEL_PATH.c_str()};
   c_ModelFiles embedding_files = {ODAI_MODEL_TYPE_EMBEDDING, LLAMA_BACKEND_ENGINE, &embedding_entry, 1};
 
-  if (!odai_register_model_files(const_cast<char*>(EMBEDDING_MODEL_NAME), &embedding_files))
+  if (odai_register_model_files(const_cast<char*>(EMBEDDING_MODEL_NAME), &embedding_files) != ODAI_SUCCESS)
   {
     std::cout << "Failed to register embedding model: " << EMBEDDING_MODEL_NAME << "\n";
   }
@@ -151,7 +151,7 @@ static bool test_registration()
       {{"base_model_path", GEMMA3_LLM_PATH.c_str()}, {"mmproj_model_path", GEMMA3_MMPROJ_PATH.c_str()}}};
   c_ModelFiles gemma3_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, gemma3_entries.data(), gemma3_entries.size()};
 
-  if (!odai_register_model_files(const_cast<char*>(GEMMA3_MODEL_NAME), &gemma3_files))
+  if (odai_register_model_files(const_cast<char*>(GEMMA3_MODEL_NAME), &gemma3_files) != ODAI_SUCCESS)
   {
     std::cout << "Failed to register LLM model: " << GEMMA3_MODEL_NAME << "\n";
   }
@@ -164,7 +164,7 @@ static bool test_registration()
   c_ModelFileEntry gemma3n_entry = {"base_model_path", GEMMA3N_LLM_PATH.c_str()};
   c_ModelFiles gemma3n_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, &gemma3n_entry, 1};
 
-  if (!odai_register_model_files(const_cast<char*>(GEMMA3N_MODEL_NAME), &gemma3n_files))
+  if (odai_register_model_files(const_cast<char*>(GEMMA3N_MODEL_NAME), &gemma3n_files) != ODAI_SUCCESS)
   {
     std::cout << "Failed to register LLM model: " << GEMMA3N_MODEL_NAME << "\n";
   }
@@ -178,13 +178,25 @@ static bool test_registration()
       {{"base_model_path", QWEN_OMNI_LLM_PATH.c_str()}, {"mmproj_model_path", QWEN_OMNI_MMPROJ_PATH.c_str()}}};
   c_ModelFiles qwen_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, qwen_entries.data(), qwen_entries.size()};
 
-  if (!odai_register_model_files(const_cast<char*>(QWEN_OMNI_MODEL_NAME), &qwen_files))
+  if (odai_register_model_files(const_cast<char*>(QWEN_OMNI_MODEL_NAME), &qwen_files) != ODAI_SUCCESS)
   {
     std::cout << "Failed to register LLM model: " << QWEN_OMNI_MODEL_NAME << "\n";
   }
   else
   {
     std::cout << "Successfully registered LLM model: " << QWEN_OMNI_MODEL_NAME << "\n";
+  }
+
+  // Test ALREADY_EXISTS behavior
+  std::cout << "\n--- Testing Model Already Exists Constraint ---\n";
+  c_OdaiResult duplicate_res = odai_register_model_files(const_cast<char*>(EMBEDDING_MODEL_NAME), &embedding_files);
+  if (duplicate_res == ODAI_ALREADY_EXISTS)
+  {
+    std::cout << "Successfully detected duplicate model registration: " << EMBEDDING_MODEL_NAME << "\n";
+  }
+  else
+  {
+    std::cout << "Failed to return ODAI_ALREADY_EXISTS for duplicate model. Got: " << duplicate_res << "\n";
   }
 
   return true;
@@ -442,8 +454,8 @@ int main(int argc, char** argv)
   AUDIO_PATH = TEST_BASE_PATH + "/data/audio/Echoes_of_Unseen_Light.mp3";
 
   // Easy to toggle tests
-  bool run_streaming = false;
-  bool run_chat = true;
+  bool run_streaming = true;
+  bool run_chat = false;
   bool do_cleanup = true;
 
   if (do_cleanup)

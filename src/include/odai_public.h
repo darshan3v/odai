@@ -42,8 +42,9 @@ extern "C"
   /// The engine validates the files and a checksum is computed to ensure integrity.
   /// @param model_name The unique name to assign to the model.
   /// @param files The Model Files struct containing paths
-  /// @return true if registration succeeded, false if name exists or properties are invalid.
-  bool odai_register_model_files(c_ModelName model_name, const c_ModelFiles* files);
+  /// @return ODAI_SUCCESS if registration succeeded, or an error code like ODAI_ALREADY_EXISTS or
+  /// ODAI_VALIDATION_FAILED.
+  c_OdaiResult odai_register_model_files(c_ModelName model_name, const c_ModelFiles* files);
 
   /// Updates the registration files for an existing model.
   /// Validates the files and potentially checks checksums based on the flag.
@@ -52,8 +53,8 @@ extern "C"
   /// @param model_name The name of the model to update.
   /// @param files The Model Files struct containing newly added or updated paths.
   /// @param flag Flag indicating how to handle checksum changes.
-  /// @return true if update succeeded, false if validation fails or model not found.
-  bool odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);
+  /// @return ODAI_SUCCESS if update succeeded, or an error code otherwise.
+  c_OdaiResult odai_update_model_files(c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag);
 
   /// Creates a new semantic space configuration.
   /// @param config The semantic space configuration to create.

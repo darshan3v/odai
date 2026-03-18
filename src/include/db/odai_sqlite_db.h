@@ -77,9 +77,9 @@ public:
   /// @param name The unique name to assign to the model
   /// @param model_file_details The generic model file details
   /// @param checksums The computed checksums for the files
-  /// @return true if registration succeeded, false on error
-  bool register_model_files(const ModelName& name, const ModelFiles& model_file_details,
-                            const std::string& checksums) override;
+  /// @return empty expected if registration succeeded, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> register_model_files(const ModelName& name, const ModelFiles& model_file_details,
+                                        const std::string& checksums) override;
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
@@ -99,9 +99,9 @@ public:
   /// @param name The name of the model to update
   /// @param new_model_file_details The complete new model registration details to store
   /// @param new_checksums The complete new computed checksums
-  /// @return true if update succeeded, false on error
-  bool update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
-                          const std::string& new_checksums) override;
+  /// @return empty expected if update succeeded, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
+                                      const std::string& new_checksums) override;
 
   /// @brief stores a media item in media store path and store the mapping in database.
   /// @note we don't store the media if its already present (based on checksum) in media store path, instead we just

@@ -2,6 +2,7 @@
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
 #include "types/odai_ctypes.h"
+#include "types/odai_result.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_csanitizers.h"
 #include <cstdint>
@@ -33,26 +34,40 @@ bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineCon
   return OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
 }
 
-bool odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
+c_OdaiResult odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
 {
   if (model_name == nullptr || files == nullptr || !is_sane(files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_register_model_files");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  return OdaiSdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
+  OdaiResult<void> res = OdaiSdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
+  if (!res)
+  {
+    return static_cast<c_OdaiResult>(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
-bool odai_update_model_files(const c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag)
+c_OdaiResult odai_update_model_files(const c_ModelName model_name, const c_ModelFiles* files, c_UpdateModelFlag flag)
 {
   if (model_name == nullptr || files == nullptr || !is_sane(files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_update_model_files");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
-  return OdaiSdk::get_instance().update_model_files(ModelName(model_name), to_cpp(*files),
-                                                    to_cpp_update_model_flag(flag));
+
+  OdaiResult<void> res =
+      OdaiSdk::get_instance().update_model_files(ModelName(model_name), to_cpp(*files), to_cpp_update_model_flag(flag));
+
+  if (!res)
+  {
+    return static_cast<c_OdaiResult>(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
 bool odai_create_semantic_space(const c_SemanticSpaceConfig* config)

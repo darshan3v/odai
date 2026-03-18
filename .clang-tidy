@@ -8,7 +8,8 @@ Checks: >
   clang-analyzer-*,
   performance-*,
   readability-*,
-  google-runtime-int
+  google-runtime-int,
+  google-build-using-namespace
 
 CheckOptions:
   # Functions: lower_case
@@ -99,3 +100,5 @@ CheckOptions:
   # Enforce CamelCase for the rest of the name
   - key: readability-identifier-naming.AbstractClassCase
     value: CamelCase
+
+WarningsAsErrors: 'google-build-using-namespace'
