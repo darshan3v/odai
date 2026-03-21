@@ -24,7 +24,7 @@ EXAMPLES:
 
 REQUIREMENTS:
     - compile_commands.json must exist in build/
-    - Run CMake first: cmake --preset debug
+    - Run CMake first: cmake --preset linux-default-debug
 EOF
 }
 
@@ -49,7 +49,7 @@ for arg in "$@"; do
 done
 
 # run cmake so that compile_commands.json is generated
-cmake --preset linux-release >/dev/null
+cmake --preset linux-default-release >/dev/null
 
 # Symlink compile_commands.json to project root if not exists
 ln -sf "$PROJECT_ROOT/build/compile_commands.json" "$PROJECT_ROOT/compile_commands.json"

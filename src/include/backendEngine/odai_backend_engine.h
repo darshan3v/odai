@@ -1,5 +1,6 @@
 #pragma once
 
+#include "types/odai_result.h"
 #include "types/odai_types.h"
 #include <vector>
 
@@ -25,9 +26,14 @@ public:
   IOdaiBackendEngine(IOdaiBackendEngine&&) = delete;
   IOdaiBackendEngine& operator=(IOdaiBackendEngine&&) = delete;
 
-  /// Initializes the backend engine. Must be called at the very first before calling any other function in this layer
-  /// @return true if initialization succeeded, false otherwise
-  virtual bool initialize_engine() = 0;
+  /// Initializes the backend engine explicitly. Will be called before any tasks.
+  /// It should discover hardware context and select active devices based on configured preferences.
+  /// @return empty expected if initialization succeeded, or an unexpected OdaiResultEnum indicating the error
+  virtual OdaiResult<void> initialize_engine() = 0;
+
+  /// Retrieves the list of candidate backend devices that can be used by this engine according to its configuration.
+  /// @return Expected vector of candidate devices.
+  virtual OdaiResult<std::vector<BackendDevice>> get_candidate_devices() = 0;
 
   /// Validates the given model registration paths for this specific backend engine.
   /// @note Implementations should document the expected model files in this function's documentation.

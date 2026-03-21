@@ -10,6 +10,7 @@ typedef uint32_t c_OdaiResult;
 #define ODAI_VALIDATION_FAILED (c_OdaiResult)3
 #define ODAI_INVALID_ARGUMENT (c_OdaiResult)4
 #define ODAI_INTERNAL_ERROR (c_OdaiResult)5
+#define ODAI_NOT_INITIALIZED (c_OdaiResult)6
 
 /// Callback function type for streaming response tokens.
 /// Called for each chunk generated during streaming response generation.
@@ -33,6 +34,13 @@ typedef uint8_t DBType;
 /// Use the constants like LLAMA_BACKEND_ENGINE to specify which backend to use.
 typedef uint8_t BackendEngineType;
 #define LLAMA_BACKEND_ENGINE (BackendEngineType)0
+
+/// C-style representation of BackendDeviceType
+typedef uint8_t c_BackendDeviceType;
+#define ODAI_BACKEND_DEVICE_TYPE_CPU ((c_BackendDeviceType)0)
+#define ODAI_BACKEND_DEVICE_TYPE_GPU ((c_BackendDeviceType)1)
+#define ODAI_BACKEND_DEVICE_TYPE_IGPU ((c_BackendDeviceType)2)
+#define ODAI_BACKEND_DEVICE_TYPE_AUTO ((c_BackendDeviceType)3)
 
 /// Strategy for Chunking
 typedef uint8_t ChunkingStrategy;

@@ -69,12 +69,12 @@ Configure and build using the predefined presets:
 #### Linux
 ```bash
 # Debug Build
-cmake --preset linux-debug
-cmake --build --preset linux-debug
+cmake --preset linux-default-debug
+cmake --build --preset linux-default-debug
 
 # Release Build
-cmake --preset linux-release
-cmake --build --preset linux-release
+cmake --preset linux-default-release
+cmake --build --preset linux-default-release
 ```
 
 #### Android (ARM64)

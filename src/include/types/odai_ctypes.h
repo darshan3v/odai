@@ -123,6 +123,9 @@ struct c_BackendEngineConfig
 {
   /// Backend engine type to use (e.g., LLAMA_BACKEND_ENGINE)
   BackendEngineType m_engineType;
+
+  /// Preferred device type (e.g., CPU, GPU, Auto)
+  c_BackendDeviceType m_preferredDeviceType;
 };
 
 /// C-style configuration structure for embedding models.

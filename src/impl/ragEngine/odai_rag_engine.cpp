@@ -5,18 +5,17 @@
 #include "backendEngine/odai_backend_engine.h"
 
 #ifdef ODAI_ENABLE_LLAMA_BACKEND
-#include "backendEngine/odai_llama_backend_engine.h"
+#include "backendEngine/odai_llamacpp/odai_llama_backend_engine.h"
 #endif
 
 #ifdef ODAI_ENABLE_SQLITE_DB
-#include "db/odai_sqlite_db.h"
+#include "db/odai_sqlite/odai_sqlite_db.h"
 #endif
 
 #include "odai_sdk.h"
 #include "types/odai_common_types.h"
 #include "types/odai_type_conversions.h"
 #include "utils/odai_helpers.h"
-#include <stdexcept>
 
 OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
@@ -29,11 +28,6 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
 #endif
   }
 
-  if (!m_db || !m_db->initialize_db())
-  {
-    throw std::runtime_error("Failed to initialize db in RAG engine");
-  }
-
   if (backend_config.m_engineType == LLAMA_BACKEND_ENGINE)
   {
 #ifdef ODAI_ENABLE_LLAMA_BACKEND
@@ -43,12 +37,25 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
 #endif
   }
 
+  ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully created");
+}
+
+bool OdaiRagEngine::initialize_rag_engine()
+{
+  if (!m_db || !m_db->initialize_db())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize db");
+    return false;
+  }
+
   if (!m_backendEngine || !m_backendEngine->initialize_engine())
   {
-    throw std::runtime_error("Failed to initialize backend engine in RAG engine");
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize backend engine");
+    return false;
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
+  return true;
 }
 
 OdaiResult<void> OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& model_file_details)

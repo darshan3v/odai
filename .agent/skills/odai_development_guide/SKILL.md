@@ -58,6 +58,7 @@ We maintain a strict separation between C types (API boundary) and C++ types (In
     - `toCpp(const c_Type&)`: Converts C structs/types to C++ objects.
     - **Expectation**: Converters **assume input data is safe**. They rely on `is_sane()` having been called previously. For example, `toCpp` for a model type assumes the input `uint32_t` corresponds to a valid `ModelType` enum value.
     - `toC(const CppType&)`: Converts C++ objects to C structs (handles memory allocation for C strings).
+    - `to_odai_<type>(const OtherType&)`: Converts external library or backend types to ODAI C++ internal types. For example, any mapping from `ggml_backend_dev_type` to `BackendDeviceType` must follow this naming convention, e.g., `to_odai_backend_device_type()`.
     - Note that Converters are not limited restricted to C/C++ conversions, and they can convert other types. For example, converting std::string mime types to Enums.
 
 ## 3. Implementation Patterns

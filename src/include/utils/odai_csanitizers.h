@@ -62,7 +62,15 @@ inline bool is_sane(const c_DbConfig* config)
 /// @return true if the configuration is valid, false otherwise
 inline bool is_sane(const c_BackendEngineConfig* config)
 {
-  return config != nullptr;
+  if (config == nullptr)
+  {
+    return false;
+  }
+  if (config->m_preferredDeviceType > ODAI_BACKEND_DEVICE_TYPE_AUTO)
+  {
+    return false;
+  }
+  return true;
 }
 
 /// Validates that an embedding model configuration is sane and usable.

@@ -95,6 +95,13 @@ bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
 
     if ((m_ragEngine == nullptr))
     {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to create RAG engine");
+      m_sdkInitialized = false;
+      return false;
+    }
+
+    if (!m_ragEngine->initialize_rag_engine())
+    {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine");
       m_sdkInitialized = false;
       return false;

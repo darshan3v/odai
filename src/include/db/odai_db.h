@@ -49,7 +49,7 @@ public:
   virtual ~IOdaiDb() = default;
 
   /// Initializes the database backend.
-  /// Should be called before any other operations.
+  /// Will be called before any other operations.
   /// @return true if initialization succeeded, false otherwise
   virtual bool initialize_db() = 0;
 

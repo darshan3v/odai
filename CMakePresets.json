@@ -6,8 +6,8 @@
   },
   "configurePresets": [
     {
-      "name": "linux-debug",
-      "displayName": "Linux Debug",
+      "name": "linux-default-debug",
+      "displayName": "Linux Default Debug",
       "binaryDir": "${sourceDir}/build/",
       "generator": "Ninja",
       "cacheVariables": {
@@ -17,12 +17,17 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "TRUE"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "TRUE",
+        "ODAI_CI_BUILD": "OFF",
+        "ODAI_ENABLE_LLAMA_BACKEND": "ON",
+        "ODAI_ENABLE_SQLITE_DB": "ON",
+        "ODAI_ENABLE_MINIAUDIO": "ON",
+        "ODAI_ENABLE_STB_IMAGE": "ON"
       }
     },
     {
-      "name": "linux-release",
-      "displayName": "Linux Release",
+      "name": "linux-default-release",
+      "displayName": "Linux Default Release",
       "binaryDir": "${sourceDir}/build/",
       "generator": "Ninja",
       "cacheVariables": {
@@ -32,7 +37,12 @@
         "CMAKE_EXE_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_SHARED_LINKER_FLAGS": "-fuse-ld=lld",
         "CMAKE_MODULE_LINKER_FLAGS": "-fuse-ld=lld",
-        "CMAKE_EXPORT_COMPILE_COMMANDS": "TRUE"
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "TRUE",
+        "ODAI_CI_BUILD": "OFF",
+        "ODAI_ENABLE_LLAMA_BACKEND": "ON",
+        "ODAI_ENABLE_SQLITE_DB": "ON",
+        "ODAI_ENABLE_MINIAUDIO": "ON",
+        "ODAI_ENABLE_STB_IMAGE": "ON"
       }
     },
     {
@@ -64,12 +74,12 @@
   ],
   "buildPresets": [
     {
-      "name": "linux-debug",
-      "configurePreset": "linux-debug"
+      "name": "linux-default-debug",
+      "configurePreset": "linux-default-debug"
     },
     {
-      "name": "linux-release",
-      "configurePreset": "linux-release"
+      "name": "linux-default-release",
+      "configurePreset": "linux-default-release"
     },
     {
       "name": "android-arm64-debug",

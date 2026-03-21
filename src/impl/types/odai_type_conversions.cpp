@@ -41,6 +41,20 @@ InputItemType to_cpp_input_item_type(c_InputItemType c)
   return InputItemType::FILE_PATH;
 }
 
+BackendDeviceType to_cpp_backend_device_type(c_BackendDeviceType c)
+{
+  switch (c)
+  {
+  case ODAI_BACKEND_DEVICE_TYPE_CPU:
+    return BackendDeviceType::CPU;
+  case ODAI_BACKEND_DEVICE_TYPE_GPU:
+    return BackendDeviceType::GPU;
+  case ODAI_BACKEND_DEVICE_TYPE_AUTO:
+    return BackendDeviceType::AUTO;
+  }
+  return BackendDeviceType::AUTO;
+}
+
 ModelFiles to_cpp(const c_ModelFiles& c)
 {
   ModelFiles model_file_details;
@@ -86,7 +100,10 @@ DBConfig to_cpp(const c_DbConfig& c)
 
 BackendEngineConfig to_cpp(const c_BackendEngineConfig& c)
 {
-  return {c.m_engineType};
+  BackendEngineConfig cpp_config{};
+  cpp_config.m_engineType = c.m_engineType;
+  cpp_config.m_preferredDeviceType = to_cpp_backend_device_type(c.m_preferredDeviceType);
+  return cpp_config;
 }
 
 EmbeddingModelConfig to_cpp(const c_EmbeddingModelConfig& c)

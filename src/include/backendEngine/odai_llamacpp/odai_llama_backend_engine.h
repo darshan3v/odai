@@ -4,6 +4,9 @@
 
 #include "backendEngine/odai_backend_engine.h"
 
+#include "types/odai_common_types.h"
+#include "types/odai_result.h"
+#include "types/odai_types.h"
 #include <llama.h>
 #include <memory>
 #include <mtmd.h>
@@ -76,9 +79,14 @@ class OdaiLlamaEngine : public IOdaiBackendEngine
 public:
   OdaiLlamaEngine(const BackendEngineConfig& backend_engine_config);
 
-  /// Initializes the llama backend engine and sets up logging.
-  /// @return true if initialization succeeded, false otherwise
-  bool initialize_engine() override;
+  /// Initializes the llama backend engine, configures logging, and discovers hardware context.
+  /// It selects devices according to the AUTO selection logic or explicit configurations.
+  /// @return empty expected if initialization succeeded, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> initialize_engine() override;
+
+  /// Returns the primary execution path candidates (e.g., discrete or integrated GPUs)
+  /// selected based on platform and user preference.
+  OdaiResult<std::vector<BackendDevice>> get_candidate_devices() override;
 
   /// Validates the model files specifically for the llama.cpp backend engine.
   /// Ensures that the engine type is LLAMA_BACKEND_ENGINE.
@@ -121,16 +129,23 @@ public:
                                            void* user_data) override;
 
   /// Destructor that frees the llama backend resources.
+  /// @note llama.cpp backends loaded via ggml_backend_load_all() are NOT intended to be unloaded
+  /// manually during application lifecycle. Unloading graphics/compute DLLs mid-execution is
+  /// inherently risky and can lead to driver-level instability.
   ~OdaiLlamaEngine() override;
 
 private:
-  bool m_isInitialized = false;
+  bool m_isInitialized{false};
 
-  EmbeddingModelConfig m_embeddingModelConfig;
-  LLMModelConfig m_llmModelConfig;
+  /// Collection of candidate hardware devices that can be used based on configuration
+  /// List of candidate devices for the primary execution path
+  std::vector<BackendDevice> m_candidateDevices;
 
-  ModelFiles m_embeddingModelFiles;
-  ModelFiles m_llmModelFiles;
+  EmbeddingModelConfig m_embeddingModelConfig{};
+  LLMModelConfig m_llmModelConfig{};
+
+  ModelFiles m_embeddingModelFiles{};
+  ModelFiles m_llmModelFiles{};
 
   std::unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
   std::unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
@@ -140,6 +155,24 @@ private:
   const llama_vocab* m_llmVocab = nullptr;
 
   std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+
+  /// This method follows a prioritized search strategy: attempts to load each backend library
+  /// and immediately verifies if it provides the requested hardware type (GPU/IGPU).
+  /// @param preferred_type The desired device preference (AUTO, GPU, IGPU, CPU)
+  /// @return ODAI_SUCCESS on success, or ODAI_INTERNAL_ERROR if strict hardware requirements are not met.
+  OdaiResult<void> load_and_setup_candidate_devices(BackendDeviceType preferred_type);
+
+  /// Helper to check if a specific backend library both loads AND provides at least one device of the target type.
+  /// If found, those devices are added to m_candidateDevices.
+  /// @param backend_name The GGML backend name (e.g., "cuda", "vulkan", "cpu")
+  /// @param target_type The device type to look for
+  /// @return true if the backend is usable and provides at least one matching device.
+  bool try_load_and_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type);
+
+  /// Helper to load a specific backend by name.
+  /// @param name The backend name (e.g., "cuda", "metal", "vulkan", "cpu")
+  /// @return true if successful or already loaded, false otherwise.
+  static bool load_backend(const std::string& name);
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries

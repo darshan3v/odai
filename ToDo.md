@@ -33,6 +33,7 @@
     - [ ] Store something in DB to identify which embedding model was used to embed the documents
     - [ ] Implement vector storage and retrieval using sqlite vector extension
 - [ ] Maybe can have a async variant of odai_generate_streaming_response
+- [ ] Qualcomm Hexagon, QNN, Apple CoreML llama cpp integration pending
 
 
 ### Build System
@@ -41,8 +42,6 @@
 - [ ] Automate fetch and build of sqlite-vec also, like we have already did for sqlitecpp (& sqlite ) and llama
 - [ ] Think on what would be the best way to structure your codebase, that is how to cross communicate JNI Libs and JNI cpp file
 - [ ] Understand why android builds are resulting in large binary
-- [ ] Build llama.cpp with CUDA for linux and OpenCL for adreno for Android
-- [ ] Build llama.cpp with extra available optimization like dotprod etc.., but think on how to build and distribute
 - [ ] Have to make Pre-commit hook with clang efficient runnig scripts/lint.sh on all files is too much intensive
 
 
@@ -56,3 +55,13 @@
 
 ### ToDo
 - [ ] Reduce header dependency
+- [ ] Figure out and ensure dotprod optimization is enabled for llamacpp (will have to check how to do)
+
+### Tests
+ - [ ] Test all GPU + optimization support
+    - [ ] Test Windows / Linux with / without CUDA / HIP (discrete) / SYSCL (discrete) / Vulkan (iGPU)
+    - [ ] For above also compare iGPU vs CPU, also check available RAM shown is correct or not
+    - [ ] Test Windows / Linux ARM Laptops with / without VULKAN, also check if kleidiAI is enabled / used on devices , test Vulkan vs CPU
+    - [ ] Test Windows / Linux lapotp are using optimal CPU for all variants
+    - [ ] Test Android with / without vulkan, also check if dotprod and kleidiAI are enabled / used on devices
+    - [ ] Test Apple devices with / without Metal, also check if dotprod and kleidiAI are enabled / used on devices

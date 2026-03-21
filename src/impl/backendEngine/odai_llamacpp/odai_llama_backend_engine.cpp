@@ -1,11 +1,13 @@
+#include "ggml-backend.h"
 #include "llama.h"
 #include "mtmd-helper.h"
+#include "mtmd.h"
 
 #include "audioEngine/odai_audio_decoder.h"
-#include "backendEngine/odai_llama_backend_engine.h"
+#include "backendEngine/odai_llamacpp/odai_llama_backend_engine.h"
+#include "backendEngine/odai_llamacpp/odai_llama_type_conversions.h"
 #include "imageEngine/odai_image_decoder.h"
 
-#include "mtmd.h"
 #include "odai_sdk.h"
 
 #include "types/odai_common_types.h"
@@ -14,6 +16,7 @@
 #include "utils/string_utils.h"
 
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -60,19 +63,179 @@ OdaiLlamaEngine::OdaiLlamaEngine(const BackendEngineConfig& backend_engine_confi
   }
 }
 
-bool OdaiLlamaEngine::initialize_engine()
+bool OdaiLlamaEngine::load_backend(const std::string& name)
 {
+  if (ggml_backend_reg_by_name(name.c_str()) != nullptr)
+  {
+    return true;
+  }
 
+  std::string filename;
+#ifdef _WIN32
+  filename = "ggml-" + name + ".dll";
+#elif defined(__APPLE__)
+  filename = "libggml-" + name + ".dylib";
+#else
+  filename = "libggml-" + name + ".so";
+#endif
+
+  ODAI_LOG(ODAI_LOG_INFO, "Attempting to load backend: {}", filename);
+  ggml_backend_reg_t reg = ggml_backend_load(filename.c_str());
+  if (reg != nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded backend: {}", name);
+    return true;
+  }
+
+  ODAI_LOG(ODAI_LOG_WARN, "Failed to load backend: {}", filename);
+  return false;
+}
+
+OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDeviceType preferred_type)
+{
+  m_candidateDevices.clear();
+
+  // 1. Always ensure CPU backend library is loaded (it's the universal fallback)
+  if (!OdaiLlamaEngine::load_backend("cpu"))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Critical failure: CPU backend library not found");
+    return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  // 2. If CPU only requested, just select CPU device and return
+  if (preferred_type == BackendDeviceType::CPU)
+  {
+    ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; selecting CPU as primary execution path");
+    this->try_load_and_add_candidate_devices("cpu", BackendDeviceType::CPU);
+    return {};
+  }
+
+  // 3. Define prioritized GPU search plan based on platform
+#ifdef __APPLE__
+  const std::vector<std::string> gpu_backends = {"metal"};
+#elif defined(__ANDROID__)
+  const std::vector<std::string> gpu_backends = {"vulkan"};
+#else
+  const std::vector<std::string> gpu_backends = {"cuda", "hip", "sycl", "vulkan"};
+#endif
+
+  bool graphics_hardware_found = false;
+
+  // 4. Try to satisfy Discrete GPU or AUTO preference
+  if (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::AUTO)
+  {
+    for (const auto& backend_name : gpu_backends)
+    {
+      if (this->try_load_and_add_candidate_devices(backend_name, BackendDeviceType::GPU))
+      {
+        graphics_hardware_found = true;
+        break; // Stop at the first backend that provides the requested hardware type
+      }
+    }
+  }
+
+  // 5. Try to satisfy Integrated GPU if GPU failed or explicitly requested
+  if (!graphics_hardware_found &&
+      (preferred_type == BackendDeviceType::IGPU || preferred_type == BackendDeviceType::AUTO))
+  {
+#ifdef __APPLE__
+    // Apple Silicon treats the integrated GPU as the primary (and only) Metal device
+    graphics_hardware_found = this->try_load_and_add_candidate_devices("metal", BackendDeviceType::IGPU);
+#else
+    graphics_hardware_found = this->try_load_and_add_candidate_devices("vulkan", BackendDeviceType::IGPU);
+#endif
+  }
+
+  // 6. Handle AUTO fallback to CPU
+  if (!graphics_hardware_found && preferred_type == BackendDeviceType::AUTO)
+  {
+    ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
+    this->try_load_and_add_candidate_devices("cpu", BackendDeviceType::CPU);
+    graphics_hardware_found = true;
+  }
+
+  // 7. Strict validation for explicit GPU/IGPU requests
+  if (!graphics_hardware_found &&
+      (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Requested {} device not found in discovered hardware",
+             preferred_type == BackendDeviceType::GPU ? "GPU" : "IGPU");
+    return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  if (graphics_hardware_found && preferred_type != BackendDeviceType::AUTO && preferred_type != BackendDeviceType::CPU)
+  {
+    ODAI_LOG(ODAI_LOG_INFO, "Successfully configured execution context with hardware acceleration");
+  }
+
+  return {};
+}
+
+bool OdaiLlamaEngine::try_load_and_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type)
+{
+  if (!OdaiLlamaEngine::load_backend(backend_name))
+  {
+    return false;
+  }
+
+  bool found = false;
+  size_t count = ggml_backend_dev_count();
+  for (size_t i = 0; i < count; ++i)
+  {
+    ggml_backend_dev_t dev = ggml_backend_dev_get(i);
+    ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
+    if (std::string(ggml_backend_reg_name(reg)) == backend_name)
+    {
+      BackendDeviceType dev_type = to_odai_backend_device_type(ggml_backend_dev_type(dev));
+      if (dev_type == target_type)
+      {
+        BackendDevice odai_dev;
+        odai_dev.m_name = ggml_backend_dev_name(dev);
+        odai_dev.m_description = ggml_backend_dev_description(dev);
+
+        size_t free_mem = 0;
+        size_t total_mem = 0;
+        ggml_backend_dev_memory(dev, &free_mem, &total_mem);
+        odai_dev.m_totalRam = total_mem;
+        odai_dev.m_type = dev_type;
+
+        m_candidateDevices.push_back(odai_dev);
+
+        ODAI_LOG(ODAI_LOG_INFO, "Discovered Candidate: {} ({}) | Backend: {} | Type: {}", odai_dev.m_name,
+                 odai_dev.m_description, backend_name, static_cast<uint8_t>(odai_dev.m_type));
+        found = true;
+      }
+    }
+  }
+  return found;
+}
+
+OdaiResult<void> OdaiLlamaEngine::initialize_engine()
+{
   llama_backend_init();
 
-  ODAI_LOG(ODAI_LOG_INFO, "Initialized llama backend");
+  OdaiResult<void> config_res = load_and_setup_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
+  if (!config_res)
+  {
+    return config_res;
+  }
+
+  ODAI_LOG(ODAI_LOG_INFO, "Initialized llama backend and execution context");
 
   llama_log_set(llama_log_redirect, nullptr);
   mtmd_helper_log_set(llama_log_redirect, nullptr);
 
   this->m_isInitialized = true;
+  return {};
+}
 
-  return true;
+OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
+{
+  if (!this->m_isInitialized)
+  {
+    return tl::make_unexpected(OdaiResultEnum::NOT_INITIALIZED);
+  }
+  return m_candidateDevices;
 }
 
 bool OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>& items,

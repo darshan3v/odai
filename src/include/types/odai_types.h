@@ -47,7 +47,8 @@ enum class OdaiResultEnum : std::uint32_t
   NOT_FOUND = ODAI_NOT_FOUND,
   VALIDATION_FAILED = ODAI_VALIDATION_FAILED,
   INVALID_ARGUMENT = ODAI_INVALID_ARGUMENT,
-  INTERNAL_ERROR = ODAI_INTERNAL_ERROR
+  INTERNAL_ERROR = ODAI_INTERNAL_ERROR,
+  NOT_INITIALIZED = ODAI_NOT_INITIALIZED
 };
 
 /// Specifies the desired output format for the decoded audio.
@@ -168,12 +169,31 @@ struct DBConfig
   }
 };
 
+enum class BackendDeviceType : std::uint8_t
+{
+  CPU = ODAI_BACKEND_DEVICE_TYPE_CPU,
+  GPU = ODAI_BACKEND_DEVICE_TYPE_GPU,
+  IGPU = ODAI_BACKEND_DEVICE_TYPE_IGPU,
+  AUTO = ODAI_BACKEND_DEVICE_TYPE_AUTO
+};
+
+struct BackendDevice
+{
+  std::string m_name;
+  std::string m_description;
+  BackendDeviceType m_type{};
+  uint64_t m_totalRam{};
+};
+
 /// Configuration structure for backend engine (LLM runtime).
 /// Specifies which LLM backend to use for text generation.
 struct BackendEngineConfig
 {
   /// Backend engine type (e.g., LLAMA_BACKEND_ENGINE)
   BackendEngineType m_engineType;
+
+  /// Preferred device type (e.g., CPU, GPU, Auto)
+  BackendDeviceType m_preferredDeviceType;
 
   bool is_sane() const { return m_engineType == LLAMA_BACKEND_ENGINE; }
 };

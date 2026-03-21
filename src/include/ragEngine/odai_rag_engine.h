@@ -20,6 +20,9 @@ class OdaiRagEngine
 public:
   OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
+  /// Initializes the RAG engine hardware discovery and validation
+  bool initialize_rag_engine();
+
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.
   /// @param name The unique name to assign to the model.
