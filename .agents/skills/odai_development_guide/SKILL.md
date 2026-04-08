@@ -1,71 +1,17 @@
 ---
 name: ODAI Development Guidelines
-description: Architectural patterns, type systems, and development workflows for the ODAI SDK.
+description: Coding patterns, conventions, and style rules for the ODAI SDK.
 ---
 
 # ODAI SDK Development Guidelines
 
-This document outlines the architectural patterns, type systems, and development workflows for the ODAI SDK. It serves as a reference for maintaining consistency across the codebase.
+This document covers the **coding patterns, conventions, and style rules** for day-to-day development. For the system architecture (layers, swappable interfaces, data flow, type system), see [`docs/architecture/`](../../../docs/architecture/README.md).
 
-## 1. High-Level Architecture
+## 1. Implementation Patterns
 
-The SDK follows a layered architecture designed to expose a stable C API while leveraging modern C++ for implementation.
+### 1.1 Implementing a New Feature
 
-```mermaid
-graph TD
-    UserApp[User Application] --> C_API[C Public API (odai_public.h)]
-    C_API --> CPP_SDK[C++ SDK Singleton (odai_sdk.h)]
-    CPP_SDK --> RAG[RAG Engine]
-    RAG --> DB[Database Layer]
-    RAG --> Backend[Backend Engine (LLM)]
-```
-
-- **C Public API (`src/include/odai_public.h`)**: The external interface. Pure C functions with C-compatible types. Stable ABI.
-- **C++ SDK (`src/include/odai_sdk.h`)**: The internal entry point. A singleton class (`OdaiSdk`) that orchestrates setup and routes work to internal engines and helpers.
-- **Internal Components**: `OdaiRagEngine` handles the specific logic for RAG and works with abstractions such as `IOdaiDb` and `IOdaiBackendEngine`.
-
-## 2. Type System & Data Flow
-
-We maintain a strict separation between C types (API boundary) and C++ types (Internal logic).
-
-### 2.1 Type Definitions
-- **C Types (`src/include/types/odai_ctypes.h`)**: 
-    - Structs strictly compatible with C.
-    - Naming convention: `c_` prefix (e.g., `c_ChatConfig`).
-    - Use `typedef char*` for opaque handles (e.g., `c_ChatId`) for type safety.
-    - **Machine-Independent Sized Types**: Always use fixed-width integer types from `<stdint.h>` (e.g., `int32_t`, `uint64_t`) instead of primitive types (`int`, `long`, `size_t`)
-- **C++ Types (`src/include/types/odai_types.h`)**:
-    - Modern C++ structs/classes using STL (`std::string`, `std::vector`).
-    - Validation logic included via `is_sane()` member functions.
-
-### 2.2 Enums, Unions, and ABI Stability
-- **Avoid C Enums in Public API**: 
-    - C enums do not have a guaranteed size (can be `int`, `unsigned int`, `char`, etc., depending on compiler/flags). This breaks ABI stability.
-    - **Solution**: Use `typedef uint8_t` or `typedef uint32_t` along with `#define` macros for constants in `odai_ctypes.h`.
-    - Example: `typedef uint32_t c_ModelType; #define ODAI_MODEL_TYPE_LLM (c_ModelType)1`
-- **Avoid Unions in Public API**:
-    - Unions can introduce ABI instability due to differing alignment, sizing, and padding rules across various compilers and architectures. They also complicate creating safe bindings for other languages.
-    - **Solution**: Use explicitly laid-out structs with an accompanying tag (type field), or use opaque pointers depending on the necessity of exposing layout.
-
-### 2.3 Sanitization & Conversion
-- **Sanitizers (`src/include/utils/odai_csanitizers.h`)**:
-    - `is_sane(const c_Type*)` / `is_sane(c_ValueType value)`
-    - **Purpose**: Low-level safety checks and **structural validation**.
-        - Pointer validity (not null).
-        - Value expectations (e.g., checking if an int representing an enum is within the valid range of defined macros).
-        - It is acceptable to perform these checks here as they validate the "structure" or "encoding" of the data before it enters the C++ layer.
-- **Converters (`src/include/types/odai_type_conversions.h`)**:
-    - `toCpp(const c_Type&)`: Converts C structs/types to C++ objects.
-    - **Expectation**: Converters **assume input data is safe**. They rely on `is_sane()` having been called previously. For example, `toCpp` for a model type assumes the input `uint32_t` corresponds to a valid `ModelType` enum value.
-    - `toC(const CppType&)`: Converts C++ objects to C structs (handles memory allocation for C strings).
-    - `to_odai_<type>(const OtherType&)`: Converts external library or backend types to ODAI C++ internal types. For example, any mapping from `ggml_backend_dev_type` to `BackendDeviceType` should follow this naming convention, e.g., `to_odai_backend_device_type()`.
-    - Note that Converters are not limited restricted to C/C++ conversions, and they can convert other types. For example, converting std::string mime types to Enums.
-
-## 3. Implementation Patterns
-
-### 3.1 Implementing a New Feature
-
-When adding a new feature, follow this data flow:
+When adding a new feature, follow this data flow through the layers:
 
 #### Step 1: Public C API (`src/impl/odai_public.cpp`)
 1.  **Receive Inputs**: Take C types as arguments.
@@ -121,7 +67,7 @@ bool OdaiSdk::create_feature(const FeatureConfig& config)
 }
 ```
 
-### 3.2 Interface Design
+### 1.2 Interface Design
 
 When defining pure virtual interfaces in the C++ backend:
 1.  **Naming**: Interfaces must be prefixed with `I` (e.g., `IAudioDecoder`, `IOdaiDb`). This is enforced by `clang-tidy`.
@@ -149,7 +95,7 @@ public:
 };
 ```
 
-## 4. Key Directives
+## 2. Key Directives
 
 1.  **Sync Headers**: `odai_public.h` (C) and `odai_sdk.h` (C++) must be kept in sync regarding feature parity.
 2.  **Memory Management**: 
@@ -164,69 +110,27 @@ public:
     - **C API**: Returns `bool` (success/fail) or `int` (error codes). logs errors.
     - **C++ SDK**: Catches exceptions and returns error status to C API. Never let exceptions propagate across the C boundary.
 
-## 5. Directory Structure Reference
+## 3. Naming Conventions
 
-- `src/include/`
-    - `odai_public.h`: **Public C Interface**
-    - `odai_sdk.h`: **Public C++ Interface** (Internal singleton)
-    - `types/`
-        - `odai_ctypes.h`: C struct definitions.
-        - `odai_types.h`: C++ struct definitions + logic validation.
-        - `odai_common_types.h`: Shared enums/constants.
-        - `odai_type_conversions.h`: Converters declaration.
-    - `utils/odai_csanitizers.h`: C type safety checks.
-- `src/impl/`
-    - `odai_public.cpp`: C API implementation (Sanitization -> Conversion -> SDK Call).
-    - `odai_sdk.cpp`: C++ SDK implementation (Business Logic -> Engine Call).
-
-## 6. Naming Conventions
-
-### 6.1 Member Variables
-- **Classes**: All non-static member variables of a **class** should be prefixed with `m_`.
-    - **Reasoning**: Distinguishes private state from local variables.
-    - **Example**:
-    ```cpp
-    class MyClass {
-    private:
-        int m_itemCount; // Correct
-    public:
-        void set_count(int count) {
-            m_itemCount = count;
-        }
-    };
-    ```
-- **Structs**: Member variables of a **struct** (POD types) should use `camelBack` *without* a prefix.
-    - **Reasoning**: Structs are often simple data containers; `m_` is unnecessary noise. Matches `clang-tidy` config.
-    - **Example**:
-    ```cpp
-    struct Vector2 {
-        float x;
-        float y;
-    };
-    ```
-
-## 7. Code Style & Conventions
-
-To ensure consistency between the C API and C++ implementation, and to maintain a clean codebase, the following style rules are strictly enforced.
-
-### 7.1 Naming Conventions
+### 3.1 General
 - **Variables & Functions**: Use `snake_case`.
     - *Reasoning*: Matches the stable C API style and standard C++ STL conventions.
     - *Examples*: `db_path`, `odai_register_model`, `is_sane`, `user_data`.
     - *Incorrect*: `dbPath`, `registerModel`, `userData`.
 - **Types (Classes, Structs, Enums, Typedefs)**: Use `PascalCase`.
     - *Examples*: `ChatConfig`, `BackendEngineInternal`, `OAIModelType`.
-    - *Incorrect*: `chat_config`, `backend_engine`.
 - **Interfaces**: Abstract classes must be prefixed with `I` followed by `PascalCase`. Enforced by `clang-tidy` (`readability-identifier-naming.AbstractClassPrefix`).
     - *Examples*: `IAudioDecoder`, `IOdaiDb`.
 - **Constants & Macros**: Use `UPPER_SNAKE_CASE`.
     - *Examples*: `ODAI_MAX_PATH`, `DEFAULT_CHUNK_SIZE`.
-- **Member Variables (Classes)**: Prefix with `m_` followed by `camelBack`.
-    - *Examples*: `m_dbPath`, `m_isInitialized`.
-- **Member Variables (Structs)**: Use `camelBack` (no prefix).
-    - *Examples*: `width`, `creationDate`.
 
-### 7.2 Code Formatting
+### 3.2 Member Variables
+- **Classes**: Prefix with `m_` followed by `camelBack`. *Examples*: `m_dbPath`, `m_isInitialized`.
+- **Structs**: Use `camelBack` (no prefix). *Examples*: `width`, `creationDate`.
+
+## 4. Code Style & Conventions
+
+### 4.1 Code Formatting
 Enforced by `clang-format` (`.clang-format`):
 - **Indentation**: 2 spaces (no tabs).
 - **Line Length**: 120 columns.
@@ -242,14 +146,14 @@ Enforced by `clang-format` (`.clang-format`):
     ```
 - **Includes**: Sorted case-sensitively.
 
-### 7.3 File Headers
+### 4.2 File Headers
 - **Pragma Once**: Use `#pragma once` at the top of all header files.
 
-### 7.4 Comments
+### 4.3 Comments
 - **Doxygen**: Use `///` for documentation comments on public APIs (classes, methods, functions).
 - **Implementation**: Use `//` for logic explanations inside functions.
 
-### 7.5 Code Style Tooling
+### 4.4 Code Style Tooling
 
 Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 - **`format.sh`** - Format code using clang-format (`--help` for usage)
@@ -257,7 +161,7 @@ Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
 
-### 7.6 Header-Only Libraries
+### 4.5 Header-Only Libraries
 
 For STB-style or similar header-only libraries, keep implementation macros in a dedicated translation unit under `src/impl/headerOnlyLib/`.
 
@@ -269,21 +173,19 @@ Current examples:
 - `src/impl/headerOnlyLib/odai_miniaudio_impl.cpp`
 - `src/impl/headerOnlyLib/odai_stb_image_impl.cpp`
 
-## 8. Header Management
+## 5. Header Management
 
-To maintain a clean and build-efficient codebase, follow these rules for managing header dependencies and avoiding circular includes.
-
-### 8.1 Prefer Forward Declarations
+### 5.1 Prefer Forward Declarations
 Whenever a header file only needs to know that a class exists (e.g., for pointers, references, or `std::unique_ptr`), use a forward declaration instead of including the full header.
 
 ```cpp
 class IOdaiDb; // Correct: Forward declaration
 ```
 
-### 8.2 Minimize Include Surface
+### 5.2 Minimize Include Surface
 - Only include what is strictly necessary for the header to compile independently.
 - Move feature-specific includes to the `.cpp` file.
 - Use the Pimpl pattern or abstract interfaces for complex internal components.
 
-### 8.3 Macro/Singleton Decoupling
+### 5.3 Macro/Singleton Decoupling
 Avoid direct dependencies on the singleton `OdaiSdk` inside macros or common headers. Use bridge functions (like `GetOdaiLogger()`) declared in low-level headers and implemented in the SDK layer to provide access to global services.
