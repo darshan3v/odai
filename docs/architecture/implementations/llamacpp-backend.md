@@ -15,11 +15,11 @@ llama.cpp is fetched via CMake `FetchContent` and built as a **traditional separ
 
 ## Hardware Discovery
 
-During `initialize_engine()`, the engine discovers available hardware using GGML's backend system. Backend libraries (CUDA, Vulkan, Metal, CPU) are loaded dynamically. The selection strategy depends on `m_preferredDeviceType`:
+During `initialize_engine()`, the engine discovers available hardware using GGML's backend system. Backend registration is done through `ggml_backend_load_all_from_path()` so ggml can score and load the best variant of each available backend family from the runtime backend directory. ODAI then enumerates the registered devices and applies its own selection policy based on `m_preferredDeviceType`:
 
 - **AUTO**: try GPU → iGPU → CPU (first match wins)
 - **GPU/IGPU**: try specific type → error if not found
-- **CPU**: load CPU backend directly
+- **CPU**: use the registered CPU backend directly
 
 > Backend libraries are **never unloaded** during the application lifecycle — doing so risks driver-level instability.
 

@@ -14,4 +14,4 @@ Before making structural changes — adding/modifying interfaces, swappable comp
 
 ## Planning
 
-Before formulating an implementation plan for non-trivial work, check the `.agents/skills/planning_guidelines/SKILL.md` skill.
+Before formulating an implementation plan for non-trivial work, check the `.agents/skills/odai_planning_guide/SKILL.md` skill.

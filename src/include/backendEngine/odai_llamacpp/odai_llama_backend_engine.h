@@ -154,23 +154,22 @@ private:
 
   std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
 
-  /// This method follows a prioritized search strategy: attempts to load each backend library
-  /// and immediately verifies if it provides the requested hardware type (GPU/IGPU).
+  /// Registers ggml backends, then selects candidate devices according to ODAI's runtime policy.
   /// @param preferred_type The desired device preference (AUTO, GPU, IGPU, CPU)
   /// @return ODAI_SUCCESS on success, or ODAI_INTERNAL_ERROR if strict hardware requirements are not met.
   OdaiResult<void> load_and_setup_candidate_devices(BackendDeviceType preferred_type);
 
-  /// Helper to check if a specific backend library both loads AND provides at least one device of the target type.
+  /// Registers all ggml backend families found in the runtime backend directory.
+  /// ggml internally scores backend variants and loads the best match for each family.
+  /// @return true if the registration step completed, false otherwise.
+  static bool register_available_backends();
+
+  /// Helper to collect devices for a registered backend family and target device type.
   /// If found, those devices are added to m_candidateDevices.
   /// @param backend_name The GGML backend name (e.g., "cuda", "vulkan", "cpu")
   /// @param target_type The device type to look for
-  /// @return true if the backend is usable and provides at least one matching device.
-  bool try_load_and_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type);
-
-  /// Helper to load a specific backend by name.
-  /// @param name The backend name (e.g., "cuda", "metal", "vulkan", "cpu")
-  /// @return true if successful or already loaded, false otherwise.
-  static bool load_backend(const std::string& name);
+  /// @return true if the backend provides at least one matching device.
+  bool try_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type);
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries

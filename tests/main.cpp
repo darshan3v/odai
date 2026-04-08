@@ -119,7 +119,7 @@ static bool init_sdk()
   odai_set_logger(log_callback, nullptr);
 
   c_DbConfig db_conf = {SQLITE_DB, DB_PATH.c_str(), CACHE_PATH.c_str()};
-  c_BackendEngineConfig backend_conf = {LLAMA_BACKEND_ENGINE};
+  c_BackendEngineConfig backend_conf = {LLAMA_BACKEND_ENGINE, ODAI_BACKEND_DEVICE_TYPE_GPU};
 
   if (!odai_initialize_sdk(&db_conf, &backend_conf))
   {

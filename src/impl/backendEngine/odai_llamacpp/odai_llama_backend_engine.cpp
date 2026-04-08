@@ -13,6 +13,7 @@
 #include "types/odai_common_types.h"
 #include "types/odai_type_conversions.h"
 #include "types/odai_types.h"
+#include "utils/odai_helpers.h"
 #include "utils/string_utils.h"
 
 #include <algorithm>
@@ -20,8 +21,33 @@
 #include <filesystem>
 #include <nlohmann/json.hpp>
 #include <optional>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
+
+namespace
+{
+std::vector<std::string_view> get_prioritized_gpu_backends()
+{
+#ifdef __APPLE__
+  return {"metal"};
+#elif defined(__ANDROID__)
+  return {"vulkan"};
+#else
+  return {"cuda", "hip", "sycl", "vulkan"};
+#endif
+}
+
+std::optional<std::string_view> get_igpu_backend_name()
+{
+#ifdef __APPLE__
+  return std::nullopt;
+#else
+  return "vulkan";
+#endif
+}
+} // namespace
 
 /// Redirects llama.cpp log messages to the Odai logging system.
 /// Maps GGML log levels to Odai log levels and filters out debug messages.
@@ -63,31 +89,21 @@ OdaiLlamaEngine::OdaiLlamaEngine(const BackendEngineConfig& backend_engine_confi
   }
 }
 
-bool OdaiLlamaEngine::load_backend(const std::string& name)
+bool OdaiLlamaEngine::register_available_backends()
 {
-  if (ggml_backend_reg_by_name(name.c_str()) != nullptr)
+  const std::filesystem::path backend_dir =
+      get_module_directory_from_address(reinterpret_cast<const void*>(&register_available_backends));
+  const std::string backend_dir_str = backend_dir.string();
+
+  ODAI_LOG(ODAI_LOG_INFO, "Registering ggml backends from runtime directory: {}", backend_dir_str);
+  ggml_backend_load_all_from_path(backend_dir_str.c_str());
+
+  if (ggml_backend_reg_by_name("cpu") != nullptr)
   {
     return true;
   }
 
-  std::string filename;
-#ifdef _WIN32
-  filename = "ggml-" + name + ".dll";
-#elif defined(__APPLE__)
-  filename = "libggml-" + name + ".dylib";
-#else
-  filename = "libggml-" + name + ".so";
-#endif
-
-  ODAI_LOG(ODAI_LOG_INFO, "Attempting to load backend: {}", filename);
-  ggml_backend_reg_t reg = ggml_backend_load(filename.c_str());
-  if (reg != nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded backend: {}", name);
-    return true;
-  }
-
-  ODAI_LOG(ODAI_LOG_WARN, "Failed to load backend: {}", filename);
+  ODAI_LOG(ODAI_LOG_ERROR, "Failed to register the CPU backend from runtime directory: {}", backend_dir_str);
   return false;
 }
 
@@ -95,66 +111,68 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
 {
   m_candidateDevices.clear();
 
-  // 1. Always ensure CPU backend library is loaded (it's the universal fallback)
-  if (!OdaiLlamaEngine::load_backend("cpu"))
+  if (!OdaiLlamaEngine::register_available_backends())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Critical failure: CPU backend library not found");
     return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 
-  // 2. If CPU only requested, just select CPU device and return
   if (preferred_type == BackendDeviceType::CPU)
   {
     ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; selecting CPU as primary execution path");
-    this->try_load_and_add_candidate_devices("cpu", BackendDeviceType::CPU);
-    return {};
-  }
+    if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+    {
+      return {};
+    }
 
-  // 3. Define prioritized GPU search plan based on platform
-#ifdef __APPLE__
-  const std::vector<std::string> gpu_backends = {"metal"};
-#elif defined(__ANDROID__)
-  const std::vector<std::string> gpu_backends = {"vulkan"};
-#else
-  const std::vector<std::string> gpu_backends = {"cuda", "hip", "sycl", "vulkan"};
-#endif
+    ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
+    return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
+  }
 
   bool graphics_hardware_found = false;
 
-  // 4. Try to satisfy Discrete GPU or AUTO preference
+  const std::vector<std::string_view> gpu_backends = get_prioritized_gpu_backends();
+
   if (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::AUTO)
   {
-    for (const auto& backend_name : gpu_backends)
+    for (const std::string_view backend_name : gpu_backends)
     {
-      if (this->try_load_and_add_candidate_devices(backend_name, BackendDeviceType::GPU))
+      if (this->try_add_candidate_devices(std::string(backend_name), BackendDeviceType::GPU))
       {
         graphics_hardware_found = true;
-        break; // Stop at the first backend that provides the requested hardware type
+        break;
       }
     }
   }
 
-  // 5. Try to satisfy Integrated GPU if GPU failed or explicitly requested
   if (!graphics_hardware_found &&
       (preferred_type == BackendDeviceType::IGPU || preferred_type == BackendDeviceType::AUTO))
   {
-#ifdef __APPLE__
-    // Apple Silicon treats the integrated GPU as the primary (and only) Metal device
-    graphics_hardware_found = this->try_load_and_add_candidate_devices("metal", BackendDeviceType::IGPU);
-#else
-    graphics_hardware_found = this->try_load_and_add_candidate_devices("vulkan", BackendDeviceType::IGPU);
-#endif
+    const std::optional<std::string_view> igpu_backend = get_igpu_backend_name();
+    if (igpu_backend.has_value())
+    {
+      graphics_hardware_found = this->try_add_candidate_devices(std::string(*igpu_backend), BackendDeviceType::IGPU);
+    }
+    else if (preferred_type == BackendDeviceType::IGPU)
+    {
+      ODAI_LOG(ODAI_LOG_INFO, "No dedicated IGPU backend probe is configured for this platform");
+    }
   }
 
-  // 6. Handle AUTO fallback to CPU
   if (!graphics_hardware_found && preferred_type == BackendDeviceType::AUTO)
   {
-    ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
-    this->try_load_and_add_candidate_devices("cpu", BackendDeviceType::CPU);
-    graphics_hardware_found = true;
+    if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+    {
+      ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
+      graphics_hardware_found = true;
+    }
+    else
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
+      return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    }
   }
 
-  // 7. Strict validation for explicit GPU/IGPU requests
   if (!graphics_hardware_found &&
       (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
   {
@@ -171,11 +189,11 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
   return {};
 }
 
-bool OdaiLlamaEngine::try_load_and_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type)
+bool OdaiLlamaEngine::try_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type)
 {
-  if (!OdaiLlamaEngine::load_backend(backend_name))
+  if (ggml_backend_reg_by_name(backend_name.c_str()) == nullptr)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load backend library: {}", backend_name);
+    ODAI_LOG(ODAI_LOG_INFO, "Backend family '{}' is not registered in this runtime", backend_name);
     return false;
   }
 

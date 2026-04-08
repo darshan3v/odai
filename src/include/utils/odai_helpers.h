@@ -1,5 +1,7 @@
 #pragma once
 
+#include <filesystem>
+
 #include "types/odai_types.h"
 
 /// Generates a unique chat session identifier.
@@ -21,3 +23,11 @@ std::string calculate_data_checksum(const std::vector<uint8_t>& data);
 /// @param files The Model Files struct containing paths.
 /// @return A JSON string containing key-value pairs of checksums, or empty string on error.
 std::string calculate_model_checksums(const ModelFiles& files);
+
+/// Returns the directory of the loaded module that contains the given symbol address.
+/// This can be used by any module to resolve its own shared library or executable directory by
+/// passing the address of one of its own functions or static objects. Falls back to the process
+/// current working directory if the module path cannot be resolved.
+/// @param symbol_address Address of a symbol that resides in the target module.
+/// @return Absolute path to the directory containing the shared library or executable for that symbol.
+std::filesystem::path get_module_directory_from_address(const void* symbol_address);

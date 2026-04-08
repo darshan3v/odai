@@ -1,5 +1,5 @@
 ---
-name: Planning Guidelines
+name: ODAI Planning Guide
 description: Steps AI agents should follow before creating implementation plans for the ODAI SDK.
 ---
 

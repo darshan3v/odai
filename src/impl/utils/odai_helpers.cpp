@@ -8,6 +8,12 @@
 #include "xxhash.h"
 #include <nlohmann/json.hpp>
 
+#ifdef _WIN32
+#include <windows.h>
+#else
+#include <dlfcn.h>
+#endif
+
 ChatId generate_chat_id()
 {
   // Simple random ID generation
@@ -82,4 +88,40 @@ std::string calculate_model_checksums(const ModelFiles& files)
   }
 
   return checksums_json.dump();
+}
+
+std::filesystem::path get_module_directory_from_address(const void* symbol_address)
+{
+#ifdef _WIN32
+  HMODULE module = nullptr;
+  if (GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT,
+                         reinterpret_cast<LPCWSTR>(symbol_address), &module) == 0)
+  {
+    return std::filesystem::current_path();
+  }
+
+  std::wstring module_path(MAX_PATH, L'\0');
+  DWORD path_length = GetModuleFileNameW(module, module_path.data(), static_cast<DWORD>(module_path.size()));
+  while (path_length == module_path.size())
+  {
+    module_path.resize(module_path.size() * 2);
+    path_length = GetModuleFileNameW(module, module_path.data(), static_cast<DWORD>(module_path.size()));
+  }
+
+  if (path_length == 0)
+  {
+    return std::filesystem::current_path();
+  }
+
+  module_path.resize(path_length);
+  return std::filesystem::path(module_path).parent_path();
+#else
+  Dl_info module_info{};
+  if (dladdr(const_cast<void*>(symbol_address), &module_info) == 0 || module_info.dli_fname == nullptr)
+  {
+    return std::filesystem::current_path();
+  }
+
+  return std::filesystem::path(module_info.dli_fname).parent_path();
+#endif
 }
