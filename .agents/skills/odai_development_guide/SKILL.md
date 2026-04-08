@@ -21,8 +21,8 @@ graph TD
 ```
 
 - **C Public API (`src/include/odai_public.h`)**: The external interface. Pure C functions with C-compatible types. Stable ABI.
-- **C++ SDK (`src/include/odai_sdk.h`)**: The internal entry point. A singleton class (`ODAISdk`) that focuses mainly on configuration validation (`is_sane()`) and orchestrating. It delegates most of the actual operations to the internal engines.
-- **Internal Components**: `ODAIRagEngine` handles the specific logic for RAG and it directly owns `ODAIDb` and `ODAIBackendEngine`. All actual DB or Backend calls are forwarded to it.
+- **C++ SDK (`src/include/odai_sdk.h`)**: The internal entry point. A singleton class (`OdaiSdk`) that orchestrates setup and routes work to internal engines and helpers.
+- **Internal Components**: `OdaiRagEngine` handles the specific logic for RAG and works with abstractions such as `IOdaiDb` and `IOdaiBackendEngine`.
 
 ## 2. Type System & Data Flow
 
@@ -58,7 +58,7 @@ We maintain a strict separation between C types (API boundary) and C++ types (In
     - `toCpp(const c_Type&)`: Converts C structs/types to C++ objects.
     - **Expectation**: Converters **assume input data is safe**. They rely on `is_sane()` having been called previously. For example, `toCpp` for a model type assumes the input `uint32_t` corresponds to a valid `ModelType` enum value.
     - `toC(const CppType&)`: Converts C++ objects to C structs (handles memory allocation for C strings).
-    - `to_odai_<type>(const OtherType&)`: Converts external library or backend types to ODAI C++ internal types. For example, any mapping from `ggml_backend_dev_type` to `BackendDeviceType` must follow this naming convention, e.g., `to_odai_backend_device_type()`.
+    - `to_odai_<type>(const OtherType&)`: Converts external library or backend types to ODAI C++ internal types. For example, any mapping from `ggml_backend_dev_type` to `BackendDeviceType` should follow this naming convention, e.g., `to_odai_backend_device_type()`.
     - Note that Converters are not limited restricted to C/C++ conversions, and they can convert other types. For example, converting std::string mime types to Enums.
 
 ## 3. Implementation Patterns
@@ -72,7 +72,7 @@ When adding a new feature, follow this data flow:
 2.  **Sanitize**: Call `is_sane()` from `odai_csanitizers.h` to ensure pointers are valid.
 3.  **Log Errors**: specific error if sanitation fails.
 4.  **Convert**: Use `toCpp()` to convert verified C inputs to C++ objects.
-5.  **Forward**: Call the corresponding `ODAISdk` singleton method.
+5.  **Forward**: Call the corresponding `OdaiSdk` singleton method.
 6.  **Return**: Convert result back to C types if necessary (or return `bool`/`int`).
 
 **Example (`odai_public.cpp`):**
@@ -86,20 +86,21 @@ bool odai_create_feature(const c_FeatureConfig *c_config)
     }
     
     // 2. Convert & Forward
-    return ODAISdk::get_instance().create_feature(toCpp(*c_config));
+    return OdaiSdk::get_instance().create_feature(toCpp(*c_config));
 }
 ```
 
 #### Step 2: C++ SDK Layer (`src/impl/odai_sdk.cpp`)
 1.  **Receive Inputs**: Take C++ types.
-2.  **Validate**: Call `config.is_sane()` for business logic validation (e.g., checking empty strings, valid checking range).
+2.  **Validate**: Call `config.is_sane()` for business logic validation (e.g., checking empty strings and valid ranges).
 3.  **Check State**: Ensure SDK is initialized (`m_sdkInitialized`).
 4.  **Execute**: Call internal engines (DB, RAG, etc.) or perform logic.
-5.  **Handle Exceptions**: Wrap broad logic in `try-catch` blocks to prevent crashes.
+5.  **Return Rich Results Where Appropriate**: Prefer `OdaiResult<T>` / `tl::expected` when the API needs structured error reporting instead of only `bool`.
+6.  **Handle Exceptions**: Wrap broad logic in `try-catch` blocks to prevent crashes.
 
 **Example (`odai_sdk.cpp`):**
 ```cpp
-bool ODAISdk::create_feature(const FeatureConfig& config)
+bool OdaiSdk::create_feature(const FeatureConfig& config)
 {
     try {
         if (!m_sdkInitialized) return false;
@@ -255,6 +256,19 @@ Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 - **`lint.sh`** - Enforce naming conventions using clang-tidy (`lint.sh [OPTIONS]`)
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
+
+### 7.6 Header-Only Libraries
+
+For STB-style or similar header-only libraries, keep implementation macros in a dedicated translation unit under `src/impl/headerOnlyLib/`.
+
+- Feature code should include the plain library headers only.
+- Each header-only library implementation must be compiled exactly once.
+- This keeps generated implementation code out of feature files, prevents duplicate symbols, and reduces rebuild noise.
+
+Current examples:
+- `src/impl/headerOnlyLib/odai_miniaudio_impl.cpp`
+- `src/impl/headerOnlyLib/odai_stb_image_impl.cpp`
+
 ## 8. Header Management
 
 To maintain a clean and build-efficient codebase, follow these rules for managing header dependencies and avoiding circular includes.

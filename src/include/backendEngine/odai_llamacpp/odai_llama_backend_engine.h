@@ -137,8 +137,6 @@ public:
 private:
   bool m_isInitialized{false};
 
-  /// Collection of candidate hardware devices that can be used based on configuration
-  /// List of candidate devices for the primary execution path
   std::vector<BackendDevice> m_candidateDevices;
 
   EmbeddingModelConfig m_embeddingModelConfig{};

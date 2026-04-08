@@ -286,7 +286,10 @@ if(ODAI_ENABLE_SQLITE_DB)
 endif()
 
 if(ODAI_ENABLE_MINIAUDIO)
-    target_sources(odai PRIVATE src/impl/audioEngine/odai_miniaudio_decoder.cpp)
+    target_sources(odai PRIVATE
+        src/impl/audioEngine/odai_miniaudio_decoder.cpp
+        src/impl/headerOnlyLib/odai_miniaudio_impl.cpp
+    )
     target_include_directories(odai PRIVATE ${miniaudio_SOURCE_DIR})
     target_compile_definitions(odai PRIVATE 
         ODAI_ENABLE_MINIAUDIO
@@ -296,7 +299,10 @@ if(ODAI_ENABLE_MINIAUDIO)
 endif()
 
 if(ODAI_ENABLE_STB_IMAGE)
-    target_sources(odai PRIVATE src/impl/imageEngine/odai_stb_image_decoder.cpp)
+    target_sources(odai PRIVATE
+        src/impl/imageEngine/odai_stb_image_decoder.cpp
+        src/impl/headerOnlyLib/odai_stb_image_impl.cpp
+    )
     target_include_directories(odai PRIVATE ${stb_SOURCE_DIR})
     # stb is header only, no target linking needed
     target_compile_definitions(odai PRIVATE ODAI_ENABLE_STB_IMAGE)

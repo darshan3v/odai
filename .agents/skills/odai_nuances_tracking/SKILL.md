@@ -19,6 +19,7 @@ All such nuances MUST be documented in the `nuances.md` file located at the root
     *   Explain the *what* and, most importantly, the *why*.
     *   Provide code examples if applicable.
 3.  **Update the Index:** The `nuances.md` file contains an index at the top. **You MUST update this index** whenever you add a new section, so that an LLM can easily scan the document and jump to the relevant section. Use markdown links to link the index item to its corresponding header.
+4.  **Remove stale nuances:** If a nuance is no longer accurate because the build, code structure, or dependency behavior changed, remove or replace it so `nuances.md` stays current.
 
 ### Example `nuances.md` Structure:
 

@@ -43,17 +43,23 @@ Unlike miniaudio, `llama.cpp` builds as a traditional, separate library containi
   **Why:** These flags instruct `llama.cpp`'s internal CMake script on *how* to compile its own `.cpp` files into a library. Once it is built, our `odai` library only needs to *link* to the resulting `llama` binary. We do not need to pass `target_compile_definitions` to our `odai` target for llama features, because our compiler is not compiling the llama source code directly—it is just pulling in the pre-compiled symbols.
 
 #### Best Practice: Dedicated Implementation File (Header-Only)
-The preferred way to handle header-only libraries (STB-style) in this SDK is to use a **dedicated implementation file**. Instead of defining the implementation macro (like `#define MINIAUDIO_IMPLEMENTATION`) in a functional component like `odai_miniaudio_decoder.cpp`, create a separate file in `src/impl/headerOnlyLib/`.
+The preferred way to handle header-only libraries (STB-style) in this SDK is to use a **dedicated implementation file**. Instead of defining the implementation macro inside decoder or engine files, create a separate file in `src/impl/headerOnlyLib/`.
 
+*   **Examples:**
+    * `src/impl/headerOnlyLib/odai_miniaudio_impl.cpp`
+    * `src/impl/headerOnlyLib/odai_stb_image_impl.cpp`
 *   **Example (`src/impl/headerOnlyLib/odai_miniaudio_impl.cpp`):**
     ```cpp
     #define MINIAUDIO_IMPLEMENTATION
+    #define MA_API static
+    #define ma_atomic_global_lock odai_ma_atomic_global_lock
     #include "miniaudio.h"
     ```
 *   **Why:**
     *   **Encapsulation:** The heavy implementation code is compiled once in its own translation unit.
     *   **Prevention of Duplicate Symbols:** Since the implementation exists in only one `.cpp` file, you won't accidentally generate multiple copies if you include the header elsewhere.
     *   **Faster Rebuilds:** Modifying your functional logic (e.g., `odai_miniaudio_decoder.cpp`) doesn't require the compiler to re-process the massive header implementation.
+    *   **Cleaner Feature Code:** Decoder and engine files can include the library normally without carrying macro-heavy setup.
 
 #### Duplicate Symbol Errors (Header-Only Libraries)
 When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (`odai`), you might encounter duplicate symbol linker errors if both libraries try to compile the `MINIAUDIO_IMPLEMENTATION` or if one compiles it globally and the other tries to link to it.

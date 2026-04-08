@@ -160,7 +160,7 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Requested {} device not found in discovered hardware",
              preferred_type == BackendDeviceType::GPU ? "GPU" : "IGPU");
-    return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
   }
 
   if (graphics_hardware_found && preferred_type != BackendDeviceType::AUTO && preferred_type != BackendDeviceType::CPU)
@@ -175,6 +175,7 @@ bool OdaiLlamaEngine::try_load_and_add_candidate_devices(const std::string& back
 {
   if (!OdaiLlamaEngine::load_backend(backend_name))
   {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load backend library: {}", backend_name);
     return false;
   }
 

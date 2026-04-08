@@ -33,6 +33,7 @@ description: Documentation style rules and checklist for the ODAI SDK.
 - **Mention edge cases**: Document important behaviors like "If the same model is already loaded, only updates the configuration"
 - **Explain complex behavior**: For functions with non-obvious behavior, provide multi-line explanations
 - **Note side effects**: Mention if parameters are modified in place or if the function has side effects
+- **Document ownership clearly**: If a function allocates memory or returns owned heap-backed data, state who frees it and which matching free function to call
 - **Reserved parameters**: Note if a parameter is "currently unused, reserved for future use"
 - **Unimplemented functions**: If a function is declared but not yet implemented, add a "ToDo: Implementation not yet defined." note in the documentation
 - **Avoid implementation details**: Do not expose unnecessary implementation details in documentation. Focus on what the function does from the user's perspective, not how it's implemented internally
@@ -46,4 +47,5 @@ When documenting a function, ensure:
 - [ ] Return value documented with `@return` including error conditions
 - [ ] Edge cases and special behaviors mentioned
 - [ ] Side effects documented if any
+- [ ] Ownership/allocation rules documented if the API returns or mutates heap-backed data
 - [ ] Complex behavior explained in additional lines
