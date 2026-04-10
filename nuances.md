@@ -9,6 +9,8 @@ This document outlines key technical reasoning, build system quirks, and "gotcha
         - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-cc-library)
         - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
         - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
+- [Runtime Behavior](#runtime-behavior)
+    - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
 
 ## Build System (CMake)
 
@@ -80,3 +82,12 @@ When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (
     #include "miniaudio.h"
     #undef MA_API
     ```
+
+## Runtime Behavior
+
+### llama.cpp Vulkan Device Type on Android and Other Integrated GPUs
+When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vulkan"`) and the device class (`GPU` vs `IGPU`) are **not** the same thing.
+
+* **What ggml does:** In the local llama.cpp source (`build/_deps/llama-src/ggml/src/ggml-vulkan/ggml-vulkan.cpp`), Vulkan devices report `GGML_BACKEND_DEVICE_TYPE_IGPU` when Vulkan exposes the physical device as an integrated GPU, otherwise they report `GGML_BACKEND_DEVICE_TYPE_GPU`.
+* **Why this matters for ODAI:** On Android, Vulkan is usually the compute API for the SoC's integrated GPU. That means probing `"vulkan"` with an ODAI target type of `GPU` can miss a valid Android Vulkan device if ggml classifies it as `IGPU`.
+* **Design implication:** Treat Vulkan as a backend family only. Device-selection policy should rely on ggml's reported device type, and Android-specific selection logic should decide whether a Vulkan iGPU satisfies a user request for "GPU acceleration" or should remain distinct from explicit `IGPU`.
