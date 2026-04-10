@@ -1,5 +1,7 @@
 #pragma once
 
+#include "types/odai_result.h"
+
 #include <string>
 
 class InputItem;
@@ -27,8 +29,9 @@ public:
   /// @param input The InputItem containing image data.
   /// @param target_spec The required output's spec.
   /// @param decoded_image The output decoded image.
-  /// @return true if decoding was successful, false otherwise.
-  bool decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec, OdaiDecodedImage& decoded_image);
+  /// @return empty expected if decoding was successful, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
+                                  OdaiDecodedImage& decoded_image);
 
 protected:
   /// Core implementation of decode_to_spec to be provided by the derived class.
@@ -36,7 +39,7 @@ protected:
   /// @param input The validated InputItem containing image data.
   /// @param target_spec The required output's spec.
   /// @param decoded_image The output decoded image.
-  /// @return true if decoding was successful, false otherwise.
-  virtual bool do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
-                                 OdaiDecodedImage& decoded_image) = 0;
+  /// @return empty expected if decoding was successful, or an unexpected OdaiResultEnum indicating the error.
+  virtual OdaiResult<void> do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
+                                             OdaiDecodedImage& decoded_image) = 0;
 };

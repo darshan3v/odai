@@ -36,9 +36,8 @@ private:
   /// @note Here we assume the item being passed is not yet present in media store path
   /// @param item The media item to store
   /// @param checksum The pre-computed checksum of the media item to use for file_name and db entry
-  /// @param item_out Output parameter to receive the stored item details, currently we expect the type to be FILE_PATH,
-  /// but this can be extended in future if needed.
-  bool store_media_item_impl(const InputItem& item, const std::string& checksum, InputItem& item_out);
+  /// @return stored item details on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<InputItem> store_media_item_impl(const InputItem& item, const std::string& checksum);
 
 public:
   /// Constructs a new ODAISqliteDb instance with the specified database
@@ -53,24 +52,25 @@ public:
   /// Initializes the database object (if db doesn't exist then create and
   /// initializes with schema) Registers the sqlite-vec extension, opens the
   /// connection, and initializes schema if needed.
-  /// @return true if initialization succeeded, false otherwise
-  bool initialize_db() override;
+  /// @return empty expected if initialization succeeded, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> initialize_db() override;
 
   /// Starts a transaction.
   /// Supports nested calls by flattening: real SQL transaction starts only on
   /// the first call.
-  /// @return true if transaction started successfully (or was already active).
-  bool begin_transaction() override;
+  /// @return empty expected if the transaction state is valid, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> begin_transaction() override;
 
   /// Commits a transaction.
   /// Supports nested calls: real SQL commit happens only when the outermost
   /// transaction commits.
-  /// @return true if commit call was successful (or decremented depth).
-  bool commit_transaction() override;
+  /// @return empty expected if the transaction state is valid, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> commit_transaction() override;
 
   /// Rolls back the entire transaction.
   /// This aborts the current transaction completely regardless of nesting depth.
-  bool rollback_transaction() override;
+  /// @return empty expected if rollback completed, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> rollback_transaction() override;
 
   /// Registers a new model in the database.
   /// Stores the model name, details JSON, checksums JSON, and type in the models table.
@@ -83,15 +83,13 @@ public:
 
   /// Retrieves the generic details for a registered model.
   /// @param name The name of the model to look up
-  /// @param model_file_details Output parameter to store the model file details
-  /// @return true if model found, false if not found or on error
-  bool get_model_files(const ModelName& name, ModelFiles& model_file_details) override;
+  /// @return model file details on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<ModelFiles> get_model_files(const ModelName& name) override;
 
   /// Retrieves the stored checksums for a registered model.
   /// @param name The name of the model to look up
-  /// @param checksums Output parameter to store the model checksums
-  /// @return true if model found, false if not found or on error
-  bool get_model_checksums(const ModelName& name, std::string& checksums) override;
+  /// @return model checksums JSON on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<std::string> get_model_checksums(const ModelName& name) override;
 
   /// Updates the details for an existing model record.
   /// Note: This method expects `new_details` and `new_checksums` to contain the
@@ -109,35 +107,32 @@ public:
   /// for in memory text (that is media type text and inputitemtype memory buffer, we directly set item_out and return
   /// success we don't store)
   /// @param item The media item to store
-  /// @param item_out Output parameter to receive the stored item details
-  /// @return true if storage succeeded, false on error
-  bool store_media_item(const InputItem& item, InputItem& item_out) override;
+  /// @return stored item details on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<InputItem> store_media_item(const InputItem& item) override;
 
   /// Creates a new semantic space configuration in the database.
   /// @param config The semantic space configuration to store.
-  /// @return true if created successfully, false on error.
-  bool create_semantic_space(const SemanticSpaceConfig& config) override;
+  /// @return empty expected if created successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> create_semantic_space(const SemanticSpaceConfig& config) override;
 
   /// Retrieves the configuration for a semantic space.
   /// @param name The name of the semantic space to retrieve.
-  /// @param config Output parameter to store the configuration.
-  /// @return true if found, false on error or if not found.
-  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config) override;
+  /// @return semantic space configuration on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<SemanticSpaceConfig> get_semantic_space_config(const SemanticSpaceName& name) override;
 
   /// Lists all available semantic spaces from the database.
-  /// @param spaces Vector to be populated with the list of semantic spaces.
-  /// @return true if listed successfully, false on error.
-  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces) override;
+  /// @return semantic space configurations on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<std::vector<SemanticSpaceConfig>> list_semantic_spaces() override;
 
   /// Deletes a semantic space configuration from the database.
   /// @param name The name of the semantic space to delete.
-  /// @return true if deleted successfully, false on error.
-  bool delete_semantic_space(const SemanticSpaceName& name) override;
+  /// @return empty expected if deleted successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> delete_semantic_space(const SemanticSpaceName& name) override;
 
   /// Checks if a chat session with the given chat_id exists in the database.
   /// @param chat_id The chat identifier to check
-  /// @return true if chat_id exists, false if not found or on error
-  bool chat_id_exists(const ChatId& chat_id) override;
+  /// @return true/false on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<bool> chat_id_exists(const ChatId& chat_id) override;
 
   /// Insert a new chat in DB with the specified configuration.
   /// Stores the chat configuration as JSONB in the database and inserts the
@@ -145,19 +140,16 @@ public:
   /// @param chat_id Unique identifier for the chat session
   /// @param chat_config Configuration object containing model settings, system
   /// prompt, and RAG options
-  /// @return true if creating chat and inserting system prompt succeeds, false
-  /// on error
-  bool create_chat(const ChatId& chat_id, const ChatConfig& chat_config) override;
+  /// @return empty expected if chat creation and system prompt insertion succeed, or an unexpected OdaiResultEnum
+  /// indicating the error
+  OdaiResult<void> create_chat(const ChatId& chat_id, const ChatConfig& chat_config) override;
 
   /// Retrieves the chat configuration for the specified chat session.
   /// The configuration is parsed from JSONB stored in the database and
   /// converted to a ChatConfig object.
   /// @param chat_id The chat identifier to retrieve configuration for
-  /// @param chat_config Output parameter that will be populated with the chat
-  /// configuration (modified in place)
-  /// @return true if configuration retrieved successfully, false if chat_id
-  /// doesn't exist or on error
-  bool get_chat_config(const ChatId& chat_id, ChatConfig& chat_config) override;
+  /// @return chat configuration on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<ChatConfig> get_chat_config(const ChatId& chat_id) override;
 
   /// @brief Retrieves all chat messages for the specified chat session.
   /// @note Messages are returned in chronological order based on sequence_index.
@@ -166,9 +158,8 @@ public:
   /// Their m_data payload will contain the local absolute path string pointing
   /// to the cached file on disk, rather than the raw binary data.
   /// @param chat_id The chat identifier to retrieve messages for.
-  /// @param messages Output parameter that will be populated with the chat messages (cleared and populated).
-  /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error.
-  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages) override;
+  /// @return chat messages on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<std::vector<ChatMessage>> get_chat_history(const ChatId& chat_id) override;
 
   /// @brief Inserts multiple chat messages into the database.
   /// This function attaches messages to an existing chat session. Each message
@@ -179,8 +170,9 @@ public:
   /// except for text items which would be memory buffer
   /// @param chat_id Unique identifier for the chat session.
   /// @param messages Vector of ChatMessage objects to insert.
-  /// @return true if all messages were inserted successfully, false on error.
-  bool insert_chat_messages(const ChatId& chat_id, const std::vector<ChatMessage>& messages) override;
+  /// @return empty expected if all messages were inserted successfully, or an unexpected OdaiResultEnum indicating the
+  /// error.
+  OdaiResult<void> insert_chat_messages(const ChatId& chat_id, const std::vector<ChatMessage>& messages) override;
 
   /// Closes the database connection and releases resources.
   void close() override;

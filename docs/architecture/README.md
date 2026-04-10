@@ -50,9 +50,9 @@ graph TD
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| **C ABI Surface** | `odai_public.h` / `odai_public.cpp` | Stable binary interface. Sanitizes C inputs, converts to C++ types, forwards to SDK. |
-| **C++ SDK** | `odai_sdk.h` / `odai_sdk.cpp` | Singleton orchestrator. Validates business logic, manages lifecycle, routes to engines. |
-| **Internal Engines** | `OdaiRagEngine`, interfaces | Core logic. RAG engine owns a `IOdaiBackendEngine` and `IOdaiDb` instance. |
+| **C ABI Surface** | `odai_public.h` / `odai_public.cpp` | Stable binary interface. Sanitizes C inputs, converts to C++ types, forwards to SDK, and returns `c_OdaiResult` for migrated operation-style APIs while keeping payload ownership in output pointers. |
+| **C++ SDK** | `odai_sdk.h` / `odai_sdk.cpp` | Singleton orchestrator. Validates business logic, manages lifecycle, routes to engines, and uses `OdaiResult` for operation-style C++ APIs, including streaming calls via `OdaiResult<StreamingStats>`. |
+| **Internal Engines** | `OdaiRagEngine`, interfaces | Core logic. RAG engine owns a `IOdaiBackendEngine` and `IOdaiDb` instance, and uses `OdaiResult` for operational APIs, including DB initialization and streaming generation. |
 | **Media Decoders** | `IOdaiAudioDecoder`, `IOdaiImageDecoder` | Stateless decoders created on-demand by the backend engine internally to process multimodal inputs (images, audio) before inference. |
 
 For the full request lifecycle (C types → sanitize → convert → SDK → engine), see [Data Flow & Type System](./data-flow-and-type-system.md).

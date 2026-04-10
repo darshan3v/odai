@@ -74,20 +74,20 @@ void OdaiSdk::set_log_level(OdaiLogLevel log_level)
   }
 }
 
-bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
+OdaiResult<void> OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
   try
   {
     if (!db_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid db config passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (!backend_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid backend engine config passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     // Initalize the RAGEngine
@@ -97,25 +97,27 @@ bool OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfi
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to create RAG engine");
       m_sdkInitialized = false;
-      return false;
+      return unexpected_internal_error<void>();
     }
 
-    if (!m_ragEngine->initialize_rag_engine())
+    OdaiResult<void> init_res = m_ragEngine->initialize_rag_engine();
+    if (!init_res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine");
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine, error code: {}",
+               static_cast<std::uint32_t>(init_res.error()));
       m_sdkInitialized = false;
-      return false;
+      return tl::unexpected(init_res.error());
     }
 
     m_sdkInitialized = true;
     ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK Initialized successfully");
-    return true;
+    return {};
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
     m_sdkInitialized = false;
-    return false;
+    return unexpected_internal_error<void>();
   }
 }
 
@@ -126,7 +128,7 @@ OdaiResult<void> OdaiSdk::register_model_files(const ModelName& name, const Mode
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+      return unexpected_not_initialized<void>();
     }
 
     return m_ragEngine->register_model_files(name, files);
@@ -134,7 +136,7 @@ OdaiResult<void> OdaiSdk::register_model_files(const ModelName& name, const Mode
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    return unexpected_internal_error<void>();
   }
 }
 
@@ -145,7 +147,7 @@ OdaiResult<void> OdaiSdk::update_model_files(const ModelName& name, const ModelF
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+      return unexpected_not_initialized<void>();
     }
 
     return m_ragEngine->update_model_files(name, files, flag);
@@ -153,121 +155,160 @@ OdaiResult<void> OdaiSdk::update_model_files(const ModelName& name, const ModelF
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    return unexpected_internal_error<void>();
   }
 }
 
-bool OdaiSdk::create_semantic_space(const SemanticSpaceConfig& config)
+OdaiResult<void> OdaiSdk::create_semantic_space(const SemanticSpaceConfig& config)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return unexpected_not_initialized<void>();
     }
 
     if (!config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid semantic space config passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     // TODO: if dim == 0 then auto infer from model
 
-    return m_ragEngine->create_semantic_space(config);
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
-  }
-}
-
-bool OdaiSdk::get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config)
-{
-  try
-  {
-    if (!m_sdkInitialized)
+    OdaiResult<void> res = m_ragEngine->create_semantic_space(config);
+    if (!res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space, error code: {}",
+               static_cast<std::uint32_t>(res.error()));
+      return tl::unexpected(res.error());
     }
 
-    return m_ragEngine->get_semantic_space_config(name, config);
+    return {};
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return unexpected_internal_error<void>();
   }
 }
 
-bool OdaiSdk::list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces)
+OdaiResult<SemanticSpaceConfig> OdaiSdk::get_semantic_space_config(const SemanticSpaceName& name)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return unexpected_not_initialized<SemanticSpaceConfig>();
     }
 
-    return m_ragEngine->list_semantic_spaces(spaces);
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
-  }
-}
-
-bool OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
-{
-  try
-  {
-    if (!m_sdkInitialized)
+    OdaiResult<SemanticSpaceConfig> res = m_ragEngine->get_semantic_space_config(name);
+    if (!res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to get semantic space config, error code: {}",
+               static_cast<std::uint32_t>(res.error()));
+      return tl::unexpected(res.error());
     }
 
-    return m_ragEngine->delete_semantic_space(name);
+    return res;
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return unexpected_internal_error<SemanticSpaceConfig>();
   }
 }
 
-bool OdaiSdk::add_document(const std::string& content, const DocumentId& document_id,
-                           const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const
+OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSdk::list_semantic_spaces()
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return unexpected_not_initialized<std::vector<SemanticSpaceConfig>>();
+    }
+
+    OdaiResult<std::vector<SemanticSpaceConfig>> res = m_ragEngine->list_semantic_spaces();
+    if (!res)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to list semantic spaces, error code: {}",
+               static_cast<std::uint32_t>(res.error()));
+      return tl::unexpected(res.error());
+    }
+
+    return res;
+  }
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+    return unexpected_internal_error<std::vector<SemanticSpaceConfig>>();
+  }
+}
+
+OdaiResult<void> OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
+{
+  try
+  {
+    if (!m_sdkInitialized)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+      return unexpected_not_initialized<void>();
+    }
+
+    OdaiResult<void> res = m_ragEngine->delete_semantic_space(name);
+    if (!res)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space, error code: {}",
+               static_cast<std::uint32_t>(res.error()));
+      return tl::unexpected(res.error());
+    }
+
+    return {};
+  }
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
+    return unexpected_internal_error<void>();
+  }
+}
+
+OdaiResult<void> OdaiSdk::add_document(const std::string& content, const DocumentId& document_id,
+                                       const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const
+{
+  try
+  {
+    if (!m_sdkInitialized)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
+      return unexpected_not_initialized<void>();
+    }
+
+    if (content.empty() || document_id.empty() || semantic_space_name.empty() || scope_id.empty())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid document arguments passed");
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     // ToDo : call rag engine to add document
 
     ODAI_LOG(ODAI_LOG_INFO, "Adding document to space: {}", semantic_space_name);
 
-    return true;
+    return {};
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return unexpected_internal_error<void>();
   }
 }
 
-int32_t OdaiSdk::generate_streaming_response(const LLMModelConfig& llm_model_config,
-                                             const std::vector<InputItem>& prompt, const SamplerConfig& sampler_config,
-                                             OdaiStreamRespCallbackFn callback, void* user_data)
+OdaiResult<StreamingStats> OdaiSdk::generate_streaming_response(const LLMModelConfig& llm_model_config,
+                                                                const std::vector<InputItem>& prompt,
+                                                                const SamplerConfig& sampler_config,
+                                                                OdaiStreamRespCallbackFn callback, void* user_data)
 {
   try
   {
@@ -275,58 +316,59 @@ int32_t OdaiSdk::generate_streaming_response(const LLMModelConfig& llm_model_con
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return -1;
+      return unexpected_not_initialized<StreamingStats>();
     }
 
     if (!llm_model_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid LLM Model Config passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (!sampler_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid Sampler Config passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (prompt.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid query passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (callback == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "empty callback passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
-    int32_t total_tokens =
+    OdaiResult<StreamingStats> stream_res =
         m_ragEngine->generate_streaming_response(llm_model_config, prompt, sampler_config, callback, user_data);
-    if (total_tokens < 0)
+    if (!stream_res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response");
-      return -1;
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to generate response, error code: {}",
+               static_cast<std::uint32_t>(stream_res.error()));
+      return tl::unexpected(stream_res.error());
     }
 
-    return total_tokens;
+    return stream_res;
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 }
 
-bool OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config, ChatId& chat_id_out)
+OdaiResult<ChatId> OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return unexpected_not_initialized<ChatId>();
     }
 
     ChatId chat_id;
@@ -334,7 +376,7 @@ bool OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
     if (!chat_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_config passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     // if chat_id is empty then we will generate and set the out, else we will
@@ -342,67 +384,77 @@ bool OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_confi
     if (chat_id_in.empty())
     {
       chat_id = generate_chat_id();
-      chat_id_out = chat_id;
     }
     else
     {
       chat_id = chat_id_in;
-      chat_id_out = chat_id; // Set output to input in this case
-      if (m_ragEngine->chat_id_exists(chat_id))
+      OdaiResult<bool> exists_res = m_ragEngine->chat_id_exists(chat_id);
+      if (!exists_res)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "failed to check chat existence, error code: {}",
+                 static_cast<std::uint32_t>(exists_res.error()));
+        return tl::unexpected(exists_res.error());
+      }
+
+      if (exists_res.value())
       {
         ODAI_LOG(ODAI_LOG_ERROR, "chat_id {} already exists", chat_id_in);
-        return false;
+        return tl::unexpected(OdaiResultEnum::ALREADY_EXISTS);
       }
     }
 
-    if (!m_ragEngine->create_chat(chat_id, chat_config))
+    OdaiResult<void> create_res = m_ragEngine->create_chat(chat_id, chat_config);
+    if (!create_res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to create chat");
-      return false;
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to create chat, error code: {}", static_cast<std::uint32_t>(create_res.error()));
+      return tl::unexpected(create_res.error());
     }
 
-    return true;
+    return chat_id;
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return unexpected_internal_error<ChatId>();
   }
 }
 
-bool OdaiSdk::get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages)
+OdaiResult<std::vector<ChatMessage>> OdaiSdk::get_chat_history(const ChatId& chat_id)
 {
   try
   {
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return false;
+      return unexpected_not_initialized<std::vector<ChatMessage>>();
     }
 
     if (chat_id.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
-    if (!m_ragEngine->get_chat_history(chat_id, messages))
+    OdaiResult<std::vector<ChatMessage>> res = m_ragEngine->get_chat_history(chat_id);
+    if (!res)
     {
-      return false;
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat history, error code: {}", static_cast<std::uint32_t>(res.error()));
+      return tl::unexpected(res.error());
     }
 
-    return true;
+    return res;
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught");
-    return false;
+    return unexpected_internal_error<std::vector<ChatMessage>>();
   }
 }
 
-int32_t OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
-                                                  const GeneratorConfig& generator_config,
-                                                  OdaiStreamRespCallbackFn callback, void* user_data)
+OdaiResult<StreamingStats> OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id,
+                                                                     const std::vector<InputItem>& prompt,
+                                                                     const GeneratorConfig& generator_config,
+                                                                     OdaiStreamRespCallbackFn callback, void* user_data)
 {
   try
   {
@@ -410,58 +462,59 @@ int32_t OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id, const s
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return -1;
+      return unexpected_not_initialized<StreamingStats>();
     }
 
     if (chat_id.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid chat_id passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (prompt.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid query passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (!generator_config.is_sane())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid generator config passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     if (callback == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid callback passed");
-      return -1;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     // Call the RAG engine's generate_streaming_chat_response method
-    int32_t total_tokens =
+    OdaiResult<StreamingStats> stream_res =
         m_ragEngine->generate_streaming_chat_response(chat_id, prompt, generator_config, callback, user_data);
 
-    if (total_tokens < 0)
+    if (!stream_res)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to generate streaming chat response for chat_id: {}", chat_id);
-      return -1;
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to generate streaming chat response for chat_id: {}, error code: {}", chat_id,
+               static_cast<std::uint32_t>(stream_res.error()));
+      return tl::unexpected(stream_res.error());
     }
 
     ODAI_LOG(ODAI_LOG_INFO,
              "Successfully generated streaming chat response for chat_id: {} "
              "with {} tokens",
-             chat_id, total_tokens);
+             chat_id, stream_res->m_generatedTokens);
 
-    return total_tokens;
+    return stream_res;
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught: {}", e.what());
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 }

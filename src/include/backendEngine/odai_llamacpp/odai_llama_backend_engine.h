@@ -94,8 +94,8 @@ public:
   /// pointing to valid existing files. For EMBEDDING models, expects exactly 1 entry: a mandatory 'base_model_path'
   /// pointing to a valid existing file.
   /// @param files The model files object to validate
-  /// @return true if the associated model files are valid, false otherwise
-  bool validate_model_files(const ModelFiles& files) override;
+  /// @return true/false on success, or an unexpected OdaiResultEnum indicating an operational failure
+  OdaiResult<bool> validate_model_files(const ModelFiles& files) override;
 
   /// Generates a streaming response for the given prompt
   /// @note engine expects the input media items to be of type File Path, and text as Memory Buffer
@@ -105,11 +105,12 @@ public:
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
-  /// @return Total number of tokens generated (excluding EOG token), or -1 on
-  /// error
-  int32_t generate_streaming_response(const std::vector<InputItem>& prompt, const LLMModelConfig& llm_model_config,
-                                      const ModelFiles& model_files, const SamplerConfig& sampler_config,
-                                      OdaiStreamRespCallbackFn callback, void* user_data) override;
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_response(const std::vector<InputItem>& prompt,
+                                                         const LLMModelConfig& llm_model_config,
+                                                         const ModelFiles& model_files,
+                                                         const SamplerConfig& sampler_config,
+                                                         OdaiStreamRespCallbackFn callback, void* user_data) override;
 
   /// Generates a streaming chat response for the given query and chat history.
   /// @note The engine expects the input media items in the prompt to be of type File Path, and text as Memory Buffer
@@ -120,13 +121,12 @@ public:
   /// @param sampler_config Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
-  /// @return Total number of tokens generated (excluding EOG token), or -1 on
-  /// error
-  int32_t generate_streaming_chat_response(const std::vector<InputItem>& prompt,
-                                           const std::vector<ChatMessage>& chat_history,
-                                           const LLMModelConfig& llm_model_config, const ModelFiles& model_files,
-                                           const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
-                                           void* user_data) override;
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats>
+  generate_streaming_chat_response(const std::vector<InputItem>& prompt, const std::vector<ChatMessage>& chat_history,
+                                   const LLMModelConfig& llm_model_config, const ModelFiles& model_files,
+                                   const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
+                                   void* user_data) override;
 
   /// Destructor that frees the llama backend resources.
   /// @note llama.cpp backends loaded via ggml_backend_load_all() are NOT intended to be unloaded
@@ -346,11 +346,11 @@ private:
   /// @param input_items The input items (text, audio, image) to process
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback
-  /// @return Total number of tokens generated (excluding EOG token), or -1 on
-  /// error
-  int32_t generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
-                                           const std::string& prompt, const std::vector<mtmd::bitmap>& bitmaps,
-                                           OdaiStreamRespCallbackFn callback, void* user_data);
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
+                                                              const std::string& prompt,
+                                                              const std::vector<mtmd::bitmap>& bitmaps,
+                                                              OdaiStreamRespCallbackFn callback, void* user_data);
 };
 
 #endif // ODAI_ENABLE_LLAMA_BACKEND

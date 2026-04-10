@@ -17,21 +17,27 @@ void odai_set_log_level(OdaiLogLevel log_level)
   OdaiSdk::get_instance().set_log_level(log_level);
 }
 
-bool odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineConfig* c_backend_engine_config)
+c_OdaiResult odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendEngineConfig* c_backend_engine_config)
 {
   if (!is_sane(c_db_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid dbConfig passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
   if (!is_sane(c_backend_engine_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid backendEngineConfig passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  return OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
+  OdaiResult<void> res = OdaiSdk::get_instance().initialize_sdk(to_cpp(*c_db_config), to_cpp(*c_backend_engine_config));
+  if (!res)
+  {
+    return to_c_result(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
 c_OdaiResult odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
@@ -45,7 +51,7 @@ c_OdaiResult odai_register_model_files(const c_ModelName model_name, const c_Mod
   OdaiResult<void> res = OdaiSdk::get_instance().register_model_files(ModelName(model_name), to_cpp(*files));
   if (!res)
   {
-    return static_cast<c_OdaiResult>(res.error());
+    return to_c_result(res.error());
   }
 
   return ODAI_SUCCESS;
@@ -64,38 +70,47 @@ c_OdaiResult odai_update_model_files(const c_ModelName model_name, const c_Model
 
   if (!res)
   {
-    return static_cast<c_OdaiResult>(res.error());
+    return to_c_result(res.error());
   }
 
   return ODAI_SUCCESS;
 }
 
-bool odai_create_semantic_space(const c_SemanticSpaceConfig* config)
+c_OdaiResult odai_create_semantic_space(const c_SemanticSpaceConfig* config)
 {
   if (!is_sane(config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid semantic space config passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
-  return OdaiSdk::get_instance().create_semantic_space(to_cpp(*config));
+  OdaiResult<void> res = OdaiSdk::get_instance().create_semantic_space(to_cpp(*config));
+  if (!res)
+  {
+    return to_c_result(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
-bool odai_get_semantic_space(const c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out)
+c_OdaiResult odai_get_semantic_space(const c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out)
 {
   if (semantic_space_name == nullptr || config_out == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid arguments passed to odai_get_semantic_space");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  SemanticSpaceConfig config;
-  if (!OdaiSdk::get_instance().get_semantic_space_config(SemanticSpaceName(semantic_space_name), config))
+  *config_out = {};
+
+  OdaiResult<SemanticSpaceConfig> res =
+      OdaiSdk::get_instance().get_semantic_space_config(SemanticSpaceName(semantic_space_name));
+  if (!res)
   {
-    return false;
+    return to_c_result(res.error());
   }
 
-  *config_out = to_c(config);
-  return true;
+  *config_out = to_c(res.value());
+  return ODAI_SUCCESS;
 }
 
 void odai_free_semantic_space_config(c_SemanticSpaceConfig* config)
@@ -107,27 +122,28 @@ void odai_free_semantic_space_config(c_SemanticSpaceConfig* config)
   free_members(config);
 }
 
-bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count)
+c_OdaiResult odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count)
 {
   if (spaces_out == nullptr || spaces_count == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid output parameters passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  std::vector<SemanticSpaceConfig> spaces;
-  if (!OdaiSdk::get_instance().list_semantic_spaces(spaces))
+  *spaces_out = nullptr;
+  *spaces_count = 0;
+
+  OdaiResult<std::vector<SemanticSpaceConfig>> res = OdaiSdk::get_instance().list_semantic_spaces();
+  if (!res)
   {
-    *spaces_out = nullptr;
-    *spaces_count = 0;
-    return false;
+    return to_c_result(res.error());
   }
+
+  const std::vector<SemanticSpaceConfig>& spaces = res.value();
 
   if (spaces.empty())
   {
-    *spaces_out = nullptr;
-    *spaces_count = 0;
-    return true;
+    return ODAI_SUCCESS;
   }
 
   *spaces_count = spaces.size();
@@ -137,7 +153,7 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spa
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for spaces list");
     *spaces_count = 0;
-    return false;
+    return ODAI_INTERNAL_ERROR;
   }
 
   for (size_t i = 0; i < spaces.size(); ++i)
@@ -145,7 +161,7 @@ bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spa
     (*spaces_out)[i] = to_c(spaces[i]);
   }
 
-  return true;
+  return ODAI_SUCCESS;
 }
 
 void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, uint16_t count)
@@ -169,27 +185,39 @@ void odai_free_semantic_spaces_list(c_SemanticSpaceConfig* spaces, uint16_t coun
   }
 }
 
-bool odai_delete_semantic_space(const c_SemanticSpaceName name)
+c_OdaiResult odai_delete_semantic_space(const c_SemanticSpaceName name)
 {
   if (name == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid space name passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
-  return OdaiSdk::get_instance().delete_semantic_space(std::string(name));
+  OdaiResult<void> res = OdaiSdk::get_instance().delete_semantic_space(std::string(name));
+  if (!res)
+  {
+    return to_c_result(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
-bool odai_add_document(const char* content, const c_DocumentId document_id,
-                       const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id)
+c_OdaiResult odai_add_document(const char* content, const c_DocumentId document_id,
+                               const c_SemanticSpaceName semantic_space_name, const c_ScopeId scope_id)
 {
   if (content == nullptr || document_id == nullptr || semantic_space_name == nullptr || scope_id == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid arguments passed to odai_add_document");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  return OdaiSdk::get_instance().add_document(std::string(content), DocumentId(document_id),
-                                              SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
+  OdaiResult<void> res = OdaiSdk::get_instance().add_document(
+      std::string(content), DocumentId(document_id), SemanticSpaceName(semantic_space_name), ScopeId(scope_id));
+  if (!res)
+  {
+    return to_c_result(res.error());
+  }
+
+  return ODAI_SUCCESS;
 }
 
 int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_config, const c_InputItem* c_prompt_items,
@@ -227,44 +255,51 @@ int32_t odai_generate_streaming_response(const c_LlmModelConfig* llm_model_confi
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }
 
-  return OdaiSdk::get_instance().generate_streaming_response(to_cpp(*llm_model_config), prompt_items,
-                                                             to_cpp(*c_sampler_config), c_callback, c_user_data);
+  OdaiResult<StreamingStats> res = OdaiSdk::get_instance().generate_streaming_response(
+      to_cpp(*llm_model_config), prompt_items, to_cpp(*c_sampler_config), c_callback, c_user_data);
+  if (!res)
+  {
+    return -1;
+  }
+
+  return res->m_generatedTokens;
 }
 
-bool odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out)
+c_OdaiResult odai_create_chat(const c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out)
 {
-  if (!is_sane(c_chat_config))
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_config passed");
-    return false;
-  }
-
-  if (c_chat_id_out == nullptr && c_chat_id_in == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "invalid parameters passed: c_chat_id_out and c_chat_id_in are null");
-    return false;
-  }
-
-  ChatId chat_id_in = (c_chat_id_in != nullptr) ? ChatId(c_chat_id_in) : ChatId("");
-  ChatId chat_id_out;
-
-  bool result = OdaiSdk::get_instance().create_chat(chat_id_in, to_cpp(*c_chat_config), chat_id_out);
-
-  if (result)
-  {
-    *c_chat_id_out = strdup(chat_id_out.c_str());
-    if (*c_chat_id_out == nullptr)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for chat_id_out");
-      return false;
-    }
-  }
-  else
+  if (c_chat_id_out != nullptr)
   {
     *c_chat_id_out = nullptr;
   }
 
-  return result;
+  if (!is_sane(c_chat_config))
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_config passed");
+    return ODAI_INVALID_ARGUMENT;
+  }
+
+  if (c_chat_id_out == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "invalid output parameter passed to odai_create_chat");
+    return ODAI_INVALID_ARGUMENT;
+  }
+
+  ChatId chat_id_in = (c_chat_id_in != nullptr) ? ChatId(c_chat_id_in) : ChatId("");
+  OdaiResult<ChatId> res = OdaiSdk::get_instance().create_chat(chat_id_in, to_cpp(*c_chat_config));
+
+  if (!res)
+  {
+    return to_c_result(res.error());
+  }
+
+  *c_chat_id_out = strdup(res.value().c_str());
+  if (*c_chat_id_out == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for chat_id_out");
+    return ODAI_INTERNAL_ERROR;
+  }
+
+  return ODAI_SUCCESS;
 }
 
 void odai_free_chat_id(c_ChatId chat_id)
@@ -275,34 +310,34 @@ void odai_free_chat_id(c_ChatId chat_id)
   }
 }
 
-bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count)
+c_OdaiResult odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count)
 {
   if (c_chat_id == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid chat_id passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
   if (c_messages_out == nullptr || messages_count == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid output parameters passed");
-    return false;
+    return ODAI_INVALID_ARGUMENT;
   }
 
-  std::vector<ChatMessage> messages;
-  if (!OdaiSdk::get_instance().get_chat_history(ChatId(c_chat_id), messages))
+  *c_messages_out = nullptr;
+  *messages_count = 0;
+
+  OdaiResult<std::vector<ChatMessage>> res = OdaiSdk::get_instance().get_chat_history(ChatId(c_chat_id));
+  if (!res)
   {
-    *c_messages_out = nullptr;
-    *messages_count = 0;
-    return false; // Or true if empty? Original returned false on DB error, true on empty.
-                  // OdaiSdk::get_chat_history returns false on error.
+    return to_c_result(res.error());
   }
+
+  const std::vector<ChatMessage>& messages = res.value();
 
   if (messages.empty())
   {
-    *c_messages_out = nullptr;
-    *messages_count = 0;
-    return true;
+    return ODAI_SUCCESS;
   }
 
   *messages_count = messages.size();
@@ -312,7 +347,7 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to allocate memory for messages");
     *messages_count = 0;
-    return false;
+    return ODAI_INTERNAL_ERROR;
   }
 
   for (size_t i = 0; i < messages.size(); ++i)
@@ -320,7 +355,7 @@ bool odai_get_chat_history(const c_ChatId c_chat_id, c_ChatMessage** c_messages_
     (*c_messages_out)[i] = to_c(messages[i]);
   }
 
-  return true;
+  return ODAI_SUCCESS;
 }
 
 void odai_free_chat_messages(c_ChatMessage* c_messages, uint16_t count)
@@ -377,6 +412,12 @@ int32_t odai_generate_streaming_chat_response(const c_ChatId c_chat_id, const c_
     prompt_items.push_back(to_cpp(c_prompt_items[i]));
   }
 
-  return OdaiSdk::get_instance().generate_streaming_chat_response(ChatId(c_chat_id), prompt_items,
-                                                                  to_cpp(*c_generator_config), callback, user_data);
+  OdaiResult<StreamingStats> res = OdaiSdk::get_instance().generate_streaming_chat_response(
+      ChatId(c_chat_id), prompt_items, to_cpp(*c_generator_config), callback, user_data);
+  if (!res)
+  {
+    return -1;
+  }
+
+  return res->m_generatedTokens;
 }

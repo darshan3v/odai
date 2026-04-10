@@ -17,7 +17,7 @@ sequenceDiagram
     App->>CAPI: odai_create_chat(c_ChatId, c_ChatConfig*, ...)
     CAPI->>CAPI: is_sane(c_ChatConfig*) — structural validation
     CAPI->>CAPI: toCpp(*c_config) — convert to C++ types
-    CAPI->>SDK: create_chat(ChatId, ChatConfig, ...)
+    CAPI->>SDK: create_chat(ChatId, ChatConfig)
     SDK->>SDK: config.is_sane() — business logic validation
     SDK->>RAG: create_chat(chat_id, chat_config)
     RAG->>Iface: m_db->create_chat(chat_id, chat_config)
@@ -33,7 +33,7 @@ sequenceDiagram
 | 3. Convert | C API | Call `toCpp()` from `odai_type_conversions.h` — C structs → C++ objects |
 | 4. Validate | C++ SDK (`odai_sdk.cpp`) | Call `config.is_sane()` — business logic (empty strings, invalid ranges) |
 | 5. Execute | Internal Engines | Forward to `OdaiRagEngine`, which delegates to `IOdaiBackendEngine` / `IOdaiDb` implementations |
-| 6. Return | All layers | Convert back to C if needed (`toC()`); return `bool`, `int32_t`, or `c_OdaiResult` |
+| 6. Return | All layers | Internal C++ layers return `OdaiResult<void>` / `OdaiResult<T>` for operation-style APIs. Migrated C ABI functions return `c_OdaiResult`, keep output pointers for payloads, and convert C++ payloads to C structs with `toC()` as needed. |
 
 ---
 

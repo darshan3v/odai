@@ -25,9 +25,9 @@ public:
   /// @param input The InputItem containing image data.
   /// @param target_spec The required output's spec.
   /// @param decoded_image The output decoded image.
-  /// @return true if decoding was successful, false otherwise.
-  bool do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
-                         OdaiDecodedImage& decoded_image) override;
+  /// @return empty expected if decoding was successful, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
+                                     OdaiDecodedImage& decoded_image) override;
 };
 
 #endif // ODAI_ENABLE_STB_IMAGE

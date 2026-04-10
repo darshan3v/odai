@@ -18,8 +18,8 @@ bool OdaiStbImageDecoder::is_supported(const std::string& format)
           lower_format == "pnm");
 }
 
-bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
-                                            OdaiDecodedImage& decoded_image)
+OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
+                                                        OdaiDecodedImage& decoded_image)
 {
   // 1. stb_image strictly expects 'int' pointers for its output parameters.
   int raw_width = 0;
@@ -36,7 +36,7 @@ bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiIm
     if (pixels == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "stbi_load failed for path {}: {}", file_path, stbi_failure_reason());
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
   }
   else if (input.m_type == InputItemType::MEMORY_BUFFER)
@@ -44,7 +44,7 @@ bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiIm
     if (input.m_data.empty())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Provided memory buffer for image decoding is empty");
-      return false;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
     pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(input.m_data.data()),
                                    static_cast<int>(input.m_data.size()), &raw_width, &raw_height,
@@ -52,13 +52,13 @@ bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiIm
     if (pixels == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "stbi_load_from_memory failed: {}", stbi_failure_reason());
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
   }
   else
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for image decoding");
-    return false;
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
   // 3. Convert raw 'int' values to fixed-width standard integer types for consistent cross-platform calculation.
@@ -110,7 +110,7 @@ bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiIm
       {
         ODAI_LOG(ODAI_LOG_ERROR, "stbir_resize_uint8_linear failed to resize the image");
         stbi_image_free(pixels);
-        return false;
+        return unexpected_internal_error<void>();
       }
     }
     else
@@ -124,12 +124,12 @@ bool OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiIm
 
     // 7. Free the STB allocation and indicate successful processing.
     stbi_image_free(pixels);
-    return true;
+    return {};
   }
   catch (const std::bad_alloc&)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to allocate memory buffer for the decoded output image");
     stbi_image_free(pixels);
-    return false;
+    return unexpected_internal_error<void>();
   }
 }

@@ -41,7 +41,7 @@ bool odai_create_feature(const c_FeatureConfig *c_config)
 2.  **Validate**: Call `config.is_sane()` for business logic validation (e.g., checking empty strings and valid ranges).
 3.  **Check State**: Ensure SDK is initialized (`m_sdkInitialized`).
 4.  **Execute**: Call internal engines (DB, RAG, etc.) or perform logic.
-5.  **Return Rich Results Where Appropriate**: Prefer `OdaiResult<T>` / `tl::expected` when the API needs structured error reporting instead of only `bool`.
+5.  **Return Rich Results Where Appropriate**: Prefer `OdaiResult<void>` for operation-style methods with no payload, `OdaiResult<T>` for methods returning data, and `OdaiResult<bool>` for state queries that can fail operationally. Reserve plain `bool` for true predicates such as `is_sane()` and similarly narrow helpers.
 6.  **Handle Exceptions**: Wrap broad logic in `try-catch` blocks to prevent crashes.
 
 **Example (`odai_sdk.cpp`):**
@@ -108,7 +108,7 @@ public:
         - Essential for types like `c_ChatMessage` or `c_SemanticSpaceConfig` where members are heap-allocated by `toC()`.
 3.  **Error Handling**:
     - **C API**: Returns `bool` (success/fail) or `int` (error codes). logs errors.
-    - **C++ SDK**: Catches exceptions and returns error status to C API. Never let exceptions propagate across the C boundary.
+    - **C++ SDK**: Never let exceptions propagate across the C boundary. Legacy APIs may still return `bool`, but operation-style methods should prefer `OdaiResult` so callers can distinguish validation, not-found, not-initialized, and internal failures.
 
 ## 3. Naming Conventions
 

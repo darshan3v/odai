@@ -12,7 +12,7 @@ Stateless — the backend engine creates a fresh instance on demand via `OdaiSdk
 
 ## Design Pattern: Template Method
 
-Same pattern as [`IOdaiAudioDecoder`](./audio-decoder.md) — base class `decode_to_spec()` validates input, then calls the protected `do_decode_to_spec()` implemented by subclasses.
+Same pattern as [`IOdaiAudioDecoder`](./audio-decoder.md) — base class `decode_to_spec()` validates input, then calls the protected `do_decode_to_spec()` implemented by subclasses. Both methods use `OdaiResult<void>` so image decode failures retain result-code detail.
 
 ## Current Implementation
 

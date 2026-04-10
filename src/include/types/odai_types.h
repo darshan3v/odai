@@ -185,6 +185,14 @@ struct BackendDevice
   uint64_t m_totalRam{};
 };
 
+/// Summary of a completed streaming generation call.
+/// `m_wasCancelled` indicates the user callback stopped the stream early.
+struct StreamingStats
+{
+  int32_t m_generatedTokens{};
+  bool m_wasCancelled{};
+};
+
 /// Configuration structure for backend engine (LLM runtime).
 /// Specifies which LLM backend to use for text generation.
 struct BackendEngineConfig

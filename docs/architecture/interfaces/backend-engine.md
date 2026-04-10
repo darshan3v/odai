@@ -13,8 +13,8 @@ Abstracts the LLM inference runtime. Any backend that can load models and genera
 ## Responsibilities
 
 - **Hardware discovery** — detect available devices (GPU, iGPU, CPU) and select based on configured preferences.
-- **Model validation** — verify that provided `ModelFiles` match what this engine expects (e.g. required file entries, correct engine type).
-- **Streaming generation** — load models, generate tokens, stream output via callback. Supports both single-shot completion and chat-with-history modes.
+- **Model validation** — verify that provided `ModelFiles` match what this engine expects (e.g. required file entries, correct engine type). The validation call now returns `OdaiResult<bool>` so callers can distinguish an invalid registration from an operational failure while checking it.
+- **Streaming generation** — load models, generate tokens, stream output via callback. Supports both single-shot completion and chat-with-history modes, and returns `OdaiResult<StreamingStats>` so callers can distinguish cancellation from operational failure.
 
 ## Input Contract
 

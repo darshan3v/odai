@@ -112,6 +112,29 @@ static void print_chat_history(const c_ChatMessage* messages, uint16_t count)
 }
 
 // --- Helpers ---
+static const char* odai_result_to_string(c_OdaiResult result)
+{
+  switch (result)
+  {
+  case ODAI_SUCCESS:
+    return "ODAI_SUCCESS";
+  case ODAI_ALREADY_EXISTS:
+    return "ODAI_ALREADY_EXISTS";
+  case ODAI_NOT_FOUND:
+    return "ODAI_NOT_FOUND";
+  case ODAI_VALIDATION_FAILED:
+    return "ODAI_VALIDATION_FAILED";
+  case ODAI_INVALID_ARGUMENT:
+    return "ODAI_INVALID_ARGUMENT";
+  case ODAI_INTERNAL_ERROR:
+    return "ODAI_INTERNAL_ERROR";
+  case ODAI_NOT_INITIALIZED:
+    return "ODAI_NOT_INITIALIZED";
+  default:
+    return "ODAI_UNKNOWN_RESULT";
+  }
+}
+
 static bool init_sdk()
 {
   g_log.open(TEST_BASE_PATH + "/odai.log");
@@ -121,9 +144,10 @@ static bool init_sdk()
   c_DbConfig db_conf = {SQLITE_DB, DB_PATH.c_str(), CACHE_PATH.c_str()};
   c_BackendEngineConfig backend_conf = {LLAMA_BACKEND_ENGINE, ODAI_BACKEND_DEVICE_TYPE_GPU};
 
-  if (!odai_initialize_sdk(&db_conf, &backend_conf))
+  c_OdaiResult init_res = odai_initialize_sdk(&db_conf, &backend_conf);
+  if (init_res != ODAI_SUCCESS)
   {
-    std::cerr << "Failed to initialize SDK\n";
+    std::cerr << "Failed to initialize SDK: " << odai_result_to_string(init_res) << " (" << init_res << ")\n";
     return false;
   }
   return true;
@@ -136,10 +160,12 @@ static bool test_registration()
   // 1. Embedding Model
   c_ModelFileEntry embedding_entry = {"base_model_path", EMBEDDING_MODEL_PATH.c_str()};
   c_ModelFiles embedding_files = {ODAI_MODEL_TYPE_EMBEDDING, LLAMA_BACKEND_ENGINE, &embedding_entry, 1};
+  c_OdaiResult res = odai_register_model_files(const_cast<char*>(EMBEDDING_MODEL_NAME), &embedding_files);
 
-  if (odai_register_model_files(const_cast<char*>(EMBEDDING_MODEL_NAME), &embedding_files) != ODAI_SUCCESS)
+  if (res != ODAI_SUCCESS)
   {
-    std::cout << "Failed to register embedding model: " << EMBEDDING_MODEL_NAME << "\n";
+    std::cout << "Failed to register embedding model: " << EMBEDDING_MODEL_NAME << " -> " << odai_result_to_string(res)
+              << " (" << res << ")\n";
   }
   else
   {
@@ -150,10 +176,12 @@ static bool test_registration()
   std::array<c_ModelFileEntry, 2> gemma3_entries = {
       {{"base_model_path", GEMMA3_LLM_PATH.c_str()}, {"mmproj_model_path", GEMMA3_MMPROJ_PATH.c_str()}}};
   c_ModelFiles gemma3_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, gemma3_entries.data(), gemma3_entries.size()};
+  res = odai_register_model_files(const_cast<char*>(GEMMA3_MODEL_NAME), &gemma3_files);
 
-  if (odai_register_model_files(const_cast<char*>(GEMMA3_MODEL_NAME), &gemma3_files) != ODAI_SUCCESS)
+  if (res != ODAI_SUCCESS)
   {
-    std::cout << "Failed to register LLM model: " << GEMMA3_MODEL_NAME << "\n";
+    std::cout << "Failed to register LLM model: " << GEMMA3_MODEL_NAME << " -> " << odai_result_to_string(res) << " ("
+              << res << ")\n";
   }
   else
   {
@@ -163,10 +191,12 @@ static bool test_registration()
   // 3. Gemma 3n Model
   c_ModelFileEntry gemma3n_entry = {"base_model_path", GEMMA3N_LLM_PATH.c_str()};
   c_ModelFiles gemma3n_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, &gemma3n_entry, 1};
+  res = odai_register_model_files(const_cast<char*>(GEMMA3N_MODEL_NAME), &gemma3n_files);
 
-  if (odai_register_model_files(const_cast<char*>(GEMMA3N_MODEL_NAME), &gemma3n_files) != ODAI_SUCCESS)
+  if (res != ODAI_SUCCESS)
   {
-    std::cout << "Failed to register LLM model: " << GEMMA3N_MODEL_NAME << "\n";
+    std::cout << "Failed to register LLM model: " << GEMMA3N_MODEL_NAME << " -> " << odai_result_to_string(res) << " ("
+              << res << ")\n";
   }
   else
   {
@@ -177,10 +207,12 @@ static bool test_registration()
   std::array<c_ModelFileEntry, 2> qwen_entries = {
       {{"base_model_path", QWEN_OMNI_LLM_PATH.c_str()}, {"mmproj_model_path", QWEN_OMNI_MMPROJ_PATH.c_str()}}};
   c_ModelFiles qwen_files = {ODAI_MODEL_TYPE_LLM, LLAMA_BACKEND_ENGINE, qwen_entries.data(), qwen_entries.size()};
+  res = odai_register_model_files(const_cast<char*>(QWEN_OMNI_MODEL_NAME), &qwen_files);
 
-  if (odai_register_model_files(const_cast<char*>(QWEN_OMNI_MODEL_NAME), &qwen_files) != ODAI_SUCCESS)
+  if (res != ODAI_SUCCESS)
   {
-    std::cout << "Failed to register LLM model: " << QWEN_OMNI_MODEL_NAME << "\n";
+    std::cout << "Failed to register LLM model: " << QWEN_OMNI_MODEL_NAME << " -> " << odai_result_to_string(res)
+              << " (" << res << ")\n";
   }
   else
   {
@@ -196,7 +228,8 @@ static bool test_registration()
   }
   else
   {
-    std::cout << "Failed to return ODAI_ALREADY_EXISTS for duplicate model. Got: " << duplicate_res << "\n";
+    std::cout << "Failed to return ODAI_ALREADY_EXISTS for duplicate model. Got: "
+              << odai_result_to_string(duplicate_res) << " (" << duplicate_res << ")\n";
   }
 
   return true;
@@ -211,46 +244,70 @@ static bool test_semantic_spaces()
 
   const char* space_name = "test_space";
   c_SemanticSpaceConfig space_config = {const_cast<char*>(space_name), embedding_conf, chunk_config, EMBEDDING_DIM};
+  c_OdaiResult res = odai_create_semantic_space(&space_config);
 
-  if (odai_create_semantic_space(&space_config))
+  if (res == ODAI_SUCCESS)
   {
     std::cout << "Semantic space '" << space_name << "' created.\n";
+  }
+  else
+  {
+    std::cout << "Failed to create semantic space '" << space_name << "': " << odai_result_to_string(res) << " (" << res
+              << ")\n";
   }
 
   const char* space_name2 = "test_space2";
   c_SemanticSpaceConfig space_config2 = {const_cast<char*>(space_name2), embedding_conf, chunk_config, EMBEDDING_DIM};
+  res = odai_create_semantic_space(&space_config2);
 
-  if (odai_create_semantic_space(&space_config2))
+  if (res == ODAI_SUCCESS)
   {
     std::cout << "Semantic space '" << space_name2 << "' created.\n";
+  }
+  else
+  {
+    std::cout << "Failed to create semantic space '" << space_name2 << "': " << odai_result_to_string(res) << " ("
+              << res << ")\n";
   }
 
   // List to verify creation
   c_SemanticSpaceConfig* spaces_list = nullptr;
   uint16_t spaces_count = 0;
-  if (odai_list_semantic_spaces(&spaces_list, &spaces_count))
+  res = odai_list_semantic_spaces(&spaces_list, &spaces_count);
+  if (res == ODAI_SUCCESS)
   {
     print_semantic_spaces(spaces_list, spaces_count);
     odai_free_semantic_spaces_list(spaces_list, spaces_count);
   }
+  else
+  {
+    std::cout << "Failed to list semantic spaces: " << odai_result_to_string(res) << " (" << res << ")\n";
+  }
 
   // Delete Space
   std::cout << "Deleting semantic space '" << space_name2 << "'...\n";
-  if (odai_delete_semantic_space(const_cast<char*>(space_name2)))
+  res = odai_delete_semantic_space(const_cast<char*>(space_name2));
+  if (res == ODAI_SUCCESS)
   {
     std::cout << "Successfully deleted semantic space.\n";
   }
   else
   {
-    std::cout << "Failed to delete semantic space.\n";
+    std::cout << "Failed to delete semantic space: " << odai_result_to_string(res) << " (" << res << ")\n";
   }
 
   // Verify Deletion
-  if (odai_list_semantic_spaces(&spaces_list, &spaces_count))
+  res = odai_list_semantic_spaces(&spaces_list, &spaces_count);
+  if (res == ODAI_SUCCESS)
   {
     std::cout << "Spaces remaining after deletion: " << spaces_count << "\n";
     print_semantic_spaces(spaces_list, spaces_count);
     odai_free_semantic_spaces_list(spaces_list, spaces_count);
+  }
+  else
+  {
+    std::cout << "Failed to list semantic spaces after deletion: " << odai_result_to_string(res) << " (" << res
+              << ")\n";
   }
 
   return true;
@@ -335,10 +392,11 @@ static bool test_chat_multimodal(const char* model_name)
   c_LlmModelConfig llm_conf = {const_cast<char*>(model_name)};
   c_ChatConfig chat_config = {true, "You are a helpful assistant.", llm_conf};
   c_ChatId chat_id = nullptr;
+  c_OdaiResult res = odai_create_chat(nullptr, &chat_config, &chat_id);
 
-  if (!odai_create_chat(nullptr, &chat_config, &chat_id))
+  if (res != ODAI_SUCCESS)
   {
-    std::cerr << "Failed to create chat\n";
+    std::cerr << "Failed to create chat: " << odai_result_to_string(res) << " (" << res << ")\n";
     return false;
   }
 
@@ -397,10 +455,15 @@ static bool test_chat_multimodal(const char* model_name)
   std::cout << "\n--- Printing Chat History ---\n";
   c_ChatMessage* messages = nullptr;
   uint16_t count = 0;
-  if (odai_get_chat_history(chat_id, &messages, &count))
+  res = odai_get_chat_history(chat_id, &messages, &count);
+  if (res == ODAI_SUCCESS)
   {
     print_chat_history(messages, count);
     odai_free_chat_messages(messages, count);
+  }
+  else
+  {
+    std::cerr << "Failed to get chat history: " << odai_result_to_string(res) << " (" << res << ")\n";
   }
 
   odai_free_chat_id(chat_id);

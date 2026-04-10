@@ -12,7 +12,7 @@ Stateless — the backend engine creates a fresh instance on demand via `OdaiSdk
 
 ## Design Pattern: Template Method
 
-The base class uses the Template Method pattern — `decode_to_spec()` handles input validation (sanity, media type, empty data), then delegates to the protected `do_decode_to_spec()` which subclasses implement. This ensures consistent validation across all decoder implementations.
+The base class uses the Template Method pattern — `decode_to_spec()` handles input validation (sanity, media type, empty data), then delegates to the protected `do_decode_to_spec()` which subclasses implement. Both methods use `OdaiResult<void>` so callers can distinguish invalid inputs from decoder failures without changing decoded-audio ownership.
 
 ## Current Implementation
 

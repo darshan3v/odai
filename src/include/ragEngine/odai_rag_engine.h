@@ -20,8 +20,9 @@ class OdaiRagEngine
 public:
   OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
-  /// Initializes the RAG engine hardware discovery and validation
-  bool initialize_rag_engine();
+  /// Initializes the RAG engine hardware discovery and validation.
+  /// @return empty expected if initialization succeeds, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> initialize_rag_engine();
 
   /// Registers a new model in the system with the given name and paths.
   /// The backend engine validates the paths and computes checksums.
@@ -52,11 +53,11 @@ public:
   /// @param callback Function called for each chunk of generated text. Can
   /// return false to cancel streaming.
   /// @param user_data User-provided data passed to the callback function
-  /// @return Total number of tokens generated (excluding EOG token), or -1 on
-  /// error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const std::vector<InputItem>& prompt,
-                                      const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
-                                      void* user_data);
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_response(const LLMModelConfig& llm_model_config,
+                                                         const std::vector<InputItem>& prompt,
+                                                         const SamplerConfig& sampler_config,
+                                                         OdaiStreamRespCallbackFn callback, void* user_data);
 
   /// Generates a streaming response for the given query for the given chat.
   /// Uses the previously loaded chat if cached, else will load chat and then
@@ -69,57 +70,53 @@ public:
   /// (ignored if RAG is disabled)
   /// @param callback Function called for each chunk of generated text
   /// @param user_data User-provided data passed to the callback function
-  /// @return Total number of tokens generated (excluding EOG token), or -1 on
-  /// error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
-                                           const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
-                                           void* user_data);
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_chat_response(const ChatId& chat_id,
+                                                              const std::vector<InputItem>& prompt,
+                                                              const GeneratorConfig& generator_config,
+                                                              OdaiStreamRespCallbackFn callback, void* user_data);
 
   /// Creates a new semantic space for vector embeddings in the database.
   /// @param config The configuration for the semantic space to be created
-  /// @return true if semantic space created successfully, false on error or if name already exists
-  bool create_semantic_space(const SemanticSpaceConfig& config);
+  /// @return empty expected if semantic space creation succeeds, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> create_semantic_space(const SemanticSpaceConfig& config);
 
   /// Retrieves the configuration of an existing semantic space by name.
   /// @param name The name of the semantic space to retrieve
-  /// @param config Output parameter populated with the semantic space configuration
-  /// @return true if successful, false on error or if name not found
-  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
+  /// @return semantic space configuration on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<SemanticSpaceConfig> get_semantic_space_config(const SemanticSpaceName& name);
 
   /// Retrieves a list of all existing semantic spaces in the database.
-  /// @param spaces Output parameter populated with configurations of all semantic spaces
-  /// @return true if successful, false on error
-  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces);
+  /// @return semantic space configurations on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<std::vector<SemanticSpaceConfig>> list_semantic_spaces();
 
   /// Deletes an existing semantic space and its associated data from the database.
   /// @param name The name of the semantic space to delete
-  /// @return true if deleted successfully, false on error or if name not found
-  bool delete_semantic_space(const SemanticSpaceName& name);
+  /// @return empty expected if deletion succeeds, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> delete_semantic_space(const SemanticSpaceName& name);
 
   /// Creates a new chat session in the database with the provided identifier and configuration.
   /// @param chat_id Unique identifier for the new chat session
   /// @param chat_config Configuration parameters for the chat session
-  /// @return true if chat created successfully, false on error or if chat_id already exists
-  bool create_chat(const ChatId& chat_id, const ChatConfig& chat_config);
+  /// @return empty expected if chat creation succeeds, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<void> create_chat(const ChatId& chat_id, const ChatConfig& chat_config);
 
   /// Retrieves the message history for a given chat session from the database.
   /// @param chat_id Unique identifier for the chat session
-  /// @param messages Output parameter populated with the chronological sequence of chat messages
-  /// @return true if successful, false on error or if chat_id not found
-  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages);
+  /// @return chronological chat messages on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<std::vector<ChatMessage>> get_chat_history(const ChatId& chat_id);
 
   /// Checks if a chat session with the specified identifier already exists in the database.
   /// @param chat_id Unique identifier for the chat session to check
-  /// @return true if the chat_id exists, false otherwise
-  bool chat_id_exists(const ChatId& chat_id);
+  /// @return true/false on success, or an unexpected OdaiResultEnum indicating the error
+  OdaiResult<bool> chat_id_exists(const ChatId& chat_id);
 
 private:
   /// Resolves the file system path for a given model name using cache or
   /// database.
   /// @param model_name The name of the model.
-  /// @param model_file_details Output parameter for the resolved file details.
-  /// @return true if found, false otherwise.
-  bool resolve_model_files(const ModelName& model_name, ModelFiles& model_file_details);
+  /// @return resolved file details on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<ModelFiles> resolve_model_files(const ModelName& model_name);
 
   std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<IOdaiBackendEngine> m_backendEngine;

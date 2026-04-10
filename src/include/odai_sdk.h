@@ -46,8 +46,8 @@ public:
   /// path
   /// @param backendConfig Configuration structure specifying which backend
   /// engine to use
-  /// @return true if initialization succeeded, false otherwise
-  bool initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
+  /// @return empty expected if initialization succeeded, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
   /// Registers a new model with generic files.
   /// @param name The unique name of the model.
@@ -66,33 +66,32 @@ public:
 
   /// Creates a new semantic space.
   /// @param config The configuration for the semantic space.
-  /// @return true if created successfully, false on error.
-  bool create_semantic_space(const SemanticSpaceConfig& config);
+  /// @return empty expected if created successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> create_semantic_space(const SemanticSpaceConfig& config);
 
   /// Retrieves the configuration for a semantic space.
   /// @param name The name of the semantic space to retrieve.
-  /// @param config Output parameter to store the configuration.
-  /// @return true if found, false on error or if not found.
-  bool get_semantic_space_config(const SemanticSpaceName& name, SemanticSpaceConfig& config);
+  /// @return semantic space configuration on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<SemanticSpaceConfig> get_semantic_space_config(const SemanticSpaceName& name);
 
   /// Lists all available semantic spaces.
-  /// @param spaces Output parameter to store list of space names.
-  /// @return true if successful, false on error.
-  bool list_semantic_spaces(std::vector<SemanticSpaceConfig>& spaces);
+  /// @return semantic space configurations on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<std::vector<SemanticSpaceConfig>> list_semantic_spaces();
 
   /// Deletes a semantic space.
   /// @param name The name of the semantic space to delete.
-  /// @return true if deleted successfully, false on error.
-  bool delete_semantic_space(const std::string& name);
+  /// @return empty expected if deleted successfully, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> delete_semantic_space(const SemanticSpaceName& name);
 
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// @param content The text content of the document to add
   /// @param documentId Unique identifier for this document
   /// @param semanticSpaceName Name of the semantic space to use
   /// @param scopeId Scope identifier to group documents
-  /// @return true if document was added successfully, false otherwise
-  bool add_document(const std::string& content, const DocumentId& document_id,
-                    const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const;
+  /// @return empty expected if the document was added successfully, or an unexpected OdaiResultEnum indicating the
+  /// error.
+  OdaiResult<void> add_document(const std::string& content, const DocumentId& document_id,
+                                const SemanticSpaceName& semantic_space_name, const ScopeId& scope_id) const;
 
   /// Generates a streaming response for the given query.
   /// Its like a Completion API, and won't use RAG
@@ -102,25 +101,22 @@ public:
   /// @param samplerConfig Configuration for the sampler (top_k, top_p, etc.)
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
-  /// @return Total number of tokens generated, or -1 on error
-  int32_t generate_streaming_response(const LLMModelConfig& llm_model_config, const std::vector<InputItem>& prompt,
-                                      const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback,
-                                      void* user_data);
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_response(const LLMModelConfig& llm_model_config,
+                                                         const std::vector<InputItem>& prompt,
+                                                         const SamplerConfig& sampler_config,
+                                                         OdaiStreamRespCallbackFn callback, void* user_data);
 
   /// Creates a new chat session with the specified configuration.
   /// @param chatIdIn Input chat ID (empty to auto-generate)
   /// @param chatConfig Configuration structure defining chat behavior
-  /// @param chatIdOut Output parameter receiving the chat ID (generated or
-  /// passed through)
-  /// @return true if chat session was created successfully, false otherwise
-  bool create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config, ChatId& chat_id_out);
+  /// @return final chat ID on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<ChatId> create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config);
 
   /// Retrieves all chat messages for the specified chat session.
   /// @param chatId The chat identifier to retrieve messages for
-  /// @param messages Output parameter: vector of ChatMessage
-  /// @return true if messages retrieved successfully, false if chat_id doesn't
-  /// exist or on error
-  bool get_chat_history(const ChatId& chat_id, std::vector<ChatMessage>& messages);
+  /// @return chronological chat messages on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<std::vector<ChatMessage>> get_chat_history(const ChatId& chat_id);
 
   /// Generates a streaming chat response for the given query in the specified
   /// chat session. It will load  languagde model mentioned in chat config and
@@ -132,10 +128,11 @@ public:
   /// settings, etc.)
   /// @param callback Function called for each generated token
   /// @param userData User-provided data pointer passed to the callback function
-  /// @return Total number of tokens generated, or -1 on error
-  int32_t generate_streaming_chat_response(const ChatId& chat_id, const std::vector<InputItem>& prompt,
-                                           const GeneratorConfig& generator_config, OdaiStreamRespCallbackFn callback,
-                                           void* user_data);
+  /// @return streaming stats on success, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<StreamingStats> generate_streaming_chat_response(const ChatId& chat_id,
+                                                              const std::vector<InputItem>& prompt,
+                                                              const GeneratorConfig& generator_config,
+                                                              OdaiStreamRespCallbackFn callback, void* user_data);
 
 private:
   OdaiSdk();

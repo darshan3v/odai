@@ -35,8 +35,9 @@ extern "C"
   /// Must be called before using any other SDK functions. Creates or opens the database at the specified path.
   /// @param db_config Configuration structure containing the database type and path
   /// @param backend_engine_config Configuration structure specifying which backend engine to use
-  /// @return true if initialization succeeded, false otherwise
-  bool odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
+  /// @return ODAI_SUCCESS if initialization succeeded, or an error code such as ODAI_INVALID_ARGUMENT or
+  /// ODAI_NOT_INITIALIZED.
+  c_OdaiResult odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
 
   /// Registers a new model in the system with the given name and generic files map.
   /// The engine validates the files and a checksum is computed to ensure integrity.
@@ -58,14 +59,15 @@ extern "C"
 
   /// Creates a new semantic space configuration.
   /// @param config The semantic space configuration to create.
-  /// @return true if created successfully, false on error.
-  bool odai_create_semantic_space(const c_SemanticSpaceConfig* config);
+  /// @return ODAI_SUCCESS if created successfully, or an error code such as ODAI_ALREADY_EXISTS or
+  /// ODAI_VALIDATION_FAILED.
+  c_OdaiResult odai_create_semantic_space(const c_SemanticSpaceConfig* config);
 
   /// Retrieves the configuration for a semantic space.
   /// @param name The name of the semantic space to retrieve.
-  /// @param config_out Output parameter: pointer to array of the retrieved configuration (allocated by this function)
-  /// @return true if found, false on error.
-  bool odai_get_semantic_space(c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out);
+  /// @param config_out Output parameter: pointer to the retrieved configuration (members allocated by this function)
+  /// @return ODAI_SUCCESS if found, or an error code such as ODAI_NOT_FOUND or ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_get_semantic_space(c_SemanticSpaceName semantic_space_name, c_SemanticSpaceConfig* config_out);
 
   /// Frees members allocated by odai_get_semantic_space
   /// @param config pointer to c_SemanticSpaceConfig struct to free .
@@ -75,8 +77,8 @@ extern "C"
   /// Caller is responsible for freeing the allocated array using odai_free_semantic_spaces_list.
   /// @param spaces_out Output parameter: pointer to array of c_SemanticSpaceConfig (allocated by this function).
   /// @param spaces_count Output parameter: number of spaces returned.
-  /// @return true if successful, false on error.
-  bool odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count);
+  /// @return ODAI_SUCCESS if successful, or an error code such as ODAI_NOT_INITIALIZED or ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_list_semantic_spaces(c_SemanticSpaceConfig** spaces_out, uint16_t* spaces_count);
 
   /// Frees memory allocated by odai_list_semantic_spaces.
   /// @param spaces Array of c_SemanticSpaceConfig to free.
@@ -85,8 +87,8 @@ extern "C"
 
   /// Deletes a semantic space configuration.
   /// @param name The name of the semantic space to delete.
-  /// @return true if deleted successfully, false on error.
-  bool odai_delete_semantic_space(c_SemanticSpaceName name);
+  /// @return ODAI_SUCCESS if deleted successfully, or an error code such as ODAI_NOT_FOUND or ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_delete_semantic_space(c_SemanticSpaceName name);
 
   /// Adds a document to the RAG knowledge base for retrieval during generation.
   /// The document content is embedded and stored in the database for later retrieval.
@@ -95,9 +97,10 @@ extern "C"
   /// @param document_id Unique identifier for this document (used for updates/deletion)
   /// @param semantic_space_name Name of the semantic space to use
   /// @param scope_id Scope identifier to group documents (used for filtering during retrieval)
-  /// @return true if document was added successfully, false otherwise
-  bool odai_add_document(const char* content, c_DocumentId document_id, c_SemanticSpaceName semantic_space_name,
-                         c_ScopeId scope_id);
+  /// @return ODAI_SUCCESS if the document was added successfully, or an error code such as ODAI_VALIDATION_FAILED or
+  /// ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_add_document(const char* content, c_DocumentId document_id, c_SemanticSpaceName semantic_space_name,
+                                 c_ScopeId scope_id);
 
   /// Generates a streaming response for a single query using the specified LLM Model.
   /// @param llm_model_config Configuration of the LLM model to use
@@ -120,8 +123,9 @@ extern "C"
   /// config, etc..)
   /// @param c_chat_id_out Output parameter: pointer to the chat ID string (allocated by this function, caller must free
   /// using odai_free_chat_id)
-  /// @return true if chat session was created successfully, false otherwise
-  bool odai_create_chat(c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out);
+  /// @return ODAI_SUCCESS if chat session was created successfully, or an error code such as ODAI_ALREADY_EXISTS or
+  /// ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_create_chat(c_ChatId c_chat_id_in, const c_ChatConfig* c_chat_config, c_ChatId* c_chat_id_out);
 
   /// Frees the chat ID string allocated by odai_create_chat.
   /// @param chat_id The chat ID string to free
@@ -131,14 +135,15 @@ extern "C"
   /// Messages are returned in chronological order.
   /// The caller is responsible for freeing the allocated memory using odai_free_chat_messages().
   /// @param c_chat_id The chat identifier to retrieve messages for
-  /// @param c_messages_out Output parameter: pointer to array of i_ChatMessage (allocated by this function)
+  /// @param c_messages_out Output parameter: pointer to array of c_ChatMessage (allocated by this function)
   /// @param messages_count Output parameter: number of messages retrieved
-  /// @return true if messages retrieved successfully, false if chat_id doesn't exist or on error
-  bool odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count);
+  /// @return ODAI_SUCCESS if messages were retrieved successfully, or an error code such as ODAI_NOT_FOUND or
+  /// ODAI_INVALID_ARGUMENT.
+  c_OdaiResult odai_get_chat_history(c_ChatId c_chat_id, c_ChatMessage** c_messages_out, uint16_t* messages_count);
 
-  /// Frees memory allocated for an array of i_ChatMessage structures.
+  /// Frees memory allocated for an array of c_ChatMessage structures.
   /// Should be called after odai_get_chat_history to free allocated strings.
-  /// @param messages Array of i_ChatMessage structures to free
+  /// @param messages Array of c_ChatMessage structures to free
   /// @param count Number of messages in the array
   void odai_free_chat_messages(c_ChatMessage* messages, uint16_t count);
 

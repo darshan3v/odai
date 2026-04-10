@@ -109,84 +109,98 @@ bool OdaiLlamaEngine::register_available_backends()
 
 OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDeviceType preferred_type)
 {
-  m_candidateDevices.clear();
-
-  if (!OdaiLlamaEngine::register_available_backends())
+  try
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Critical failure: CPU backend library not found");
-    return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
-  }
+    m_candidateDevices.clear();
 
-  if (preferred_type == BackendDeviceType::CPU)
-  {
-    ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; selecting CPU as primary execution path");
-    if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+    if (!OdaiLlamaEngine::register_available_backends())
     {
-      return {};
+      ODAI_LOG(ODAI_LOG_ERROR, "Critical failure: CPU backend library not found");
+      return unexpected_internal_error<void>();
     }
 
-    ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
-    return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
-  }
-
-  bool graphics_hardware_found = false;
-
-  const std::vector<std::string_view> gpu_backends = get_prioritized_gpu_backends();
-
-  if (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::AUTO)
-  {
-    for (const std::string_view backend_name : gpu_backends)
+    if (preferred_type == BackendDeviceType::CPU)
     {
-      if (this->try_add_candidate_devices(std::string(backend_name), BackendDeviceType::GPU))
+      ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; selecting CPU as primary execution path");
+      if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
       {
-        graphics_hardware_found = true;
-        break;
+        return {};
+      }
+
+      ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
+      return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
+    }
+
+    bool graphics_hardware_found = false;
+
+    const std::vector<std::string_view> gpu_backends = get_prioritized_gpu_backends();
+
+    if (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::AUTO)
+    {
+      for (const std::string_view backend_name : gpu_backends)
+      {
+        if (this->try_add_candidate_devices(std::string(backend_name), BackendDeviceType::GPU))
+        {
+          graphics_hardware_found = true;
+          break;
+        }
       }
     }
-  }
 
-  if (!graphics_hardware_found &&
-      (preferred_type == BackendDeviceType::IGPU || preferred_type == BackendDeviceType::AUTO))
-  {
-    const std::optional<std::string_view> igpu_backend = get_igpu_backend_name();
-    if (igpu_backend.has_value())
+    if (!graphics_hardware_found &&
+        (preferred_type == BackendDeviceType::IGPU || preferred_type == BackendDeviceType::AUTO))
     {
-      graphics_hardware_found = this->try_add_candidate_devices(std::string(*igpu_backend), BackendDeviceType::IGPU);
+      const std::optional<std::string_view> igpu_backend = get_igpu_backend_name();
+      if (igpu_backend.has_value())
+      {
+        graphics_hardware_found = this->try_add_candidate_devices(std::string(*igpu_backend), BackendDeviceType::IGPU);
+      }
+      else if (preferred_type == BackendDeviceType::IGPU)
+      {
+        ODAI_LOG(ODAI_LOG_INFO, "No dedicated IGPU backend probe is configured for this platform");
+      }
     }
-    else if (preferred_type == BackendDeviceType::IGPU)
+
+    if (!graphics_hardware_found && preferred_type == BackendDeviceType::AUTO)
     {
-      ODAI_LOG(ODAI_LOG_INFO, "No dedicated IGPU backend probe is configured for this platform");
+      if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+      {
+        ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
+        graphics_hardware_found = true;
+      }
+      else
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
+        return unexpected_internal_error<void>();
+      }
     }
-  }
 
-  if (!graphics_hardware_found && preferred_type == BackendDeviceType::AUTO)
-  {
-    if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+    if (!graphics_hardware_found &&
+        (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
     {
-      ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
-      graphics_hardware_found = true;
+      ODAI_LOG(ODAI_LOG_ERROR, "Requested {} device not found in discovered hardware",
+               preferred_type == BackendDeviceType::GPU ? "GPU" : "IGPU");
+      return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
     }
-    else
+
+    if (graphics_hardware_found && preferred_type != BackendDeviceType::AUTO &&
+        preferred_type != BackendDeviceType::CPU)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
-      return tl::make_unexpected(OdaiResultEnum::INTERNAL_ERROR);
+      ODAI_LOG(ODAI_LOG_INFO, "Successfully configured execution context with hardware acceleration");
     }
-  }
 
-  if (!graphics_hardware_found &&
-      (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
+    return {};
+  }
+  catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Requested {} device not found in discovered hardware",
-             preferred_type == BackendDeviceType::GPU ? "GPU" : "IGPU");
-    return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to configure candidate devices: {}", e.what());
+    return unexpected_internal_error<void>();
   }
-
-  if (graphics_hardware_found && preferred_type != BackendDeviceType::AUTO && preferred_type != BackendDeviceType::CPU)
+  catch (...)
   {
-    ODAI_LOG(ODAI_LOG_INFO, "Successfully configured execution context with hardware acceleration");
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown failure while configuring candidate devices");
+    return unexpected_internal_error<void>();
   }
-
-  return {};
 }
 
 bool OdaiLlamaEngine::try_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type)
@@ -231,21 +245,34 @@ bool OdaiLlamaEngine::try_add_candidate_devices(const std::string& backend_name,
 
 OdaiResult<void> OdaiLlamaEngine::initialize_engine()
 {
-  llama_backend_init();
-
-  OdaiResult<void> config_res = load_and_setup_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
-  if (!config_res)
+  try
   {
-    return config_res;
+    llama_backend_init();
+
+    OdaiResult<void> config_res = load_and_setup_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
+    if (!config_res)
+    {
+      return config_res;
+    }
+
+    ODAI_LOG(ODAI_LOG_INFO, "Initialized llama backend and execution context");
+
+    llama_log_set(llama_log_redirect, nullptr);
+    mtmd_helper_log_set(llama_log_redirect, nullptr);
+
+    this->m_isInitialized = true;
+    return {};
   }
-
-  ODAI_LOG(ODAI_LOG_INFO, "Initialized llama backend and execution context");
-
-  llama_log_set(llama_log_redirect, nullptr);
-  mtmd_helper_log_set(llama_log_redirect, nullptr);
-
-  this->m_isInitialized = true;
-  return {};
+  catch (const std::exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize llama backend engine: {}", e.what());
+    return unexpected_internal_error<void>();
+  }
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown failure while initializing llama backend engine");
+    return unexpected_internal_error<void>();
+  }
 }
 
 OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
@@ -395,48 +422,65 @@ bool OdaiLlamaEngine::validate_model_file_entry(const std::unordered_map<std::st
   return true;
 }
 
-bool OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
+OdaiResult<bool> OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
 {
-
-  if (files.m_engineType != LLAMA_BACKEND_ENGINE)
+  try
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid Engine Type passed");
-    return false;
-  }
+    if (files.m_engineType != LLAMA_BACKEND_ENGINE)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid Engine Type passed");
+      return false;
+    }
 
-  if (files.m_modelType == ModelType::LLM)
+    if (files.m_modelType == ModelType::LLM)
+    {
+      if (files.m_entries.size() > 2)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
+        return false;
+      }
+
+      if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
+      {
+        return false;
+      }
+
+      if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "mmproj_model_path", true))
+      {
+        return false;
+      }
+    }
+    else if (files.m_modelType == ModelType::EMBEDDING)
+    {
+      if (files.m_entries.size() != 1)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
+        return false;
+      }
+
+      if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
+      {
+        return false;
+      }
+    }
+    else
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed");
+      return false;
+    }
+
+    return true;
+  }
+  catch (const std::exception& e)
   {
-    if (files.m_entries.size() > 2)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
-      return false;
-    }
-
-    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
-    {
-      return false;
-    }
-
-    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "mmproj_model_path", true))
-    {
-      return false;
-    }
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while validating model files: {}", e.what());
+    return unexpected_internal_error<bool>();
   }
-  else if (files.m_modelType == ModelType::EMBEDDING)
+  catch (...)
   {
-    if (files.m_entries.size() != 1)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Invalid number of entries passed");
-      return false;
-    }
-
-    if (!OdaiLlamaEngine::validate_model_file_entry(files.m_entries, "base_model_path", false))
-    {
-      return false;
-    }
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while validating model files");
+    return unexpected_internal_error<bool>();
   }
-
-  return true;
 }
 
 std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config,
@@ -811,17 +855,17 @@ bool OdaiLlamaEngine::generate_next_token(llama_context& model_context, llama_sa
   return true;
 }
 
-int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
-                                                          const std::string& prompt,
-                                                          const std::vector<mtmd::bitmap>& bitmaps,
-                                                          OdaiStreamRespCallbackFn callback, void* user_data)
+OdaiResult<StreamingStats>
+OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, llama_sampler& sampler,
+                                                  const std::string& prompt, const std::vector<mtmd::bitmap>& bitmaps,
+                                                  OdaiStreamRespCallbackFn callback, void* user_data)
 {
   uint32_t next_pos = 0;
 
   if (!this->load_into_context(model_context, prompt, bitmaps, next_pos, true))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load prompt into context");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   llama_token generated_token = 0;
@@ -834,7 +878,7 @@ int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_c
     if (!OdaiLlamaEngine::generate_next_token(model_context, sampler, generated_token, true))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate next token");
-      return -1;
+      return unexpected_internal_error<StreamingStats>();
     }
 
     // Check if model is done
@@ -846,7 +890,7 @@ int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_c
         std::string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
         if (!callback(safe_output_buffer.c_str(), user_data))
         {
-          return total_tokens;
+          return StreamingStats{.m_generatedTokens = total_tokens, .m_wasCancelled = true};
         }
       }
       break;
@@ -860,47 +904,53 @@ int32_t OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_c
       std::string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
       if (!callback(safe_output_buffer.c_str(), user_data))
       {
-        return total_tokens;
+        return StreamingStats{.m_generatedTokens = total_tokens, .m_wasCancelled = true};
       }
     }
   }
 
-  return total_tokens;
+  return StreamingStats{.m_generatedTokens = total_tokens, .m_wasCancelled = false};
 }
 
-int32_t OdaiLlamaEngine::generate_streaming_response(const std::vector<InputItem>& prompt,
-                                                     const LLMModelConfig& llm_model_config,
-                                                     const ModelFiles& model_files, const SamplerConfig& sampler_config,
-                                                     OdaiStreamRespCallbackFn callback, void* user_data)
+OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
+    const std::vector<InputItem>& prompt, const LLMModelConfig& llm_model_config, const ModelFiles& model_files,
+    const SamplerConfig& sampler_config, OdaiStreamRespCallbackFn callback, void* user_data)
 {
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet hence can't generate response");
-    return -1;
+    return unexpected_not_initialized<StreamingStats>();
   }
 
   if (callback == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "empty callback is passed so can't stream response");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
-  if (!validate_model_files(model_files))
+  OdaiResult<bool> model_validation_res = validate_model_files(model_files);
+  if (!model_validation_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "model file validation failed with operational error: {}",
+             static_cast<std::uint32_t>(model_validation_res.error()));
+    return tl::unexpected(model_validation_res.error());
+  }
+  if (!model_validation_res.value())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid model files passed");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   if (!does_model_support_input_data(prompt, llm_model_config, model_files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid input data");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   if (!this->load_language_model(model_files, llm_model_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
@@ -908,7 +958,7 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const std::vector<InputItem
   if (this->m_llmVocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   std::unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
@@ -916,7 +966,7 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const std::vector<InputItem
   if (llm_llama_context == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create context");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   std::unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler =
@@ -925,7 +975,7 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const std::vector<InputItem
   if (llm_llama_sampler == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create sampler");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   std::optional<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);
@@ -933,13 +983,12 @@ int32_t OdaiLlamaEngine::generate_streaming_response(const std::vector<InputItem
   if (!process_result.has_value())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to process input items");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   std::string text_prompt = process_result->first;
   std::vector<mtmd::bitmap> bitmaps = std::move(process_result->second);
 
-  // Pass bitmaps vector explicitly. Note: we need to change generate_streaming_response_impl signature.
   return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, text_prompt, bitmaps, callback,
                                           user_data);
 }
@@ -980,9 +1029,11 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       target_spec.m_channels = 3;
 
       OdaiDecodedImage decoded_image;
-      if (!image_decoder->decode_to_spec(item, target_spec, decoded_image))
+      OdaiResult<void> decode_res = image_decoder->decode_to_spec(item, target_spec, decoded_image);
+      if (!decode_res)
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "image decoding failed for path {}", file_path);
+        ODAI_LOG(ODAI_LOG_ERROR, "image decoding failed for path {} with error code {}", file_path,
+                 static_cast<std::uint32_t>(decode_res.error()));
         return std::nullopt;
       }
 
@@ -1010,9 +1061,11 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
         return std::nullopt;
       }
       OdaiDecodedAudio decoded_audio;
-      if (!audio_decoder->decode_to_spec(item, spec_opt.value(), decoded_audio))
+      OdaiResult<void> decode_res = audio_decoder->decode_to_spec(item, spec_opt.value(), decoded_audio);
+      if (!decode_res)
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "audio decoding failed");
+        ODAI_LOG(ODAI_LOG_ERROR, "audio decoding failed with error code {}",
+                 static_cast<std::uint32_t>(decode_res.error()));
         return std::nullopt;
       }
       mtmd_bitmap* bmp = mtmd_bitmap_init_from_audio(decoded_audio.m_samples.size(), decoded_audio.m_samples.data());
@@ -1161,42 +1214,47 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   return llm_llama_context;
 }
 
-int32_t OdaiLlamaEngine::generate_streaming_chat_response(const std::vector<InputItem>& prompt,
-                                                          const std::vector<ChatMessage>& chat_history,
-                                                          const LLMModelConfig& llm_model_config,
-                                                          const ModelFiles& model_files,
-                                                          const SamplerConfig& sampler_config,
-                                                          OdaiStreamRespCallbackFn callback, void* user_data)
+OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
+    const std::vector<InputItem>& prompt, const std::vector<ChatMessage>& chat_history,
+    const LLMModelConfig& llm_model_config, const ModelFiles& model_files, const SamplerConfig& sampler_config,
+    OdaiStreamRespCallbackFn callback, void* user_data)
 {
 
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet hence can't generate response");
-    return -1;
+    return unexpected_not_initialized<StreamingStats>();
   }
 
   if (callback == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "empty callback is passed so can't stream response");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
-  if (!validate_model_files(model_files))
+  OdaiResult<bool> model_validation_res = validate_model_files(model_files);
+  if (!model_validation_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "model file validation failed with operational error: {}",
+             static_cast<std::uint32_t>(model_validation_res.error()));
+    return tl::unexpected(model_validation_res.error());
+  }
+  if (!model_validation_res.value())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "invalid model files passed");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   if (!does_model_support_input_data(prompt, llm_model_config, model_files))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid input data");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   if (!this->load_language_model(model_files, llm_model_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   std::unique_ptr<llama_context, LlamaContextDeleter> chat_context =
@@ -1205,7 +1263,7 @@ int32_t OdaiLlamaEngine::generate_streaming_chat_response(const std::vector<Inpu
   if (!chat_context)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into cache");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   std::unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler =
@@ -1214,14 +1272,14 @@ int32_t OdaiLlamaEngine::generate_streaming_chat_response(const std::vector<Inpu
   if (sampler == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create new sampler");
-    return -1;
+    return unexpected_internal_error<StreamingStats>();
   }
 
   auto process_result = this->process_input_items(prompt);
   if (!process_result.has_value())
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to process chat input items");
-    return -1;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   std::vector<std::pair<std::string, std::string>> extracted_msgs;

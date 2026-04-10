@@ -25,9 +25,9 @@ public:
   /// @param input The InputItem containing audio data.
   /// @param target_spec The required output's spec.
   /// @param decoded_audio The output decoded audio.
-  /// @return true if decoding was successful, false otherwise.
-  bool do_decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
-                         OdaiDecodedAudio& decoded_audio) override;
+  /// @return empty expected if decoding was successful, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> do_decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
+                                     OdaiDecodedAudio& decoded_audio) override;
 };
 
 #endif // ODAI_ENABLE_MINIAUDIO
