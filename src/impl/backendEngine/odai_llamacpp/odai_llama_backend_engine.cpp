@@ -483,27 +483,30 @@ OdaiResult<bool> OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
   }
 }
 
-std::optional<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config,
-                                                                            const ModelFiles& model_files)
+OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config,
+                                                                         const ModelFiles& model_files)
 {
+  (void)config;
+  (void)model_files;
 
   if (this->m_mtmdContext == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "MtmD context not initialized");
-    return std::nullopt;
+    return unexpected_not_initialized<OdaiAudioTargetSpec>();
   }
 
   if (!mtmd_support_audio(this->m_mtmdContext.get()))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Loaded model does not support audio");
-    return std::nullopt;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
   int sample_rate = mtmd_get_audio_sample_rate(this->m_mtmdContext.get());
 
   if (sample_rate <= 0)
   {
-    return std::nullopt;
+    ODAI_LOG(ODAI_LOG_ERROR, "Invalid audio sample rate reported by mtmd: {}", sample_rate);
+    return unexpected_internal_error<OdaiAudioTargetSpec>();
   }
 
   return OdaiAudioTargetSpec{static_cast<uint32_t>(sample_rate), 1};
@@ -612,7 +615,8 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   return true;
 }
 
-std::vector<llama_token> OdaiLlamaEngine::tokenize(const std::string& input, bool is_first, ModelType model_type)
+OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string& input, bool is_first,
+                                                               ModelType model_type)
 {
 
   const llama_vocab* vocab = nullptr;
@@ -628,13 +632,13 @@ std::vector<llama_token> OdaiLlamaEngine::tokenize(const std::string& input, boo
   else
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid Tokenization purpose passed");
-    return {};
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
   if (vocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no vocab present for tokenization");
-    return {};
+    return unexpected_not_initialized<std::vector<llama_token>>();
   }
 
   // 1. Ask llama.cpp how much space we need
@@ -643,7 +647,7 @@ std::vector<llama_token> OdaiLlamaEngine::tokenize(const std::string& input, boo
   if (n_tokens < 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize give input");
-    return {};
+    return unexpected_internal_error<std::vector<llama_token>>();
   }
 
   std::vector<llama_token> tokens(n_tokens);
@@ -655,12 +659,12 @@ std::vector<llama_token> OdaiLlamaEngine::tokenize(const std::string& input, boo
   return tokens;
 }
 
-std::string OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens)
+OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens)
 {
   if (this->m_llmVocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no LLM model loaded yet, so can't detokenize");
-    return "";
+    return unexpected_not_initialized<std::string>();
   }
 
   std::string result;
@@ -673,7 +677,7 @@ std::string OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens)
     if (n < 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to detokenize give input");
-      return "";
+      return unexpected_internal_error<std::string>();
     }
 
     result += std::string(buf, n);
@@ -683,10 +687,16 @@ std::string OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens)
   return result;
 }
 
-std::string OdaiLlamaEngine::flush_utf8_safe_output(std::vector<llama_token>& buffered_tokens,
-                                                    std::string& output_buffer)
+OdaiResult<std::string> OdaiLlamaEngine::flush_utf8_safe_output(std::vector<llama_token>& buffered_tokens,
+                                                                std::string& output_buffer)
 {
-  output_buffer += this->detokenize(buffered_tokens);
+  OdaiResult<std::string> detokenized_res = this->detokenize(buffered_tokens);
+  if (!detokenized_res)
+  {
+    return tl::unexpected(detokenized_res.error());
+  }
+
+  output_buffer += detokenized_res.value();
 
   size_t safe_len = get_safe_utf8_length(output_buffer);
   std::string safe_output_buffer = output_buffer.substr(0, safe_len);
@@ -760,15 +770,15 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
 {
   const bool is_first = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
 
-  std::vector<llama_token> prompt_tokens = this->tokenize(prompt, is_first, ModelType::LLM);
-
-  if (prompt_tokens.empty())
+  OdaiResult<std::vector<llama_token>> prompt_tokens_res = this->tokenize(prompt, is_first, ModelType::LLM);
+  if (!prompt_tokens_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt");
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt, error code: {}",
+             static_cast<std::uint32_t>(prompt_tokens_res.error()));
     return false;
   }
 
-  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens, next_pos,
+  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens_res.value(), next_pos,
                                                         request_logits_for_last_token);
 }
 
@@ -887,7 +897,14 @@ OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, 
       // flush left over tokens
       if (!buffered_tokens.empty())
       {
-        std::string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
+        OdaiResult<std::string> safe_output_res = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
+        if (!safe_output_res)
+        {
+          ODAI_LOG(ODAI_LOG_ERROR, "failed to flush buffered output, error code: {}",
+                   static_cast<std::uint32_t>(safe_output_res.error()));
+          return tl::unexpected(safe_output_res.error());
+        }
+        const std::string& safe_output_buffer = safe_output_res.value();
         if (!callback(safe_output_buffer.c_str(), user_data))
         {
           return StreamingStats{.m_generatedTokens = total_tokens, .m_wasCancelled = true};
@@ -901,7 +918,14 @@ OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, 
 
     if ((buffered_tokens.size() % 20) == 0)
     {
-      std::string safe_output_buffer = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
+      OdaiResult<std::string> safe_output_res = this->flush_utf8_safe_output(buffered_tokens, output_buffer);
+      if (!safe_output_res)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "failed to flush buffered output, error code: {}",
+                 static_cast<std::uint32_t>(safe_output_res.error()));
+        return tl::unexpected(safe_output_res.error());
+      }
+      const std::string& safe_output_buffer = safe_output_res.value();
       if (!callback(safe_output_buffer.c_str(), user_data))
       {
         return StreamingStats{.m_generatedTokens = total_tokens, .m_wasCancelled = true};
@@ -978,12 +1002,12 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
     return unexpected_internal_error<StreamingStats>();
   }
 
-  std::optional<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);
-
-  if (!process_result.has_value())
+  OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);
+  if (!process_result)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to process input items");
-    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to process input items, error code: {}",
+             static_cast<std::uint32_t>(process_result.error()));
+    return tl::unexpected(process_result.error());
   }
 
   std::string text_prompt = process_result->first;
@@ -993,14 +1017,12 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
                                           user_data);
 }
 
-std::optional<std::pair<std::string, std::vector<mtmd::bitmap>>>
+OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>>
 OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
 {
   std::string text_content;
   std::vector<mtmd::bitmap> bitmaps;
-
-  // Cache the audio spec so we don't query it per audio item
-  std::optional<OdaiAudioTargetSpec> spec_opt = get_required_audio_spec(this->m_llmModelConfig, this->m_llmModelFiles);
+  std::optional<OdaiAudioTargetSpec> cached_audio_spec;
 
   for (const InputItem& item : items)
   {
@@ -1019,7 +1041,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (!image_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No image decoder available to decode image input");
-        return std::nullopt;
+        return unexpected_not_initialized<std::pair<std::string, std::vector<mtmd::bitmap>>>();
       }
 
       // Request original dimensions but exactly 3 channels (RGB) for mtmd
@@ -1034,14 +1056,14 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "image decoding failed for path {} with error code {}", file_path,
                  static_cast<std::uint32_t>(decode_res.error()));
-        return std::nullopt;
+        return tl::unexpected(decode_res.error());
       }
 
       mtmd_bitmap* bmp = mtmd_bitmap_init(decoded_image.m_width, decoded_image.m_height, decoded_image.m_pixels.data());
       if (bmp == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to create mtmd_bitmap from decoded image");
-        return std::nullopt;
+        return unexpected_internal_error<std::pair<std::string, std::vector<mtmd::bitmap>>>();
       }
       bitmaps.emplace_back(bmp);
     }
@@ -1052,48 +1074,55 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (!audio_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No audio decoder available to decode audio input");
-        return std::nullopt;
+        return unexpected_not_initialized<std::pair<std::string, std::vector<mtmd::bitmap>>>();
       }
 
-      if (!spec_opt.has_value())
+      if (!cached_audio_spec.has_value())
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to get target audio spec");
-        return std::nullopt;
+        OdaiResult<OdaiAudioTargetSpec> spec_res =
+            get_required_audio_spec(this->m_llmModelConfig, this->m_llmModelFiles);
+        if (!spec_res)
+        {
+          ODAI_LOG(ODAI_LOG_ERROR, "Failed to get target audio spec, error code: {}",
+                   static_cast<std::uint32_t>(spec_res.error()));
+          return tl::unexpected(spec_res.error());
+        }
+        cached_audio_spec = spec_res.value();
       }
       OdaiDecodedAudio decoded_audio;
-      OdaiResult<void> decode_res = audio_decoder->decode_to_spec(item, spec_opt.value(), decoded_audio);
+      OdaiResult<void> decode_res = audio_decoder->decode_to_spec(item, cached_audio_spec.value(), decoded_audio);
       if (!decode_res)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "audio decoding failed with error code {}",
                  static_cast<std::uint32_t>(decode_res.error()));
-        return std::nullopt;
+        return tl::unexpected(decode_res.error());
       }
       mtmd_bitmap* bmp = mtmd_bitmap_init_from_audio(decoded_audio.m_samples.size(), decoded_audio.m_samples.data());
       if (bmp == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to create mtmd_bitmap from audio");
-        return std::nullopt;
+        return unexpected_internal_error<std::pair<std::string, std::vector<mtmd::bitmap>>>();
       }
       bitmaps.emplace_back(bmp);
     }
     else
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
-      return std::nullopt;
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
   }
 
   return std::make_pair(text_content, std::move(bitmaps));
 }
 
-std::string
+OdaiResult<std::string>
 OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
                                                 bool add_generation_prompt)
 {
   if (this->m_llmModel == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet");
-    return "";
+    return unexpected_not_initialized<std::string>();
   }
 
   // Get the chat template from the model
@@ -1102,7 +1131,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   if (tmpl == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat template from model");
-    return "";
+    return unexpected_internal_error<std::string>();
   }
 
   ODAI_LOG(ODAI_LOG_TRACE, "Got chat template from model: {}", tmpl);
@@ -1132,7 +1161,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   if (needed_size <= 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to calculate required template buffer size");
-    return "";
+    return unexpected_internal_error<std::string>();
   }
 
   if (needed_size > static_cast<int32_t>(formatted_buffer.size()))
@@ -1145,7 +1174,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
     if (actual_size <= 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to apply chat template");
-      return "";
+      return unexpected_internal_error<std::string>();
     }
   }
 
@@ -1153,14 +1182,14 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   return std::string(formatted_buffer.data());
 }
 
-std::unique_ptr<llama_context, LlamaContextDeleter>
+OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>>
 OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>& messages)
 {
 
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
-    return nullptr;
+    return unexpected_not_initialized<std::unique_ptr<llama_context, LlamaContextDeleter>>();
   }
 
   std::unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
@@ -1168,7 +1197,7 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   if (llm_llama_context == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create context");
-    return nullptr;
+    return unexpected_internal_error<std::unique_ptr<llama_context, LlamaContextDeleter>>();
   }
 
   std::vector<mtmd::bitmap> bitmaps;
@@ -1176,11 +1205,13 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
 
   for (const ChatMessage& msg : messages)
   {
-    auto process_result = this->process_input_items(msg.m_contentItems);
-    if (!process_result.has_value())
+    OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result =
+        this->process_input_items(msg.m_contentItems);
+    if (!process_result)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to process chat message content items");
-      return nullptr;
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to process chat message content items, error code: {}",
+               static_cast<std::uint32_t>(process_result.error()));
+      return tl::unexpected(process_result.error());
     }
 
     extracted_messages.push_back({msg.m_role, process_result->first});
@@ -1193,13 +1224,14 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   }
 
   // Format the chat messages into a prompt string (without generation prompt)
-  std::string formatted_prompt = this->format_chat_messages_to_prompt(extracted_messages, false);
-
-  if (formatted_prompt.empty() && !extracted_messages.empty())
+  OdaiResult<std::string> formatted_prompt_res = this->format_chat_messages_to_prompt(extracted_messages, false);
+  if (!formatted_prompt_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to format chat messages into prompt");
-    return nullptr;
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to format chat messages into prompt, error code: {}",
+             static_cast<std::uint32_t>(formatted_prompt_res.error()));
+    return tl::unexpected(formatted_prompt_res.error());
   }
+  const std::string& formatted_prompt = formatted_prompt_res.value();
 
   // Load the formatted prompt into the context to build KV cache
   uint32_t next_pos = 0;
@@ -1207,11 +1239,11 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   if (!this->load_into_context(*llm_llama_context, formatted_prompt, bitmaps, next_pos, false))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load formatted prompt into context");
-    return nullptr;
+    return unexpected_internal_error<std::unique_ptr<llama_context, LlamaContextDeleter>>();
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context");
-  return llm_llama_context;
+  return std::move(llm_llama_context);
 }
 
 OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
@@ -1257,14 +1289,15 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
     return unexpected_internal_error<StreamingStats>();
   }
 
-  std::unique_ptr<llama_context, LlamaContextDeleter> chat_context =
+  OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>> chat_context_res =
       this->load_chat_messages_into_context(chat_history);
-
-  if (!chat_context)
+  if (!chat_context_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into cache");
-    return unexpected_internal_error<StreamingStats>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into cache, error code: {}",
+             static_cast<std::uint32_t>(chat_context_res.error()));
+    return tl::unexpected(chat_context_res.error());
   }
+  std::unique_ptr<llama_context, LlamaContextDeleter> chat_context = std::move(chat_context_res.value());
 
   std::unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler =
       OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
@@ -1275,18 +1308,26 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
     return unexpected_internal_error<StreamingStats>();
   }
 
-  auto process_result = this->process_input_items(prompt);
-  if (!process_result.has_value())
+  OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);
+  if (!process_result)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to process chat input items");
-    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to process chat input items, error code: {}",
+             static_cast<std::uint32_t>(process_result.error()));
+    return tl::unexpected(process_result.error());
   }
 
   std::vector<std::pair<std::string, std::string>> extracted_msgs;
   extracted_msgs.push_back({"user", process_result->first});
   std::vector<mtmd::bitmap> bitmaps = std::move(process_result->second);
 
-  std::string formatted_prompt = this->format_chat_messages_to_prompt(extracted_msgs, true);
+  OdaiResult<std::string> formatted_prompt_res = this->format_chat_messages_to_prompt(extracted_msgs, true);
+  if (!formatted_prompt_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to format chat prompt, error code: {}",
+             static_cast<std::uint32_t>(formatted_prompt_res.error()));
+    return tl::unexpected(formatted_prompt_res.error());
+  }
+  std::string formatted_prompt = formatted_prompt_res.value();
 
   // Use the cached context and sampler to generate streaming response
   return this->generate_streaming_response_impl(*chat_context, *sampler, formatted_prompt, bitmaps, callback,

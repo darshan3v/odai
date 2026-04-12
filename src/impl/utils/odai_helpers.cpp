@@ -4,6 +4,7 @@
 #include <sstream>
 #include <vector>
 
+#include "odai_logger.h"
 #include "utils/odai_helpers.h"
 #include "xxhash.h"
 #include <nlohmann/json.hpp>
@@ -20,22 +21,35 @@ ChatId generate_chat_id()
   return std::string("chat_") + std::to_string(rand()) + "_" + "t" + std::to_string(time(nullptr));
 }
 
-std::string calculate_file_checksum(const std::string& path)
+OdaiResult<std::string> calculate_file_checksum(const std::string& path)
 {
+  if (path.empty())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Empty path passed for checksum calculation");
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
+  }
+
   std::ifstream file(path, std::ios::binary);
   if (!file.is_open())
   {
-    return "";
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to open file for checksum calculation: {}", path);
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
   // Use XXH3_64bits for speed and simple checksum
   XXH3_state_t* state = XXH3_createState();
   if (state == nullptr)
   {
-    return "";
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to allocate XXH3 state for file checksum");
+    return unexpected_internal_error<std::string>();
   }
 
-  XXH3_64bits_reset(state);
+  if (XXH3_64bits_reset(state) != XXH_OK)
+  {
+    XXH3_freeState(state);
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to reset XXH3 state for file checksum");
+    return unexpected_internal_error<std::string>();
+  }
 
   const uint32_t buffer_size = static_cast<const uint32_t>(64 * 1024); // 64KB buffer
   std::vector<char> buffer(buffer_size);
@@ -55,11 +69,12 @@ std::string calculate_file_checksum(const std::string& path)
   return ss.str();
 }
 
-std::string calculate_data_checksum(const std::vector<uint8_t>& data)
+OdaiResult<std::string> calculate_data_checksum(const std::vector<uint8_t>& data)
 {
   if (data.empty())
   {
-    return "";
+    ODAI_LOG(ODAI_LOG_ERROR, "Empty data passed for checksum calculation");
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
   XXH64_hash_t hash = XXH3_64bits(data.data(), data.size());
@@ -69,22 +84,26 @@ std::string calculate_data_checksum(const std::vector<uint8_t>& data)
   return ss.str();
 }
 
-std::string calculate_model_checksums(const ModelFiles& files)
+OdaiResult<std::string> calculate_model_checksums(const ModelFiles& files)
 {
-  nlohmann::json checksums_json;
-  for (const auto& [key, path] : files.m_entries)
+  if (files.m_entries.empty())
   {
-    std::string checksum = calculate_file_checksum(path);
-    if (!checksum.empty())
-    {
-      checksums_json[key] = checksum;
-    }
-    // if checksum fails, it might just be an optional file that doesn't exist, but we skip it.
+    ODAI_LOG(ODAI_LOG_ERROR, "No model file entries passed for checksum calculation");
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
-  if (checksums_json.empty() && !files.m_entries.empty())
+  nlohmann::json checksums_json = nlohmann::json::object();
+  for (const auto& [key, path] : files.m_entries)
   {
-    return ""; // Failed to calculate any checksums
+    OdaiResult<std::string> checksum_res = calculate_file_checksum(path);
+    if (!checksum_res)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksum for model file entry '{}', error code: {}", key,
+               static_cast<std::uint32_t>(checksum_res.error()));
+      return tl::unexpected(checksum_res.error());
+    }
+
+    checksums_json[key] = checksum_res.value();
   }
 
   return checksums_json.dump();

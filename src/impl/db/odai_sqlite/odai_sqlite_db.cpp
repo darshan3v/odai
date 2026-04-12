@@ -427,21 +427,29 @@ OdaiResult<InputItem> OdaiSqliteDb::store_media_item(const InputItem& item)
 
     if (media_type == MediaType::IMAGE || media_type == MediaType::AUDIO)
     {
-      std::string checksum;
+      OdaiResult<std::string> checksum_res = unexpected_internal_error<std::string>();
 
       if (item.m_type == InputItemType::FILE_PATH)
       {
-        checksum = calculate_file_checksum(byte_vector_to_string(item.m_data));
+        checksum_res = calculate_file_checksum(byte_vector_to_string(item.m_data));
       }
       else if (item.m_type == InputItemType::MEMORY_BUFFER)
       {
-        checksum = calculate_data_checksum(item.m_data);
+        checksum_res = calculate_data_checksum(item.m_data);
       }
       else
       {
         ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItem type for storing media item");
         return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
       }
+
+      if (!checksum_res)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate media checksum, error code: {}",
+                 static_cast<std::uint32_t>(checksum_res.error()));
+        return tl::unexpected(checksum_res.error());
+      }
+      const std::string& checksum = checksum_res.value();
 
       // check in db if we already have a mapping for this checksum, if yes return that path instead of storing again
       SQLite::Statement query(

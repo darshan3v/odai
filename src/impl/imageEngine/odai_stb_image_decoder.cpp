@@ -7,6 +7,7 @@
 #include "stb_image_resize2.h"
 
 #include <algorithm>
+#include <memory>
 
 bool OdaiStbImageDecoder::is_supported(const std::string& format)
 {
@@ -28,11 +29,12 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
   int raw_desired_channels = static_cast<int>(target_spec.m_channels);
 
   // 2. Decode the image from the provided source (file path or memory buffer).
-  stbi_uc* pixels = nullptr;
+  using StbiPixelsPtr = std::unique_ptr<stbi_uc, decltype(&stbi_image_free)>;
+  StbiPixelsPtr pixels(nullptr, &stbi_image_free);
   if (input.m_type == InputItemType::FILE_PATH)
   {
     std::string file_path(input.m_data.begin(), input.m_data.end());
-    pixels = stbi_load(file_path.c_str(), &raw_width, &raw_height, &raw_channels_in_file, raw_desired_channels);
+    pixels.reset(stbi_load(file_path.c_str(), &raw_width, &raw_height, &raw_channels_in_file, raw_desired_channels));
     if (pixels == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "stbi_load failed for path {}: {}", file_path, stbi_failure_reason());
@@ -46,9 +48,10 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
       ODAI_LOG(ODAI_LOG_ERROR, "Provided memory buffer for image decoding is empty");
       return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
-    pixels = stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(input.m_data.data()),
-                                   static_cast<int>(input.m_data.size()), &raw_width, &raw_height,
-                                   &raw_channels_in_file, raw_desired_channels);
+
+    pixels.reset(stbi_load_from_memory(reinterpret_cast<const stbi_uc*>(input.m_data.data()),
+                                       static_cast<int>(input.m_data.size()), &raw_width, &raw_height,
+                                       &raw_channels_in_file, raw_desired_channels));
     if (pixels == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "stbi_load_from_memory failed: {}", stbi_failure_reason());
@@ -90,7 +93,6 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
   decoded_image.m_channels = actual_channels;
 
   bool resize_required = (out_w != orig_width || out_h != orig_height);
-
   try
   {
     if (resize_required)
@@ -103,13 +105,12 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
       // Invoke the linear resizing algorithm provided by stb_image_resize2.
       // We safely cast dimensions back to int for STB's internal use.
       auto* resized_ptr = stbir_resize_uint8_linear(
-          pixels, static_cast<int>(orig_width), static_cast<int>(orig_height), 0, decoded_image.m_pixels.data(),
+          pixels.get(), static_cast<int>(orig_width), static_cast<int>(orig_height), 0, decoded_image.m_pixels.data(),
           static_cast<int>(out_w), static_cast<int>(out_h), 0, static_cast<stbir_pixel_layout>(actual_channels));
 
       if (resized_ptr == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "stbir_resize_uint8_linear failed to resize the image");
-        stbi_image_free(pixels);
         return unexpected_internal_error<void>();
       }
     }
@@ -119,17 +120,14 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
       size_t total_size =
           static_cast<size_t>(orig_width) * static_cast<size_t>(orig_height) * static_cast<size_t>(actual_channels);
       decoded_image.m_pixels.resize(total_size);
-      std::memcpy(decoded_image.m_pixels.data(), pixels, total_size);
+      std::memcpy(decoded_image.m_pixels.data(), pixels.get(), total_size);
     }
 
-    // 7. Free the STB allocation and indicate successful processing.
-    stbi_image_free(pixels);
     return {};
   }
   catch (const std::bad_alloc&)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to allocate memory buffer for the decoded output image");
-    stbi_image_free(pixels);
     return unexpected_internal_error<void>();
   }
 }

@@ -2,6 +2,7 @@
 
 #include <filesystem>
 
+#include "types/odai_result.h"
 #include "types/odai_types.h"
 
 /// Generates a unique chat session identifier.
@@ -11,18 +12,18 @@ ChatId generate_chat_id();
 
 /// Calculates the XXH3 64-bit checksum of a file's contents.
 /// @param path The absolute path to the file.
-/// @return A 16-character hexadecimal string representing the checksum, or an empty string on error.
-std::string calculate_file_checksum(const std::string& path);
+/// @return Hex checksum on success, or an unexpected OdaiResultEnum on failure.
+OdaiResult<std::string> calculate_file_checksum(const std::string& path);
 
 /// Calculates the XXH3 64-bit checksum of a byte array in memory.
 /// @param data The vector containing the binary data.
-/// @return A 16-character hexadecimal string representing the checksum, or an empty string if data is empty.
-std::string calculate_data_checksum(const std::vector<uint8_t>& data);
+/// @return Hex checksum on success, or an unexpected OdaiResultEnum on failure.
+OdaiResult<std::string> calculate_data_checksum(const std::vector<uint8_t>& data);
 
 /// Calculates checksums for all files in a ModelFiles struct.
 /// @param files The Model Files struct containing paths.
-/// @return A JSON string containing key-value pairs of checksums, or empty string on error.
-std::string calculate_model_checksums(const ModelFiles& files);
+/// @return JSON string containing key-value checksum pairs on success, or an unexpected OdaiResultEnum on failure.
+OdaiResult<std::string> calculate_model_checksums(const ModelFiles& files);
 
 /// Returns the directory of the loaded module that contains the given symbol address.
 /// This can be used by any module to resolve its own shared library or executable directory by

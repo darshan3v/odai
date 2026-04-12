@@ -109,6 +109,17 @@ public:
 3.  **Error Handling**:
     - **C API**: Returns `bool` (success/fail) or `int` (error codes). logs errors.
     - **C++ SDK**: Never let exceptions propagate across the C boundary. Legacy APIs may still return `bool`, but operation-style methods should prefer `OdaiResult` so callers can distinguish validation, not-found, not-initialized, and internal failures.
+    - **Exception Guards**: Prefer explicit boundary-local `try`/`catch` blocks so `ODAI_LOG` continues to report the real caller `__func__` and `__LINE__`.
+      - A small catch-tail macro from `src/include/utils/odai_exception_macros.h` is acceptable for repeated exception translation, but keep the main function body written normally.
+      - Keep validation and output initialization outside any shared catch-tail macro so invalid-argument paths remain explicit.
+      - The shared macro should use caller-site `__func__` directly; do not require a separate context string unless the function name alone is ambiguous.
+      - Standard fallback mapping remains:
+        - `c_OdaiResult` -> `ODAI_INTERNAL_ERROR`
+        - `int32_t` streaming APIs -> `-1`
+        - `bool` -> `false`
+        - `OdaiResult<T>` -> `unexpected_internal_error<T>()`
+        - `void` -> log and return
+      - If a function needs additional exception-side cleanup, keep the full `catch` local instead of hiding cleanup behind a shared macro.
 
 ## 3. Naming Conventions
 

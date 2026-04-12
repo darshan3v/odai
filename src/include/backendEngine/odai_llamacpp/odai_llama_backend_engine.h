@@ -189,7 +189,7 @@ private:
   /// Returns the required audio specification for the given GGUF model.
   /// @param config The LLM model configuration to check requirements for.
   /// @param files The associated model files containing text model and multimodal projectors.
-  std::optional<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config, const ModelFiles& files);
+  OdaiResult<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config, const ModelFiles& files);
 
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
@@ -221,8 +221,8 @@ private:
   /// @param input The string to tokenize
   /// @param is_first Whether this is the first prompt
   /// @param model_type Type of model (LLM or EMBEDDING) to use for tokenization
-  /// @return Vector of tokens, or empty vector on error
-  std::vector<llama_token> tokenize(const std::string& input, bool is_first, ModelType model_type);
+  /// @return Tokens on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::vector<llama_token>> tokenize(const std::string& input, bool is_first, ModelType model_type);
 
   /// Adds tokens to a llama batch for processing. we set the logits request for
   /// the last token.
@@ -238,8 +238,8 @@ private:
 
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize
-  /// @return Detokenized string, or empty string on error
-  std::string detokenize(const std::vector<llama_token>& tokens);
+  /// @return Detokenized string on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::string> detokenize(const std::vector<llama_token>& tokens);
 
   /// Loads the given prompt into the provided llama context.
   /// If the context already has some other context (Eg: some message hisotry)
@@ -294,8 +294,8 @@ private:
   /// Loads the provided sequence of chat messages into the model's context
   /// @param messages Vector of chat messages (in order) to load into the
   /// context
-  /// @return true if the context was successfully loaded, false otherwise
-  std::unique_ptr<llama_context, LlamaContextDeleter>
+  /// @return Loaded llama context on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>>
   load_chat_messages_into_context(const std::vector<ChatMessage>& messages);
 
   /// Generates the next token using the provided llama context and sampler.
@@ -316,8 +316,8 @@ private:
   /// @param buffered_tokens Tokens to process (cleared after processing)
   /// @param output_buffer Accumulated output buffer (unsafe tail remains after
   /// return)
-  /// @return Safe UTF-8 string that can be sent to client
-  std::string flush_utf8_safe_output(std::vector<llama_token>& buffered_tokens, std::string& output_buffer);
+  /// @return Safe UTF-8 string on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::string> flush_utf8_safe_output(std::vector<llama_token>& buffered_tokens, std::string& output_buffer);
 
   /// Formats a vector of chat messages into a single prompt string using the
   /// model's chat template. Uses llama_chat_apply_template to apply the model's
@@ -325,15 +325,16 @@ private:
   /// @param messages Vector of chat messages to format
   /// @param add_generation_prompt Whether to add generation prompt (set to true
   /// when expecting model response)
-  /// @return Formatted prompt string.
-  std::string format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
-                                             bool add_generation_prompt);
+  /// @return Formatted prompt string on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::string>
+  format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
+                                 bool add_generation_prompt);
 
   /// Processes input items to extract formatted text and multimodal bitmaps.
   /// @todo Replace current mtmd image decoding logic with our custom internal image decoder
   /// @param items The input items to process
-  /// @return A pair containing the formatted text string and extracted mtmd bitmaps, or nullopt on failure.
-  std::optional<std::pair<std::string, std::vector<mtmd::bitmap>>>
+  /// @return Formatted text and extracted mtmd bitmaps on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>>
   process_input_items(const std::vector<InputItem>& items);
 
   /// Core implementation of streaming response generation that handles token

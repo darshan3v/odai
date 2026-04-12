@@ -42,204 +42,156 @@ OdaiRagEngine::OdaiRagEngine(const DBConfig& db_config, const BackendEngineConfi
 
 OdaiResult<void> OdaiRagEngine::initialize_rag_engine()
 {
-  try
+  if (!m_db)
   {
-    if (!m_db)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Database implementation is not available");
-      return unexpected_not_initialized<void>();
-    }
-
-    OdaiResult<void> db_res = m_db->initialize_db();
-    if (!db_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize db, error code: {}", static_cast<std::uint32_t>(db_res.error()));
-      return db_res;
-    }
-
-    if (!m_backendEngine)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Backend engine implementation is not available");
-      return unexpected_not_initialized<void>();
-    }
-
-    OdaiResult<void> backend_res = m_backendEngine->initialize_engine();
-    if (!backend_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize backend engine, error code: {}",
-               static_cast<std::uint32_t>(backend_res.error()));
-      return backend_res;
-    }
-
-    ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
-    return {};
+    ODAI_LOG(ODAI_LOG_ERROR, "Database implementation is not available");
+    return unexpected_not_initialized<void>();
   }
-  catch (const std::exception& e)
+
+  OdaiResult<void> db_res = m_db->initialize_db();
+  if (!db_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while initializing RAG engine: {}", e.what());
-    return unexpected_internal_error<void>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize db, error code: {}", static_cast<std::uint32_t>(db_res.error()));
+    return db_res;
   }
-  catch (...)
+
+  if (!m_backendEngine)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while initializing RAG engine");
-    return unexpected_internal_error<void>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Backend engine implementation is not available");
+    return unexpected_not_initialized<void>();
   }
+
+  OdaiResult<void> backend_res = m_backendEngine->initialize_engine();
+  if (!backend_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize backend engine, error code: {}",
+             static_cast<std::uint32_t>(backend_res.error()));
+    return backend_res;
+  }
+
+  ODAI_LOG(ODAI_LOG_INFO, "RAG Engine successfully initialized");
+  return {};
 }
 
 OdaiResult<void> OdaiRagEngine::register_model_files(const ModelName& name, const ModelFiles& model_file_details)
 {
-  try
+  if (!m_backendEngine || !m_db)
   {
-    if (!m_backendEngine || !m_db)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
-      return unexpected_not_initialized<void>();
-    }
-
-    OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(model_file_details);
-    if (!validation_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "file details validation errored for model: {}, error code: {}", name,
-               static_cast<std::uint32_t>(validation_res.error()));
-      return tl::unexpected(validation_res.error());
-    }
-
-    if (!validation_res.value())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "file details validation failed for model: {}", name);
-      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
-    }
-
-    std::string checksums_json = calculate_model_checksums(model_file_details);
-    if (checksums_json.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
-      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
-    }
-
-    OdaiResult<void> db_res = m_db->register_model_files(name, model_file_details, checksums_json);
-    if (!db_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to register file details for model: {}, error code: {}", name,
-               static_cast<std::uint32_t>(db_res.error()));
-      return db_res;
-    }
-
-    ODAI_LOG(ODAI_LOG_INFO, "Model files registered successfully for model: {}", name);
-    return {};
+    ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
+    return unexpected_not_initialized<void>();
   }
-  catch (const std::exception& e)
+
+  OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(model_file_details);
+  if (!validation_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while registering model files for {}: {}", name, e.what());
-    return unexpected_internal_error<void>();
+    ODAI_LOG(ODAI_LOG_ERROR, "file details validation errored for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(validation_res.error()));
+    return tl::unexpected(validation_res.error());
   }
-  catch (...)
+
+  if (!validation_res.value())
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while registering model files for {}", name);
-    return unexpected_internal_error<void>();
+    ODAI_LOG(ODAI_LOG_ERROR, "file details validation failed for model: {}", name);
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
+
+  OdaiResult<std::string> checksums_res = calculate_model_checksums(model_file_details);
+  if (!checksums_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(checksums_res.error()));
+    return tl::unexpected(checksums_res.error());
+  }
+  const std::string& checksums_json = checksums_res.value();
+
+  OdaiResult<void> db_res = m_db->register_model_files(name, model_file_details, checksums_json);
+  if (!db_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to register file details for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(db_res.error()));
+    return db_res;
+  }
+
+  ODAI_LOG(ODAI_LOG_INFO, "Model files registered successfully for model: {}", name);
+  return {};
 }
 
 OdaiResult<void> OdaiRagEngine::update_model_files(const ModelName& name, const ModelFiles& new_model_file_details,
                                                    UpdateModelFlag flag)
 {
-  try
+  if (!m_backendEngine || !m_db)
   {
-    if (!m_backendEngine || !m_db)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
-      return unexpected_not_initialized<void>();
-    }
+    ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
+    return unexpected_not_initialized<void>();
+  }
 
-    OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(new_model_file_details);
-    if (!validation_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "new file details validation errored for model: {}, error code: {}", name,
-               static_cast<std::uint32_t>(validation_res.error()));
-      return tl::unexpected(validation_res.error());
-    }
+  OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(new_model_file_details);
+  if (!validation_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "new file details validation errored for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(validation_res.error()));
+    return tl::unexpected(validation_res.error());
+  }
 
-    if (!validation_res.value())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "new file details Validation failed for model: {}", name);
-      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
-    }
+  if (!validation_res.value())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "new file details Validation failed for model: {}", name);
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+  }
 
-    std::string new_checksums_json = calculate_model_checksums(new_model_file_details);
-    if (new_checksums_json.empty())
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}", name);
-      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
-    }
+  OdaiResult<std::string> new_checksums_res = calculate_model_checksums(new_model_file_details);
+  if (!new_checksums_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to calculate checksums for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(new_checksums_res.error()));
+    return tl::unexpected(new_checksums_res.error());
+  }
+  const std::string& new_checksums_json = new_checksums_res.value();
 
-    if (flag == UpdateModelFlag::STRICT_MATCH)
+  if (flag == UpdateModelFlag::STRICT_MATCH)
+  {
+    OdaiResult<std::string> old_checksums_res = m_db->get_model_checksums(name);
+    if (!old_checksums_res)
     {
-      OdaiResult<std::string> old_checksums_res = m_db->get_model_checksums(name);
-      if (!old_checksums_res)
+      ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}, error code: {}", name,
+               static_cast<std::uint32_t>(old_checksums_res.error()));
+      return tl::unexpected(old_checksums_res.error());
+    }
+    const std::string& old_checksums_json = old_checksums_res.value();
+
+    nlohmann::json new_checksums_json_obj = nlohmann::json::parse(new_checksums_json);
+    nlohmann::json old_checksums_json_obj = nlohmann::json::parse(old_checksums_json);
+
+    for (auto it = new_checksums_json_obj.begin(); it != new_checksums_json_obj.end(); ++it)
+    {
+      const std::string& key = it.key();
+      if (old_checksums_json_obj.contains(key))
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "Model not found or failed to retrieve checksums: {}, error code: {}", name,
-                 static_cast<std::uint32_t>(old_checksums_res.error()));
-        return tl::unexpected(old_checksums_res.error());
-      }
-      const std::string& old_checksums_json = old_checksums_res.value();
-
-      try
-      {
-        nlohmann::json new_checksums_json_obj = nlohmann::json::parse(new_checksums_json);
-        nlohmann::json old_checksums_json_obj = nlohmann::json::parse(old_checksums_json);
-
-        for (auto it = new_checksums_json_obj.begin(); it != new_checksums_json_obj.end(); ++it)
+        if (old_checksums_json_obj[key] != it.value())
         {
-          const std::string& key = it.key();
-          if (old_checksums_json_obj.contains(key))
-          {
-            if (old_checksums_json_obj[key] != it.value())
-            {
-              ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {} on key: {}. Expected: {}, Got: {}", name, key,
-                       old_checksums_json_obj[key].dump(), it.value().dump());
-              return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
-            }
-          }
-          else
-          {
-            ODAI_LOG(ODAI_LOG_INFO, "New key found: {}, adding it to the model file details", key);
-            old_checksums_json_obj[key] = it.value();
-          }
+          ODAI_LOG(ODAI_LOG_ERROR, "Checksum mismatch for model: {} on key: {}. Expected: {}, Got: {}", name, key,
+                   old_checksums_json_obj[key].dump(), it.value().dump());
+          return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
         }
       }
-      catch (const std::exception& e)
+      else
       {
-        ODAI_LOG(ODAI_LOG_ERROR, "Failed to parse/compare checksum JSONs for {}: {}", name, e.what());
-        return unexpected_internal_error<void>();
-      }
-      catch (...)
-      {
-        ODAI_LOG(ODAI_LOG_ERROR, "Unknown failure while parsing/comparing checksum JSONs for {}", name);
-        return unexpected_internal_error<void>();
+        ODAI_LOG(ODAI_LOG_INFO, "New key found: {}, adding it to the model file details", key);
+        old_checksums_json_obj[key] = it.value();
       }
     }
+  }
 
-    OdaiResult<void> db_res = m_db->update_model_files(name, new_model_file_details, new_checksums_json);
-    if (!db_res)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, error code: {}", name,
-               static_cast<std::uint32_t>(db_res.error()));
-      return db_res;
-    }
+  OdaiResult<void> db_res = m_db->update_model_files(name, new_model_file_details, new_checksums_json);
+  if (!db_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to update file details for model: {}, error code: {}", name,
+             static_cast<std::uint32_t>(db_res.error()));
+    return db_res;
+  }
 
-    ODAI_LOG(ODAI_LOG_INFO, "Model files updated successfully for model: {}", name);
-    return {};
-  }
-  catch (const std::exception& e)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while updating model files for {}: {}", name, e.what());
-    return unexpected_internal_error<void>();
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while updating model files for {}", name);
-    return unexpected_internal_error<void>();
-  }
+  ODAI_LOG(ODAI_LOG_INFO, "Model files updated successfully for model: {}", name);
+  return {};
 }
 
 OdaiResult<StreamingStats> OdaiRagEngine::generate_streaming_response(const LLMModelConfig& llm_model_config,
