@@ -15,11 +15,25 @@ llama.cpp is fetched via CMake `FetchContent` and built as a **traditional separ
 
 ## Hardware Discovery
 
-During `initialize_engine()`, the engine discovers available hardware using GGML's backend system. Backend registration is done through `ggml_backend_load_all_from_path()` so ggml can score and load the best variant of each available backend family from the runtime backend directory. ODAI then enumerates the registered devices and applies its own selection policy based on `m_preferredDeviceType`:
+During `initialize_engine()`, the engine discovers available hardware using GGML's backend system. Backend registration is done through `ggml_backend_load_all_from_path()` so ggml can score and load the best variant of each available backend family from the runtime backend directory.
 
-- **AUTO**: try GPU → iGPU → CPU (first match wins)
-- **GPU/IGPU**: try specific type → error if not found
-- **CPU**: use the registered CPU backend directly
+Discovery is split into two internal concerns:
+
+- **Device inventory**: store each accepted candidate as both public `BackendDevice` info and the private `ggml_backend_dev_t` handle needed by later placement and load decisions
+- **Probe policy**: decide which backend families to query, in what order, for the requested device class
+
+Current discovery policy is:
+
+- **AUTO**: probe prioritized GPU backends, then fall back directly to CPU
+- **GPU**: probe prioritized GPU backends only
+- **IGPU**: probe prioritized iGPU backends only
+- **CPU**: probe the CPU backend directly
+
+Platform-specific notes:
+
+- **Desktop AUTO** does not run a second iGPU-only pass after GPU probing fails
+- **Android GPU probing** accepts Vulkan devices that ggml reports as `IGPU`, because that still represents the accelerated SoC path ODAI wants for `AUTO`/`GPU`
+- Discovery logs both the configured probe order and the per-backend probe result counts so later placement behavior can be explained without mixing discovery into load heuristics
 
 > Backend libraries are **never unloaded** during the application lifecycle — doing so risks driver-level instability.
 

@@ -13,6 +13,7 @@
 #include "types/odai_common_types.h"
 #include "types/odai_type_conversions.h"
 #include "types/odai_types.h"
+#include "utils/odai_exception_macros.h"
 #include "utils/odai_helpers.h"
 #include "utils/string_utils.h"
 
@@ -28,6 +29,12 @@
 
 namespace
 {
+std::string format_backend_list(const std::vector<std::string_view>& backends)
+{
+  const std::string joined = join_strings(backends, ", ");
+  return joined.empty() ? "(none)" : joined;
+}
+
 std::vector<std::string_view> get_prioritized_gpu_backends()
 {
 #ifdef __APPLE__
@@ -39,13 +46,37 @@ std::vector<std::string_view> get_prioritized_gpu_backends()
 #endif
 }
 
-std::optional<std::string_view> get_igpu_backend_name()
+std::vector<std::string_view> get_prioritized_igpu_backends()
 {
 #ifdef __APPLE__
-  return std::nullopt;
+  return {};
+#elif defined(__ANDROID__)
+  return {"vulkan"};
 #else
-  return "vulkan";
+  return {"sycl", "vulkan"};
 #endif
+}
+
+const char* device_type_name(BackendDeviceType type)
+{
+  switch (type)
+  {
+  case BackendDeviceType::AUTO:
+    return "AUTO";
+  case BackendDeviceType::CPU:
+    return "CPU";
+  case BackendDeviceType::GPU:
+    return "GPU";
+  case BackendDeviceType::IGPU:
+    return "IGPU";
+  default:
+    return "UNKNOWN";
+  }
+}
+
+bool contains_type(const std::vector<BackendDeviceType>& accepted_types, BackendDeviceType type)
+{
+  return std::find(accepted_types.begin(), accepted_types.end(), type) != accepted_types.end();
 }
 } // namespace
 
@@ -107,11 +138,12 @@ bool OdaiLlamaEngine::register_available_backends()
   return false;
 }
 
-OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDeviceType preferred_type)
+OdaiResult<void> OdaiLlamaEngine::discover_candidate_devices(BackendDeviceType preferred_type)
 {
   try
   {
-    m_candidateDevices.clear();
+    m_deviceInventory = {};
+    m_deviceInventory.m_requestedType = preferred_type;
 
     if (!OdaiLlamaEngine::register_available_backends())
     {
@@ -119,11 +151,24 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
       return unexpected_internal_error<void>();
     }
 
+    ODAI_LOG(ODAI_LOG_INFO, "Discovering candidate devices for preferred type {}", device_type_name(preferred_type));
+
+    auto append_candidates_with_log = [this](const std::string_view backend_name,
+                                             const std::vector<BackendDeviceType>& accepted_types) -> bool
+    {
+      const std::string accepted_type_names =
+          join_strings(accepted_types, ", ", [](BackendDeviceType type) { return device_type_name(type); });
+
+      ODAI_LOG(ODAI_LOG_INFO, "Probing backend family '{}' for device types [{}]", backend_name, accepted_type_names);
+      return this->append_backend_candidate_devices(std::string(backend_name), accepted_types);
+    };
+
     if (preferred_type == BackendDeviceType::CPU)
     {
-      ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; selecting CPU as primary execution path");
-      if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+      ODAI_LOG(ODAI_LOG_INFO, "CPU only mode requested; discovery will probe the CPU backend directly");
+      if (append_candidates_with_log("cpu", {BackendDeviceType::CPU}))
       {
+        ODAI_LOG(ODAI_LOG_INFO, "Discovered {} CPU candidate device(s)", m_deviceInventory.m_candidates.size());
         return {};
       }
 
@@ -131,42 +176,72 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
       return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
     }
 
-    bool graphics_hardware_found = false;
-
     const std::vector<std::string_view> gpu_backends = get_prioritized_gpu_backends();
+    const std::vector<std::string_view> igpu_backends = get_prioritized_igpu_backends();
+    bool candidates_found = false;
 
     if (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::AUTO)
     {
+      ODAI_LOG(ODAI_LOG_INFO, "Prioritized GPU backend probe order: {}", format_backend_list(gpu_backends));
+
       for (const std::string_view backend_name : gpu_backends)
       {
-        if (this->try_add_candidate_devices(std::string(backend_name), BackendDeviceType::GPU))
+        std::vector<BackendDeviceType> accepted_types = {BackendDeviceType::GPU};
+
+#ifdef __ANDROID__
+        if (backend_name == "vulkan")
         {
-          graphics_hardware_found = true;
+          accepted_types.push_back(BackendDeviceType::IGPU);
+        }
+#endif
+
+        if (append_candidates_with_log(backend_name, accepted_types))
+        {
+          m_deviceInventory.m_hasAccelerationCandidate = true;
+          candidates_found = true;
+
+#ifdef __ANDROID__
+          if (contains_type(accepted_types, BackendDeviceType::IGPU))
+          {
+            ODAI_LOG(ODAI_LOG_INFO,
+                     "Accepted Android Vulkan integrated devices as acceleration candidates during GPU probing");
+          }
+#endif
+
           break;
         }
       }
     }
 
-    if (!graphics_hardware_found &&
-        (preferred_type == BackendDeviceType::IGPU || preferred_type == BackendDeviceType::AUTO))
+    if (preferred_type == BackendDeviceType::IGPU)
     {
-      const std::optional<std::string_view> igpu_backend = get_igpu_backend_name();
-      if (igpu_backend.has_value())
-      {
-        graphics_hardware_found = this->try_add_candidate_devices(std::string(*igpu_backend), BackendDeviceType::IGPU);
-      }
-      else if (preferred_type == BackendDeviceType::IGPU)
+      ODAI_LOG(ODAI_LOG_INFO, "Prioritized IGPU backend probe order: {}", format_backend_list(igpu_backends));
+
+      if (igpu_backends.empty())
       {
         ODAI_LOG(ODAI_LOG_INFO, "No dedicated IGPU backend probe is configured for this platform");
       }
+
+      for (const std::string_view backend_name : igpu_backends)
+      {
+        if (append_candidates_with_log(backend_name, {BackendDeviceType::IGPU}))
+        {
+          m_deviceInventory.m_hasAccelerationCandidate = true;
+          candidates_found = true;
+          break;
+        }
+      }
     }
 
-    if (!graphics_hardware_found && preferred_type == BackendDeviceType::AUTO)
+    if (!candidates_found && preferred_type == BackendDeviceType::AUTO)
     {
-      if (this->try_add_candidate_devices("cpu", BackendDeviceType::CPU))
+      ODAI_LOG(ODAI_LOG_INFO, "AUTO mode did not find an accelerated GPU candidate; discovery will fall back to CPU");
+
+      if (append_candidates_with_log("cpu", {BackendDeviceType::CPU}))
       {
-        ODAI_LOG(ODAI_LOG_INFO, "No GPU acceleration found; primary execution will use CPU");
-        graphics_hardware_found = true;
+        candidates_found = true;
+        ODAI_LOG(ODAI_LOG_INFO, "Discovered {} CPU fallback candidate device(s)",
+                 m_deviceInventory.m_candidates.size());
       }
       else
       {
@@ -175,35 +250,35 @@ OdaiResult<void> OdaiLlamaEngine::load_and_setup_candidate_devices(BackendDevice
       }
     }
 
-    if (!graphics_hardware_found &&
-        (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
+    if (!candidates_found && (preferred_type == BackendDeviceType::GPU || preferred_type == BackendDeviceType::IGPU))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Requested {} device not found in discovered hardware",
                preferred_type == BackendDeviceType::GPU ? "GPU" : "IGPU");
       return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
     }
 
-    if (graphics_hardware_found && preferred_type != BackendDeviceType::AUTO &&
-        preferred_type != BackendDeviceType::CPU)
+    if (m_deviceInventory.m_candidates.empty())
     {
-      ODAI_LOG(ODAI_LOG_INFO, "Successfully configured execution context with hardware acceleration");
+      ODAI_LOG(ODAI_LOG_ERROR, "No candidate devices were discovered for preferred type {}",
+               device_type_name(preferred_type));
+      return tl::make_unexpected(OdaiResultEnum::NOT_FOUND);
+    }
+
+    ODAI_LOG(ODAI_LOG_INFO, "Discovered {} candidate device(s) for preferred type {}",
+             m_deviceInventory.m_candidates.size(), device_type_name(preferred_type));
+
+    if (m_deviceInventory.m_hasAccelerationCandidate)
+    {
+      ODAI_LOG(ODAI_LOG_INFO, "Hardware acceleration candidates are available for later placement planning");
     }
 
     return {};
   }
-  catch (const std::exception& e)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to configure candidate devices: {}", e.what());
-    return unexpected_internal_error<void>();
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Unknown failure while configuring candidate devices");
-    return unexpected_internal_error<void>();
-  }
+  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
 }
 
-bool OdaiLlamaEngine::try_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type)
+bool OdaiLlamaEngine::append_backend_candidate_devices(const std::string& backend_name,
+                                                       const std::vector<BackendDeviceType>& accepted_types)
 {
   if (ggml_backend_reg_by_name(backend_name.c_str()) == nullptr)
   {
@@ -212,34 +287,43 @@ bool OdaiLlamaEngine::try_add_candidate_devices(const std::string& backend_name,
   }
 
   bool found = false;
+  size_t backend_device_count = 0;
+  size_t matching_type_count = 0;
   size_t count = ggml_backend_dev_count();
   for (size_t i = 0; i < count; ++i)
   {
     ggml_backend_dev_t dev = ggml_backend_dev_get(i);
     ggml_backend_reg_t reg = ggml_backend_dev_backend_reg(dev);
-    if (std::string(ggml_backend_reg_name(reg)) == backend_name)
+    if (to_lower(ggml_backend_reg_name(reg)) == to_lower(backend_name))
     {
+      ++backend_device_count;
       BackendDeviceType dev_type = to_odai_backend_device_type(ggml_backend_dev_type(dev));
-      if (dev_type == target_type)
+      if (contains_type(accepted_types, dev_type))
       {
-        BackendDevice odai_dev;
-        odai_dev.m_name = ggml_backend_dev_name(dev);
-        odai_dev.m_description = ggml_backend_dev_description(dev);
+        ++matching_type_count;
+        CandidateDeviceRecord record;
+        record.m_info.m_name = ggml_backend_dev_name(dev);
+        record.m_info.m_description = ggml_backend_dev_description(dev);
+        record.m_handle = dev;
 
         size_t free_mem = 0;
         size_t total_mem = 0;
         ggml_backend_dev_memory(dev, &free_mem, &total_mem);
-        odai_dev.m_totalRam = total_mem;
-        odai_dev.m_type = dev_type;
+        record.m_info.m_totalRam = total_mem;
+        record.m_info.m_type = dev_type;
 
-        m_candidateDevices.push_back(odai_dev);
+        m_deviceInventory.m_candidates.push_back(record);
 
-        ODAI_LOG(ODAI_LOG_INFO, "Discovered Candidate: {} ({}) | Backend: {} | Type: {}", odai_dev.m_name,
-                 odai_dev.m_description, backend_name, static_cast<uint8_t>(odai_dev.m_type));
+        ODAI_LOG(ODAI_LOG_INFO, "Discovered candidate: {} ({}) | Backend: {} | Type: {} | Total RAM: {} bytes",
+                 record.m_info.m_name, record.m_info.m_description, backend_name,
+                 static_cast<uint8_t>(record.m_info.m_type), record.m_info.m_totalRam);
         found = true;
       }
     }
   }
+
+  ODAI_LOG(ODAI_LOG_INFO, "Probe result for backend '{}': {} device(s) in family, {} accepted candidate(s)",
+           backend_name, backend_device_count, matching_type_count);
   return found;
 }
 
@@ -249,7 +333,7 @@ OdaiResult<void> OdaiLlamaEngine::initialize_engine()
   {
     llama_backend_init();
 
-    OdaiResult<void> config_res = load_and_setup_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
+    OdaiResult<void> config_res = discover_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
     if (!config_res)
     {
       return config_res;
@@ -263,16 +347,7 @@ OdaiResult<void> OdaiLlamaEngine::initialize_engine()
     this->m_isInitialized = true;
     return {};
   }
-  catch (const std::exception& e)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize llama backend engine: {}", e.what());
-    return unexpected_internal_error<void>();
-  }
-  catch (...)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "Unknown failure while initializing llama backend engine");
-    return unexpected_internal_error<void>();
-  }
+  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
 }
 
 OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
@@ -281,7 +356,15 @@ OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
   {
     return tl::make_unexpected(OdaiResultEnum::NOT_INITIALIZED);
   }
-  return m_candidateDevices;
+
+  std::vector<BackendDevice> candidate_devices;
+  candidate_devices.reserve(m_deviceInventory.m_candidates.size());
+  for (const CandidateDeviceRecord& record : m_deviceInventory.m_candidates)
+  {
+    candidate_devices.push_back(record.m_info);
+  }
+
+  return candidate_devices;
 }
 
 bool OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>& items,

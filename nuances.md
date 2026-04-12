@@ -92,7 +92,7 @@ ODAI's singleton lifetime is not a safe place to rely on backend teardown, espec
 * **What to do:** Applications should call `OdaiSdk::shutdown()` or `odai_shutdown()` during normal control flow before process exit or before reinitializing the SDK.
 * **Why this matters:** Resetting SDK-owned orchestrator state explicitly gives deterministic release of backend-owned resources without depending on late global destruction order.
 * **Observed failure mode before explicit shutdown:** `OdaiSdk` is a static singleton, so without an explicit shutdown path its owned runtime state was being torn down at the very end of process exit. In GPU-backed runs, model destruction could then race backend / driver unload during process teardown, which led to driver-level errors while freeing model resources.
-* **Current Phase 1 scope:** The shutdown path currently clears the SDK's owned runtime state by resetting the RAG engine and SDK lifecycle members. More backend-specific teardown can be layered on top later without changing the public lifecycle direction.
+* **Current scope:** The shutdown path clears the SDK's owned runtime state by resetting the RAG engine and SDK lifecycle members. More backend-specific teardown can be layered on top later without changing the public lifecycle direction.
 
 ### llama.cpp Vulkan Device Type on Android and Other Integrated GPUs
 When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vulkan"`) and the device class (`GPU` vs `IGPU`) are **not** the same thing.
@@ -100,3 +100,4 @@ When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vul
 * **What ggml does:** In the local llama.cpp source (`build/_deps/llama-src/ggml/src/ggml-vulkan/ggml-vulkan.cpp`), Vulkan devices report `GGML_BACKEND_DEVICE_TYPE_IGPU` when Vulkan exposes the physical device as an integrated GPU, otherwise they report `GGML_BACKEND_DEVICE_TYPE_GPU`.
 * **Why this matters for ODAI:** On Android, Vulkan is usually the compute API for the SoC's integrated GPU. That means probing `"vulkan"` with an ODAI target type of `GPU` can miss a valid Android Vulkan device if ggml classifies it as `IGPU`.
 * **Design implication:** Treat Vulkan as a backend family only. Device-selection policy should rely on ggml's reported device type, and Android-specific selection logic should decide whether a Vulkan iGPU satisfies a user request for "GPU acceleration" or should remain distinct from explicit `IGPU`.
+* **Current discovery policy implication:** Desktop `AUTO` probes prioritized dGPU backends and then falls back directly to CPU; it does **not** run a separate iGPU-only pass. Android keeps its accelerated Vulkan path by allowing the GPU probe to accept Vulkan devices reported as `IGPU`.

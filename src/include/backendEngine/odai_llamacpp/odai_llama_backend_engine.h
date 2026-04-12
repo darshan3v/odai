@@ -4,6 +4,7 @@
 
 #include "backendEngine/odai_backend_engine.h"
 
+#include "ggml-backend.h"
 #include "types/odai_common_types.h"
 #include "types/odai_result.h"
 #include "types/odai_types.h"
@@ -135,9 +136,22 @@ public:
   ~OdaiLlamaEngine() override;
 
 private:
+  struct CandidateDeviceRecord
+  {
+    BackendDevice m_info{};
+    ggml_backend_dev_t m_handle = nullptr;
+  };
+
+  struct DeviceInventory
+  {
+    std::vector<CandidateDeviceRecord> m_candidates;
+    BackendDeviceType m_requestedType = BackendDeviceType::AUTO;
+    bool m_hasAccelerationCandidate = false;
+  };
+
   bool m_isInitialized{false};
 
-  std::vector<BackendDevice> m_candidateDevices;
+  DeviceInventory m_deviceInventory{};
 
   EmbeddingModelConfig m_embeddingModelConfig{};
   LLMModelConfig m_llmModelConfig{};
@@ -154,22 +168,23 @@ private:
 
   std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
 
-  /// Registers ggml backends, then selects candidate devices according to ODAI's runtime policy.
+  /// Registers ggml backends, then discovers candidate devices according to ODAI's runtime policy.
   /// @param preferred_type The desired device preference (AUTO, GPU, IGPU, CPU)
   /// @return ODAI_SUCCESS on success, or ODAI_INTERNAL_ERROR if strict hardware requirements are not met.
-  OdaiResult<void> load_and_setup_candidate_devices(BackendDeviceType preferred_type);
+  OdaiResult<void> discover_candidate_devices(BackendDeviceType preferred_type);
 
   /// Registers all ggml backend families found in the runtime backend directory.
   /// ggml internally scores backend variants and loads the best match for each family.
   /// @return true if the registration step completed, false otherwise.
   static bool register_available_backends();
 
-  /// Helper to collect devices for a registered backend family and target device type.
-  /// If found, those devices are added to m_candidateDevices.
+  /// Helper to collect devices for a registered backend family and accepted device types.
+  /// If found, those devices are added to the inventory.
   /// @param backend_name The GGML backend name (e.g., "cuda", "vulkan", "cpu")
-  /// @param target_type The device type to look for
+  /// @param accepted_types The device types to accept for this probe
   /// @return true if the backend provides at least one matching device.
-  bool try_add_candidate_devices(const std::string& backend_name, BackendDeviceType target_type);
+  bool append_backend_candidate_devices(const std::string& backend_name,
+                                        const std::vector<BackendDeviceType>& accepted_types);
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
