@@ -6,8 +6,6 @@
 
 ### Language / Structure Specific
 
-- [ ] Use Result Type instead of bool and reference set
-- [ ] Probably wrap all the fn in try catch, or atleast in the public interface
 - [ ] Have to fix the ABI , so that our ABI is independent of memory layout of caller, also update dev guide accordingly
 - [ ] May be convert int type based enum to true C++ enums, and have conversion fns to convert from C style enum to Cpp enum, that way Cpp side api is more idiomatic
 - [ ] Our ODAIDb (sqlite impl) is not thread safe, since db, statement, transaction, if at all we want to make it thread safe then one db object per thread, or use mutex locks

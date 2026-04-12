@@ -19,7 +19,7 @@ check_ipo_supported(RESULT iporesult)
 # Determine Platform & Optimization
 if(ANDROID)
     set(TARGET_PLATFORM "android")
-    add_compile_definitions(__android__)
+    add_compile_definitions(__ANDROID__)
     if(ANDROID_ABI STREQUAL "arm64-v8a")
         add_compile_options(-march=armv8.2-a+dotprod)
     endif()
@@ -100,7 +100,7 @@ endif()
 
 # --- Llama.cpp ---
 if(ODAI_ENABLE_LLAMA_BACKEND)
-    FetchContent_Declare(llama GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git GIT_TAG b8457)
+    FetchContent_Declare(llama GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git GIT_TAG b8748)
 
     set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
     set(GGML_NATIVE OFF CACHE BOOL "" FORCE)

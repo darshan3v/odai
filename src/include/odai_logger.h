@@ -1,7 +1,9 @@
 #pragma once
 
+#include <cstdint>
 #include <format>
 #include <string>
+#include <string_view>
 #include <utility>
 
 #include "odai_public.h"
@@ -12,6 +14,21 @@ class OdaiLogger;
 /// This prevents circular dependencies between the logger macro and the SDK.
 /// @return Pointer to the active OdaiLogger instance, or nullptr if not available.
 OdaiLogger* get_odai_logger();
+
+/// Returns the current local timestamp formatted for log prefixes.
+std::string get_odai_log_timestamp();
+
+/// Trims a source file path to just the filename for concise log lines.
+constexpr std::string_view odai_log_file_name(std::string_view path)
+{
+  const size_t last_separator = path.find_last_of("/\\");
+  if (last_separator == std::string_view::npos)
+  {
+    return path;
+  }
+
+  return path.substr(last_separator + 1);
+}
 
 /// Logger class that provides formatted logging functionality with configurable
 /// log levels and callbacks. Supports format string arguments and automatically
@@ -45,10 +62,14 @@ public:
   /// the message is silently ignored. All exceptions during formatting are
   /// caught and ignored.
   /// @param level Log level for this message
+  /// @param file Trimmed source filename for the caller
+  /// @param line Source line number for the caller
+  /// @param function Function name for the caller
   /// @param fmt Format string compatible with std::format
   /// @param args Arguments to format into the message
   template <typename... Args>
-  void log(OdaiLogLevel level, std::format_string<Args...> fmt, Args&&... args)
+  void log(OdaiLogLevel level, std::string_view file, std::uint_least32_t line, std::string_view function,
+           std::format_string<Args...> fmt, Args&&... args)
   {
     try
     {
@@ -62,9 +83,8 @@ public:
         return;
       }
 
-      std::string msg = format(fmt, std::forward<Args>(args)...);
-
-      msg.insert(0, "[odai] ");
+      std::string msg = std::format("[odai] [{}] [{}:{}] [{}] {}", get_odai_log_timestamp(), file, line, function,
+                                    std::format(fmt, std::forward<Args>(args)...));
 
       this->m_callback(level, msg.c_str(), this->m_userData);
     }
@@ -76,4 +96,4 @@ public:
 
 #define ODAI_LOG(level, fmt, ...)                                                                                      \
   if (OdaiLogger* logger = get_odai_logger())                                                                          \
-  logger->log(level, "[{}:{}] " fmt, __func__, __LINE__, ##__VA_ARGS__)
+  logger->log(level, odai_log_file_name(__FILE__), __LINE__, __func__, fmt, ##__VA_ARGS__)
