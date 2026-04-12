@@ -39,6 +39,11 @@ extern "C"
   /// ODAI_NOT_INITIALIZED.
   c_OdaiResult odai_initialize_sdk(const c_DbConfig* db_config, const c_BackendEngineConfig* backend_engine_config);
 
+  /// Shuts down the SDK and releases owned backend state before process teardown.
+  /// This function is idempotent and should be called explicitly by applications before exit when using the SDK.
+  /// @return ODAI_SUCCESS if shutdown succeeded, or an error code such as ODAI_INTERNAL_ERROR.
+  c_OdaiResult odai_shutdown(void);
+
   /// Registers a new model in the system with the given name and generic files map.
   /// The engine validates the files and a checksum is computed to ensure integrity.
   /// @param model_name The unique name to assign to the model.

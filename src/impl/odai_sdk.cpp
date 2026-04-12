@@ -47,8 +47,8 @@ OdaiSdk::OdaiSdk()
 
 OdaiSdk::~OdaiSdk()
 {
-  // Clean up if needed, though smart pointers in globals handle themselves
-  // mostly But we might want to shut down explicitly if order matters
+  // Consumers are expected to call shutdown() explicitly before process teardown.
+  // Avoid forcing late GPU-backed destruction here when runtime shutdown order is undefined.
 }
 
 void OdaiSdk::set_logger(OdaiLogCallbackFn callback, void* user_data)
@@ -71,7 +71,6 @@ void OdaiSdk::set_log_level(OdaiLogLevel log_level)
 
 OdaiResult<void> OdaiSdk::initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config)
 {
-  m_sdkInitialized = false;
   try
   {
     if (!db_config.is_sane())
@@ -86,27 +85,52 @@ OdaiResult<void> OdaiSdk::initialize_sdk(const DBConfig& db_config, const Backen
       return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
-    // Initalize the RAGEngine
-    m_ragEngine = std::make_unique<OdaiRagEngine>(db_config, backend_config);
+    if (m_sdkInitialized || m_ragEngine != nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_WARN, "ODAI SDK already holds active state; shutting it down before reinitialization");
+      OdaiResult<void> shutdown_res = shutdown();
+      if (!shutdown_res)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "Failed to shutdown existing SDK state before reinitialization, error code: {}",
+                 static_cast<std::uint32_t>(shutdown_res.error()));
+        return tl::unexpected(shutdown_res.error());
+      }
+    }
 
-    if ((m_ragEngine == nullptr))
+    m_sdkInitialized = false;
+
+    // Initalize the RAGEngine
+    std::unique_ptr<OdaiRagEngine> rag_engine = std::make_unique<OdaiRagEngine>(db_config, backend_config);
+
+    if ((rag_engine == nullptr))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to create RAG engine");
-      m_sdkInitialized = false;
       return unexpected_internal_error<void>();
     }
 
-    OdaiResult<void> init_res = m_ragEngine->initialize_rag_engine();
+    OdaiResult<void> init_res = rag_engine->initialize_rag_engine();
     if (!init_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize RAG engine, error code: {}",
                static_cast<std::uint32_t>(init_res.error()));
-      m_sdkInitialized = false;
       return tl::unexpected(init_res.error());
     }
 
+    m_ragEngine = std::move(rag_engine);
     m_sdkInitialized = true;
     ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK Initialized successfully");
+    return {};
+  }
+  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+}
+
+OdaiResult<void> OdaiSdk::shutdown()
+{
+  try
+  {
+    m_sdkInitialized = false;
+    m_ragEngine.reset();
+    ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK shutdown completed");
     return {};
   }
   ODAI_CATCH_RETURN(unexpected_internal_error<void>())

@@ -54,6 +54,21 @@ c_OdaiResult odai_initialize_sdk(const c_DbConfig* c_db_config, const c_BackendE
   ODAI_CATCH_RETURN(ODAI_INTERNAL_ERROR)
 }
 
+c_OdaiResult odai_shutdown(void)
+{
+  try
+  {
+    OdaiResult<void> res = OdaiSdk::get_instance().shutdown();
+    if (!res)
+    {
+      return to_c_result(res.error());
+    }
+
+    return ODAI_SUCCESS;
+  }
+  ODAI_CATCH_RETURN(ODAI_INTERNAL_ERROR)
+}
+
 c_OdaiResult odai_register_model_files(const c_ModelName model_name, const c_ModelFiles* files)
 {
   try

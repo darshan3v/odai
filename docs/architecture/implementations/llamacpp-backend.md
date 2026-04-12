@@ -47,6 +47,8 @@ When `mmproj_model_path` is registered, the engine creates an `mtmd_context` for
 
 All llama.cpp resources use `std::unique_ptr` with custom deleters (`LlamaModelDeleter`, `LlamaContextDeleter`, `LlamaSamplerDeleter`, `LlamaBatchDeleter`, `MtmdContextDeleter`) to ensure proper RAII cleanup.
 
+ODAI expects applications to trigger that cleanup through explicit SDK lifecycle control (`OdaiSdk::shutdown()` / `odai_shutdown()`) instead of relying on late singleton destruction during process teardown.
+
 ## Known Limitations
 
 - Only supports **decoder-only** LLMs (no encoder-decoder models)

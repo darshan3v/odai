@@ -137,6 +137,10 @@ static const char* odai_result_to_string(c_OdaiResult result)
 
 static bool init_sdk()
 {
+  if (g_log.is_open())
+  {
+    g_log.close();
+  }
   g_log.open(TEST_BASE_PATH + "/odai.log");
   odai_set_log_level(ODAI_LOG_DEBUG);
   odai_set_logger(log_callback, nullptr);
@@ -470,6 +474,47 @@ static bool test_chat_multimodal(const char* model_name)
   return true;
 }
 
+static bool test_shutdown_reinitialize()
+{
+  std::cout << "\n--- Testing Shutdown And Reinitialize ---\n";
+
+  c_OdaiResult res = odai_shutdown();
+  if (res != ODAI_SUCCESS)
+  {
+    std::cout << "Failed to shutdown SDK: " << odai_result_to_string(res) << " (" << res << ")\n";
+    return false;
+  }
+
+  c_SemanticSpaceConfig* spaces_list = nullptr;
+  uint16_t spaces_count = 0;
+  res = odai_list_semantic_spaces(&spaces_list, &spaces_count);
+  if (res != ODAI_NOT_INITIALIZED)
+  {
+    std::cout << "Expected ODAI_NOT_INITIALIZED after shutdown, got: " << odai_result_to_string(res) << " (" << res
+              << ")\n";
+    odai_free_semantic_spaces_list(spaces_list, spaces_count);
+    return false;
+  }
+
+  if (!init_sdk())
+  {
+    std::cout << "Failed to reinitialize SDK after shutdown.\n";
+    return false;
+  }
+
+  res = odai_list_semantic_spaces(&spaces_list, &spaces_count);
+  if (res != ODAI_SUCCESS)
+  {
+    std::cout << "Failed to list semantic spaces after reinitialize: " << odai_result_to_string(res) << " (" << res
+              << ")\n";
+    return false;
+  }
+
+  std::cout << "Reinitialized SDK successfully. Spaces available: " << spaces_count << "\n";
+  odai_free_semantic_spaces_list(spaces_list, spaces_count);
+  return true;
+}
+
 static void cleanup()
 {
   std::cout << "\n--- Cleanup ---\n";
@@ -544,6 +589,11 @@ int main(int argc, char** argv)
   if (run_chat)
   {
     test_chat_multimodal(QWEN_OMNI_MODEL_NAME);
+  }
+
+  if (!test_shutdown_reinitialize())
+  {
+    return 1;
   }
 
   // No cleanup at the end, we do it at the start

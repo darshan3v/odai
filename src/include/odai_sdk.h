@@ -49,6 +49,11 @@ public:
   /// @return empty expected if initialization succeeded, or an unexpected OdaiResultEnum indicating the error.
   OdaiResult<void> initialize_sdk(const DBConfig& db_config, const BackendEngineConfig& backend_config);
 
+  /// Shuts down the SDK and releases owned engines before process teardown.
+  /// This call is idempotent and should be used by consumers when GPU-backed resources are active.
+  /// @return empty expected if shutdown succeeded, or an unexpected OdaiResultEnum indicating the error.
+  OdaiResult<void> shutdown();
+
   /// Registers a new model with generic files.
   /// @param name The unique name of the model.
   /// @param files The Model Files struct containing paths.
@@ -139,7 +144,6 @@ private:
   ~OdaiSdk();
 
   bool m_sdkInitialized = false;
-  std::unique_ptr<IOdaiDb> m_db;
   std::unique_ptr<OdaiLogger> m_logger;
   std::unique_ptr<OdaiRagEngine> m_ragEngine;
 

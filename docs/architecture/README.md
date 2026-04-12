@@ -50,8 +50,8 @@ graph TD
 
 | Layer | Files | Responsibility |
 |---|---|---|
-| **C ABI Surface** | `odai_public.h` / `odai_public.cpp` | Stable binary interface. Sanitizes C inputs, converts to C++ types, forwards to SDK, and returns `c_OdaiResult` for migrated operation-style APIs while keeping payload ownership in output pointers. |
-| **C++ SDK** | `odai_sdk.h` / `odai_sdk.cpp` | Singleton orchestrator. Validates business logic, manages lifecycle, routes to engines, and uses `OdaiResult` for operation-style C++ APIs, including streaming calls via `OdaiResult<StreamingStats>`. |
+| **C ABI Surface** | `odai_public.h` / `odai_public.cpp` | Stable binary interface. Sanitizes C inputs, converts to C++ types, forwards to SDK, and returns `c_OdaiResult` for migrated operation-style APIs while keeping payload ownership in output pointers. Exposes explicit lifecycle entry points such as `odai_initialize_sdk()` and `odai_shutdown()`. |
+| **C++ SDK** | `odai_sdk.h` / `odai_sdk.cpp` | Singleton orchestrator. Validates business logic, manages lifecycle, routes to engines, and uses `OdaiResult` for operation-style C++ APIs, including streaming calls via `OdaiResult<StreamingStats>`. Consumers are expected to use `shutdown()` for deterministic teardown before process exit or reinitialization. |
 | **Internal Engines** | `OdaiRagEngine`, interfaces | Core logic. RAG engine owns a `IOdaiBackendEngine` and `IOdaiDb` instance, and uses `OdaiResult` for operational APIs, including DB initialization and streaming generation. |
 | **Media Decoders** | `IOdaiAudioDecoder`, `IOdaiImageDecoder` | Stateless decoders created on-demand by the backend engine internally to process multimodal inputs (images, audio) before inference. |
 

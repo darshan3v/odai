@@ -10,6 +10,7 @@ This document outlines key technical reasoning, build system quirks, and "gotcha
         - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
         - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
 - [Runtime Behavior](#runtime-behavior)
+    - [Explicit SDK Shutdown for Deterministic Backend Cleanup](#explicit-sdk-shutdown-for-deterministic-backend-cleanup)
     - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
 
 ## Build System (CMake)
@@ -84,6 +85,14 @@ When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (
     ```
 
 ## Runtime Behavior
+
+### Explicit SDK Shutdown for Deterministic Backend Cleanup
+ODAI's singleton lifetime is not a safe place to rely on backend teardown, especially once GPU-backed model state exists.
+
+* **What to do:** Applications should call `OdaiSdk::shutdown()` or `odai_shutdown()` during normal control flow before process exit or before reinitializing the SDK.
+* **Why this matters:** Resetting SDK-owned orchestrator state explicitly gives deterministic release of backend-owned resources without depending on late global destruction order.
+* **Observed failure mode before explicit shutdown:** `OdaiSdk` is a static singleton, so without an explicit shutdown path its owned runtime state was being torn down at the very end of process exit. In GPU-backed runs, model destruction could then race backend / driver unload during process teardown, which led to driver-level errors while freeing model resources.
+* **Current Phase 1 scope:** The shutdown path currently clears the SDK's owned runtime state by resetting the RAG engine and SDK lifecycle members. More backend-specific teardown can be layered on top later without changing the public lifecycle direction.
 
 ### llama.cpp Vulkan Device Type on Android and Other Integrated GPUs
 When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vulkan"`) and the device class (`GPU` vs `IGPU`) are **not** the same thing.
