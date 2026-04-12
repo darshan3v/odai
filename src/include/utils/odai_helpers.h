@@ -32,3 +32,8 @@ OdaiResult<std::string> calculate_model_checksums(const ModelFiles& files);
 /// @param symbol_address Address of a symbol that resides in the target module.
 /// @return Absolute path to the directory containing the shared library or executable for that symbol.
 std::filesystem::path get_module_directory_from_address(const void* symbol_address);
+
+/// Converts a byte count to whole mebibytes for human-readable logging.
+/// @param bytes Byte count to convert.
+/// @return Whole MiB value using binary units.
+uint64_t bytes_to_mb(uint64_t bytes);

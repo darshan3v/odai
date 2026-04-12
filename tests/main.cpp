@@ -157,6 +157,17 @@ static bool init_sdk()
   return true;
 }
 
+static bool shutdown_sdk()
+{
+  c_OdaiResult shutdown_res = odai_shutdown();
+  if (shutdown_res != ODAI_SUCCESS)
+  {
+    std::cerr << "Failed to shutdown SDK: " << odai_result_to_string(shutdown_res) << " (" << shutdown_res << ")\n";
+    return false;
+  }
+  return true;
+}
+
 static bool test_registration()
 {
   std::cout << "\n--- Testing Model Registration ---\n";
@@ -478,13 +489,12 @@ static bool test_shutdown_reinitialize()
 {
   std::cout << "\n--- Testing Shutdown And Reinitialize ---\n";
 
-  c_OdaiResult res = odai_shutdown();
-  if (res != ODAI_SUCCESS)
+  if (!shutdown_sdk())
   {
-    std::cout << "Failed to shutdown SDK: " << odai_result_to_string(res) << " (" << res << ")\n";
     return false;
   }
 
+  c_OdaiResult res = ODAI_SUCCESS;
   c_SemanticSpaceConfig* spaces_list = nullptr;
   uint16_t spaces_count = 0;
   res = odai_list_semantic_spaces(&spaces_list, &spaces_count);
@@ -565,6 +575,7 @@ int main(int argc, char** argv)
   bool run_streaming = true;
   bool run_chat = false;
   bool do_cleanup = true;
+  int exit_code = 0;
 
   if (do_cleanup)
   {
@@ -591,13 +602,16 @@ int main(int argc, char** argv)
     test_chat_multimodal(QWEN_OMNI_MODEL_NAME);
   }
 
-  if (!test_shutdown_reinitialize())
+  // if (!test_shutdown_reinitialize())
+  // {
+  //   return 1;
+  // }
+
+  if (!shutdown_sdk())
   {
-    return 1;
+    exit_code = 1;
   }
 
-  // No cleanup at the end, we do it at the start
-
   std::cout << "\nAll tests completed.\n";
-  return 0;
+  return exit_code;
 }

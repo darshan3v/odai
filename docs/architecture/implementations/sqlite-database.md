@@ -7,13 +7,7 @@
 
 ## Overview
 
-Uses SQLite (via [SQLiteCpp](https://github.com/SRombauts/SQLiteCpp) wrapper) with the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for vector similarity search. Single-file database suitable for on-device deployment.
-
-## Build Integration
-
-- **SQLiteCpp** — Fetched via CMake `FetchContent`, built as a library, linked to `odai`.
-- **sqlite-vec** — Amalgamation included in repo at `sqlite-vec-0.1.6-amalgamation/`. Automating its fetch is a TODO item.
-- The `sqlite-vec` extension is registered before opening the database.
+Uses SQLite (via [SQLiteCpp](https://github.com/SRombauts/SQLiteCpp) wrapper) with the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for vector similarity search. Single-file database suitable for on-device deployment. The `sqlite-vec` extension is registered before opening the database.
 
 ## Schema Overview
 

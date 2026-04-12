@@ -9,10 +9,6 @@
 
 Uses [llama.cpp](https://github.com/ggerganov/llama.cpp) for LLM inference and the experimental `mtmd` (multimodal) API for image and audio inputs. Supports decoder-only LLMs in GGUF format.
 
-## Build Integration
-
-llama.cpp is fetched via CMake `FetchContent` and built as a **traditional separate library** (not header-only). ODAI only links against the resulting `llama` target — no `target_compile_definitions` needed on `odai`. See [nuances.md](../../nuances.md) for details.
-
 ## Hardware Discovery
 
 During `initialize_engine()`, the engine discovers available hardware using GGML's backend system. Backend registration is done through `ggml_backend_load_all_from_path()` so ggml can score and load the best variant of each available backend family from the runtime backend directory.
@@ -29,13 +25,32 @@ Current discovery policy is:
 - **IGPU**: probe prioritized iGPU backends only
 - **CPU**: probe the CPU backend directly
 
-Platform-specific notes:
+Notes:
 
 - **Desktop AUTO** does not run a second iGPU-only pass after GPU probing fails
-- **Android GPU probing** accepts Vulkan devices that ggml reports as `IGPU`, because that still represents the accelerated SoC path ODAI wants for `AUTO`/`GPU`
 - Discovery logs both the configured probe order and the per-backend probe result counts so later placement behavior can be explained without mixing discovery into load heuristics
+- The Vulkan-on-Android device-class nuance is documented in [`nuances.md`](../../nuances.md#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
 
-> Backend libraries are **never unloaded** during the application lifecycle — doing so risks driver-level instability.
+## LLM Placement Planning
+
+Base LLM loading now runs through an internal `LlmLoadPlan` before calling `llama_model_load_from_file()`. The planner keeps placement policy separate from load execution and records the reason for the selected placement.
+
+Current planning policy is:
+
+- **Explicit CPU**: materialize a CPU-only plan directly
+- **Apple / Android unified-memory platforms**: use the first accelerated candidate for full offload
+- **Desktop dGPU**: query fresh free VRAM, choose the minimum fitting subset when possible, otherwise pass all discovered dGPUs for best-effort partial offload
+- **Desktop iGPU**: require a full-fit free-memory check, otherwise fall back to CPU
+- **No accelerator candidate**: materialize an explicit CPU-only plan instead of relying on llama.cpp defaults
+
+The plan currently carries:
+
+- placement mode (`CPU_ONLY`, `ACCELERATED_FULL`, `ACCELERATED_PARTIAL`)
+- selected candidate-device indices
+- `n_gpu_layers`, `split_mode`, `use_mmap`, and `use_mlock`
+- a human-readable reason string used in runtime logs
+
+The dGPU versus iGPU rationale for this split lives in [`nuances.md`](../../nuances.md#desktop-gpu-placement-uses-different-dgpu-and-igpu-rules).
 
 ## Model Caching
 
@@ -61,7 +76,7 @@ When `mmproj_model_path` is registered, the engine creates an `mtmd_context` for
 
 All llama.cpp resources use `std::unique_ptr` with custom deleters (`LlamaModelDeleter`, `LlamaContextDeleter`, `LlamaSamplerDeleter`, `LlamaBatchDeleter`, `MtmdContextDeleter`) to ensure proper RAII cleanup.
 
-ODAI expects applications to trigger that cleanup through explicit SDK lifecycle control (`OdaiSdk::shutdown()` / `odai_shutdown()`) instead of relying on late singleton destruction during process teardown.
+Applications should release those resources through the normal SDK lifecycle (`OdaiSdk::shutdown()` / `odai_shutdown()`). The teardown rationale is documented in [`nuances.md`](../../nuances.md#explicit-sdk-shutdown-for-deterministic-backend-cleanup).
 
 ## Known Limitations
 

@@ -149,6 +149,25 @@ private:
     bool m_hasAccelerationCandidate = false;
   };
 
+  enum class PlacementMode
+  {
+    CPU_ONLY,
+    ACCELERATED_FULL,
+    ACCELERATED_PARTIAL
+  };
+
+  struct LlmLoadPlan
+  {
+    PlacementMode m_mode = PlacementMode::CPU_ONLY;
+    std::vector<size_t> m_selectedCandidateIndices;
+    bool m_shouldUseMlock = false;
+    bool m_shouldUseMmap = true;
+    int32_t m_nGpuLayers = 0;
+    llama_split_mode m_splitMode = LLAMA_SPLIT_MODE_NONE;
+    bool m_allowCpuRetry = false;
+    std::string m_reason;
+  };
+
   bool m_isInitialized{false};
 
   DeviceInventory m_deviceInventory{};
@@ -185,6 +204,31 @@ private:
   /// @return true if the backend provides at least one matching device.
   bool append_backend_candidate_devices(const std::string& backend_name,
                                         const std::vector<BackendDeviceType>& accepted_types);
+
+  /// Plans base LLM placement from the discovered inventory and current platform policy.
+  /// The returned plan explains why ODAI chose CPU-only, full acceleration, or best-effort partial offload.
+  /// @param model_file_size_bytes Size of the GGUF file on disk.
+  /// @return Placement plan for the next base language model load.
+  LlmLoadPlan plan_llm_load(uint64_t model_file_size_bytes) const;
+
+  /// Selects discrete GPUs for desktop llama.cpp offload.
+  /// If the model estimate fits, returns the minimum subset whose combined free VRAM is sufficient.
+  /// Otherwise returns all discovered dGPUs so llama.cpp can still offload layers best-effort.
+  /// @param estimated_model_bytes Estimated VRAM needed for the base model load.
+  /// @param out_has_full_fit Set to true when the returned subset satisfies the estimate.
+  /// @return Indices into m_deviceInventory.m_candidates for the selected dGPUs.
+  std::vector<size_t> select_minimum_gpu_subset(uint64_t estimated_model_bytes, bool& out_has_full_fit) const;
+
+  /// Queries the current free memory reported by a ggml backend device.
+  /// @param backend_handle The ggml device handle to query.
+  /// @return Fresh free memory in bytes, or std::nullopt if the handle is invalid.
+  static std::optional<uint64_t> get_device_free_memory_bytes(ggml_backend_dev_t backend_handle);
+
+  /// Produces a CPU-only load plan with explicit llama.cpp placement fields set.
+  /// @param model_file_size_bytes Size of the GGUF file on disk.
+  /// @param reason Human-readable explanation for choosing CPU-only placement.
+  /// @return CPU-only load plan.
+  LlmLoadPlan make_cpu_only_llm_plan(uint64_t model_file_size_bytes, std::string reason) const;
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries

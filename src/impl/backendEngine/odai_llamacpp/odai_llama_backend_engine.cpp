@@ -20,6 +20,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <filesystem>
+#include <format>
 #include <nlohmann/json.hpp>
 #include <optional>
 #include <string>
@@ -78,6 +79,15 @@ bool contains_type(const std::vector<BackendDeviceType>& accepted_types, Backend
 {
   return std::find(accepted_types.begin(), accepted_types.end(), type) != accepted_types.end();
 }
+
+bool is_accelerated_device_type(BackendDeviceType type)
+{
+  return (type == BackendDeviceType::GPU) || (type == BackendDeviceType::IGPU);
+}
+
+constexpr int32_t N_GPU_LAYERS_ALL_POSSIBLE = -1;
+constexpr uint64_t LLM_VRAM_OVERHEAD_BUFFER = 350ULL * BYTES_PER_MB;
+constexpr uint64_t CPU_MLOCK_HEADROOM = 2ULL * BYTES_PER_GB;
 } // namespace
 
 /// Redirects llama.cpp log messages to the Odai logging system.
@@ -314,9 +324,10 @@ bool OdaiLlamaEngine::append_backend_candidate_devices(const std::string& backen
 
         m_deviceInventory.m_candidates.push_back(record);
 
-        ODAI_LOG(ODAI_LOG_INFO, "Discovered candidate: {} ({}) | Backend: {} | Type: {} | Total RAM: {} bytes",
-                 record.m_info.m_name, record.m_info.m_description, backend_name,
-                 static_cast<uint8_t>(record.m_info.m_type), record.m_info.m_totalRam);
+        ODAI_LOG(
+            ODAI_LOG_INFO, "Discovered candidate: {} ({}) | Backend: {} | Type: {} | Memory: {} MB free / {} MB total",
+            record.m_info.m_name, record.m_info.m_description, backend_name, static_cast<uint8_t>(record.m_info.m_type),
+            bytes_to_mb(free_mem), bytes_to_mb(record.m_info.m_totalRam));
         found = true;
       }
     }
@@ -325,6 +336,237 @@ bool OdaiLlamaEngine::append_backend_candidate_devices(const std::string& backen
   ODAI_LOG(ODAI_LOG_INFO, "Probe result for backend '{}': {} device(s) in family, {} accepted candidate(s)",
            backend_name, backend_device_count, matching_type_count);
   return found;
+}
+
+std::optional<uint64_t> OdaiLlamaEngine::get_device_free_memory_bytes(ggml_backend_dev_t backend_handle)
+{
+  if (backend_handle == nullptr)
+  {
+    return std::nullopt;
+  }
+
+  size_t free_mem = 0;
+  size_t total_mem = 0;
+  ggml_backend_dev_memory(backend_handle, &free_mem, &total_mem);
+  return static_cast<uint64_t>(free_mem);
+}
+
+OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_cpu_only_llm_plan(uint64_t model_file_size_bytes,
+                                                                     std::string reason) const
+{
+  LlmLoadPlan plan;
+  plan.m_mode = PlacementMode::CPU_ONLY;
+  plan.m_nGpuLayers = 0;
+  plan.m_splitMode = LLAMA_SPLIT_MODE_NONE;
+  plan.m_allowCpuRetry = false;
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+  plan.m_shouldUseMlock = false;
+#else
+  std::optional<uint64_t> system_free_ram = std::nullopt;
+  for (const CandidateDeviceRecord& record : m_deviceInventory.m_candidates)
+  {
+    if (record.m_info.m_type != BackendDeviceType::CPU)
+    {
+      continue;
+    }
+
+    system_free_ram = get_device_free_memory_bytes(record.m_handle);
+    break;
+  }
+
+  plan.m_shouldUseMlock =
+      system_free_ram.has_value() && (system_free_ram.value() > (model_file_size_bytes + CPU_MLOCK_HEADROOM));
+
+  if (system_free_ram.has_value())
+  {
+    reason += std::format(" CPU free RAM {} MB, model {} MB, mlock {}.", system_free_ram.value() / BYTES_PER_MB,
+                          model_file_size_bytes / BYTES_PER_MB, plan.m_shouldUseMlock ? "enabled" : "disabled");
+  }
+  else
+  {
+    reason += " CPU free RAM unavailable, mlock disabled.";
+  }
+#endif
+
+  plan.m_reason = std::move(reason);
+  return plan;
+}
+
+std::vector<size_t> OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimated_model_bytes,
+                                                               bool& out_has_full_fit) const
+{
+  out_has_full_fit = false;
+
+  std::vector<size_t> all_dgpu_indices;
+  std::vector<std::pair<size_t, uint64_t>> dgpu_free_memory;
+
+  for (size_t idx = 0; idx < m_deviceInventory.m_candidates.size(); ++idx)
+  {
+    const CandidateDeviceRecord& record = m_deviceInventory.m_candidates[idx];
+    if (record.m_info.m_type != BackendDeviceType::GPU)
+    {
+      continue;
+    }
+
+    all_dgpu_indices.push_back(idx);
+
+    const std::optional<uint64_t> free_mem = get_device_free_memory_bytes(record.m_handle);
+    if (free_mem.has_value())
+    {
+      dgpu_free_memory.emplace_back(idx, free_mem.value());
+    }
+  }
+
+  if (all_dgpu_indices.empty())
+  {
+    return {};
+  }
+
+  if (dgpu_free_memory.empty())
+  {
+    return all_dgpu_indices;
+  }
+
+  std::sort(dgpu_free_memory.begin(), dgpu_free_memory.end(),
+            [](const auto& lhs, const auto& rhs) { return lhs.second > rhs.second; });
+
+  std::vector<size_t> selected_indices;
+  uint64_t accumulated_free_vram = 0;
+  for (const auto& [candidate_index, free_vram] : dgpu_free_memory)
+  {
+    selected_indices.push_back(candidate_index);
+    accumulated_free_vram += free_vram;
+    if (accumulated_free_vram >= estimated_model_bytes)
+    {
+      out_has_full_fit = true;
+      break;
+    }
+  }
+
+  return out_has_full_fit ? selected_indices : all_dgpu_indices;
+}
+
+OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_size_bytes) const
+{
+  const uint64_t estimated_model_bytes = model_file_size_bytes + LLM_VRAM_OVERHEAD_BUFFER;
+
+  // `AUTO` does not need its own branch here. Device discovery already resolved the user's
+  // preference into candidate inventory, so planning only needs to inspect that inventory and
+  // apply the platform-specific placement rules below.
+  if (m_deviceInventory.m_requestedType == BackendDeviceType::CPU)
+  {
+    return make_cpu_only_llm_plan(model_file_size_bytes, "CPU-only mode was explicitly requested.");
+  }
+
+  std::optional<size_t> first_accelerator_index = std::nullopt;
+  for (size_t idx = 0; idx < m_deviceInventory.m_candidates.size(); ++idx)
+  {
+    if (is_accelerated_device_type(m_deviceInventory.m_candidates[idx].m_info.m_type))
+    {
+      first_accelerator_index = idx;
+      break;
+    }
+  }
+
+  if (!first_accelerator_index.has_value())
+  {
+    // This is the soft-fallback path for inventories that ended up CPU-only after discovery.
+    // We materialize that fallback explicitly instead of relying on llama.cpp defaults.
+    return make_cpu_only_llm_plan(model_file_size_bytes,
+                                  "No accelerator candidate was discovered, so the model will load on CPU.");
+  }
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+  // Phase 3 treats Apple and Android as single-accelerator / unified-memory targets:
+  // once an accelerator is present, prefer full offload on that device.
+  const CandidateDeviceRecord& record = m_deviceInventory.m_candidates[first_accelerator_index.value()];
+
+  LlmLoadPlan plan;
+  plan.m_mode = PlacementMode::ACCELERATED_FULL;
+  plan.m_selectedCandidateIndices = {first_accelerator_index.value()};
+  plan.m_shouldUseMlock = false;
+  plan.m_shouldUseMmap = true;
+  plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
+  plan.m_splitMode = LLAMA_SPLIT_MODE_NONE;
+  plan.m_allowCpuRetry = true;
+  plan.m_reason =
+      std::format("Unified-memory platform selected accelerator '{}' for full offload.", record.m_info.m_name);
+  return plan;
+#else
+  // Desktop policy intentionally differs by device class:
+  // dGPU allows best-effort partial offload, while iGPU requires a conservative full-fit gate.
+  bool has_full_dgpu_fit = false;
+  const std::vector<size_t> selected_dgpu_indices = select_minimum_gpu_subset(estimated_model_bytes, has_full_dgpu_fit);
+  if (!selected_dgpu_indices.empty())
+  {
+    LlmLoadPlan plan;
+    plan.m_mode = has_full_dgpu_fit ? PlacementMode::ACCELERATED_FULL : PlacementMode::ACCELERATED_PARTIAL;
+    plan.m_selectedCandidateIndices = selected_dgpu_indices;
+    plan.m_shouldUseMlock = false;
+    plan.m_shouldUseMmap = true;
+    plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
+    plan.m_splitMode = selected_dgpu_indices.size() > 1 ? LLAMA_SPLIT_MODE_LAYER : LLAMA_SPLIT_MODE_NONE;
+    plan.m_allowCpuRetry = true;
+
+    if (has_full_dgpu_fit)
+    {
+      plan.m_reason = std::format("Desktop dGPU planner selected a minimum fitting subset of {} device(s) for an "
+                                  "estimated {} MB model footprint.",
+                                  selected_dgpu_indices.size(), estimated_model_bytes / BYTES_PER_MB);
+    }
+    else
+    {
+      plan.m_reason = std::format("Desktop dGPU planner could not prove a full fit for the estimated {} MB model "
+                                  "footprint, so it selected all discovered dGPUs for best-effort partial offload.",
+                                  estimated_model_bytes / BYTES_PER_MB);
+    }
+
+    return plan;
+  }
+
+  for (size_t idx = 0; idx < m_deviceInventory.m_candidates.size(); ++idx)
+  {
+    const CandidateDeviceRecord& record = m_deviceInventory.m_candidates[idx];
+    if (record.m_info.m_type != BackendDeviceType::IGPU)
+    {
+      continue;
+    }
+
+    const std::optional<uint64_t> free_memory = get_device_free_memory_bytes(record.m_handle);
+    if (!free_memory.has_value())
+    {
+      return make_cpu_only_llm_plan(
+          model_file_size_bytes,
+          std::format("Desktop iGPU '{}' reported no free-memory reading, so ODAI will not risk accelerated load.",
+                      record.m_info.m_name));
+    }
+
+    if (free_memory.value() < estimated_model_bytes)
+    {
+      return make_cpu_only_llm_plan(
+          model_file_size_bytes,
+          std::format("Desktop iGPU '{}' has {} MB free but the model estimate is {} MB, so ODAI will use CPU instead.",
+                      record.m_info.m_name, free_memory.value() / BYTES_PER_MB, estimated_model_bytes / BYTES_PER_MB));
+    }
+
+    LlmLoadPlan plan;
+    plan.m_mode = PlacementMode::ACCELERATED_FULL;
+    plan.m_selectedCandidateIndices = {idx};
+    plan.m_shouldUseMlock = false;
+    plan.m_shouldUseMmap = true;
+    plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
+    plan.m_splitMode = LLAMA_SPLIT_MODE_NONE;
+    plan.m_allowCpuRetry = true;
+    plan.m_reason = std::format(
+        "Desktop iGPU '{}' passed the full-fit gate with {} MB free for an estimated {} MB model footprint.",
+        record.m_info.m_name, free_memory.value() / BYTES_PER_MB, estimated_model_bytes / BYTES_PER_MB);
+    return plan;
+  }
+
+  return make_cpu_only_llm_plan(model_file_size_bytes,
+                                "No desktop dGPU or iGPU candidate was available for accelerated placement.");
+#endif
 }
 
 OdaiResult<void> OdaiLlamaEngine::initialize_engine()
@@ -616,6 +858,9 @@ bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
 
   llama_model_params embedding_model_params = llama_model_default_params();
   embedding_model_params.n_gpu_layers = 0; // Load entire model on CPU
+  embedding_model_params.devices = nullptr;
+  embedding_model_params.main_gpu = -1;
+  embedding_model_params.split_mode = LLAMA_SPLIT_MODE_NONE;
   embedding_model_params.use_mlock = false;
 
   this->m_embeddingModel.reset(llama_model_load_from_file(path.c_str(), embedding_model_params));
@@ -651,9 +896,42 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts and mtmd context as new model is being loaded");
   this->m_mtmdContext.reset();
 
+  std::error_code model_size_error;
+  const uint64_t model_file_size_bytes = std::filesystem::file_size(base_path, model_size_error);
+  if (model_size_error)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to determine model file size for {}: {}", base_path, model_size_error.message());
+    return false;
+  }
+
+  const LlmLoadPlan llm_load_plan = this->plan_llm_load(model_file_size_bytes);
+  ODAI_LOG(ODAI_LOG_INFO, "LLM placement plan: {}", llm_load_plan.m_reason);
+
   llama_model_params llm_model_params = llama_model_default_params();
-  llm_model_params.n_gpu_layers = 0; // Load entire model on CPU
-  llm_model_params.use_mlock = false;
+  llm_model_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
+  llm_model_params.devices = nullptr;
+  llm_model_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
+  llm_model_params.split_mode = llm_load_plan.m_splitMode;
+  llm_model_params.use_mlock = llm_load_plan.m_shouldUseMlock;
+  llm_model_params.use_mmap = llm_load_plan.m_shouldUseMmap;
+
+  std::vector<ggml_backend_dev_t> selected_devices;
+  if (!llm_load_plan.m_selectedCandidateIndices.empty())
+  {
+    selected_devices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
+    for (size_t candidate_index : llm_load_plan.m_selectedCandidateIndices)
+    {
+      if (candidate_index >= m_deviceInventory.m_candidates.size())
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid candidate device index {}", candidate_index);
+        return false;
+      }
+
+      selected_devices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
+    }
+    selected_devices.push_back(nullptr);
+    llm_model_params.devices = selected_devices.data();
+  }
 
   this->m_llmModel.reset(llama_model_load_from_file(base_path.c_str(), llm_model_params));
 

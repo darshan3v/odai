@@ -51,7 +51,7 @@ OdaiResult<std::string> calculate_file_checksum(const std::string& path)
     return unexpected_internal_error<std::string>();
   }
 
-  const uint32_t buffer_size = static_cast<const uint32_t>(512 * 1024); // 512KB buffer
+  const uint32_t buffer_size = static_cast<const uint32_t>(512 * BYTES_PER_KB); // 512KB buffer
   std::vector<char> buffer(buffer_size);
 
   while (file.read(buffer.data(), buffer_size))
@@ -143,4 +143,9 @@ std::filesystem::path get_module_directory_from_address(const void* symbol_addre
 
   return std::filesystem::path(module_info.dli_fname).parent_path();
 #endif
+}
+
+uint64_t bytes_to_mb(uint64_t bytes)
+{
+  return bytes / BYTES_PER_MB;
 }

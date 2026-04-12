@@ -64,3 +64,7 @@ constexpr uint32_t DEFAULT_CHUNKING_OVERLAP = 50;
 constexpr uint32_t DEFAULT_MAX_TOKENS = 4096;
 constexpr float DEFAULT_TOP_P = 0.95F;
 constexpr uint32_t DEFAULT_TOP_K = 40;
+
+constexpr uint64_t BYTES_PER_KB = 1024ULL;
+constexpr uint64_t BYTES_PER_MB = 1024ULL * BYTES_PER_KB;
+constexpr uint64_t BYTES_PER_GB = 1024ULL * BYTES_PER_MB;
