@@ -146,7 +146,7 @@ static bool init_sdk()
   odai_set_logger(log_callback, nullptr);
 
   c_DbConfig db_conf = {SQLITE_DB, DB_PATH.c_str(), CACHE_PATH.c_str()};
-  c_BackendEngineConfig backend_conf = {LLAMA_BACKEND_ENGINE, ODAI_BACKEND_DEVICE_TYPE_AUTO};
+  c_BackendEngineConfig backend_conf = {LLAMA_BACKEND_ENGINE, ODAI_BACKEND_DEVICE_TYPE_GPU};
 
   c_OdaiResult init_res = odai_initialize_sdk(&db_conf, &backend_conf);
   if (init_res != ODAI_SUCCESS)
@@ -573,7 +573,7 @@ int main(int argc, char** argv)
 
   // Easy to toggle tests
   bool run_streaming = true;
-  bool run_chat = false;
+  bool run_chat = true;
   bool do_cleanup = true;
   int exit_code = 0;
 

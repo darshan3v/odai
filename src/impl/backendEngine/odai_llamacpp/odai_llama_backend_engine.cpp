@@ -393,68 +393,65 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_cpu_only_llm_plan(uint64_t mo
   return plan;
 }
 
-bool OdaiLlamaEngine::build_llm_model_params(const LlmLoadPlan& llm_load_plan, llama_model_params& out_model_params,
-                                             std::vector<ggml_backend_dev_t>& out_selected_devices) const
+OdaiResult<OdaiLlamaEngine::PreparedLlmModelParams>
+OdaiLlamaEngine::build_llm_model_params(const LlmLoadPlan& llm_load_plan) const
 {
-  out_model_params = llama_model_default_params();
-  out_model_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
-  out_model_params.devices = nullptr;
-  out_model_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
-  out_model_params.split_mode = llm_load_plan.m_splitMode;
-  out_model_params.use_mlock = llm_load_plan.m_shouldUseMlock;
-  out_model_params.use_mmap = llm_load_plan.m_shouldUseMmap;
+  PreparedLlmModelParams prepared_params;
+  prepared_params.m_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
+  prepared_params.m_params.devices = nullptr;
+  prepared_params.m_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
+  prepared_params.m_params.split_mode = llm_load_plan.m_splitMode;
+  prepared_params.m_params.use_mlock = llm_load_plan.m_shouldUseMlock;
+  prepared_params.m_params.use_mmap = llm_load_plan.m_shouldUseMmap;
 
   if (llm_load_plan.m_selectedCandidateIndices.empty())
   {
-    return true;
+    return prepared_params;
   }
 
-  out_selected_devices.clear();
-  out_selected_devices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
+  prepared_params.m_selectedDevices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
   for (size_t candidate_index : llm_load_plan.m_selectedCandidateIndices)
   {
     if (candidate_index >= m_deviceInventory.m_candidates.size())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid candidate device index {}", candidate_index);
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
-    out_selected_devices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
+    prepared_params.m_selectedDevices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
   }
 
-  out_selected_devices.push_back(nullptr);
-  out_model_params.devices = out_selected_devices.data();
-  return true;
+  prepared_params.m_selectedDevices.push_back(nullptr);
+  prepared_params.m_params.devices = prepared_params.m_selectedDevices.data();
+  return prepared_params;
 }
 
-bool OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_path,
-                                                       const std::optional<std::string>& mmproj_model_path,
-                                                       const LlmLoadPlan& llm_load_plan,
-                                                       LoadedLanguageModelState& out_loaded_state) const
+OdaiResult<OdaiLlamaEngine::LoadedLanguageModelState>
+OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_path,
+                                                  const std::optional<std::string>& mmproj_model_path,
+                                                  const LlmLoadPlan& llm_load_plan) const
 {
   try
   {
-    llama_model_params llm_model_params = llama_model_default_params();
-    std::vector<ggml_backend_dev_t> selected_devices;
-    if (!build_llm_model_params(llm_load_plan, llm_model_params, selected_devices))
+    OdaiResult<PreparedLlmModelParams> prepared_params_res = build_llm_model_params(llm_load_plan);
+    if (!prepared_params_res)
     {
-      return false;
+      return tl::unexpected(prepared_params_res.error());
     }
 
-    out_loaded_state = {};
-    out_loaded_state.m_model.reset(llama_model_load_from_file(base_model_path.c_str(), llm_model_params));
-    if (out_loaded_state.m_model == nullptr)
+    LoadedLanguageModelState loaded_state;
+    loaded_state.m_model.reset(llama_model_load_from_file(base_model_path.c_str(), prepared_params_res->m_params));
+    if (loaded_state.m_model == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model with plan: {}", llm_load_plan.m_reason);
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
-    out_loaded_state.m_vocab = llama_model_get_vocab(out_loaded_state.m_model.get());
-    if (out_loaded_state.m_vocab == nullptr)
+    loaded_state.m_vocab = llama_model_get_vocab(loaded_state.m_model.get());
+    if (loaded_state.m_vocab == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary from language model");
-      out_loaded_state = {};
-      return false;
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
     if (mmproj_model_path.has_value())
@@ -465,41 +462,36 @@ bool OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_m
       mparams.image_min_tokens = 0;
       mparams.image_max_tokens = 0;
 
-      mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_model_path->c_str(), out_loaded_state.m_model.get(), mparams);
+      mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_model_path->c_str(), loaded_state.m_model.get(), mparams);
       if (temp_ctx == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from: {}", mmproj_model_path.value());
-        out_loaded_state = {};
-        return false;
+        return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
       }
 
-      out_loaded_state.m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
+      loaded_state.m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
       ODAI_LOG(ODAI_LOG_INFO, "Loaded multimodal projector from {}", mmproj_model_path.value());
     }
 
-    return true;
+    return loaded_state;
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading language model with plan '{}': {}", llm_load_plan.m_reason,
              e.what());
-    out_loaded_state = {};
-    return false;
+    return unexpected_internal_error<LoadedLanguageModelState>();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading language model with plan '{}'",
              llm_load_plan.m_reason);
-    out_loaded_state = {};
-    return false;
+    return unexpected_internal_error<LoadedLanguageModelState>();
   }
 }
 
-std::vector<size_t> OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimated_model_bytes,
-                                                               bool& out_has_full_fit) const
+OdaiLlamaEngine::GpuSelectionResult OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimated_model_bytes) const
 {
-  out_has_full_fit = false;
-
+  GpuSelectionResult selection;
   std::vector<size_t> all_dgpu_indices;
   std::vector<std::pair<size_t, uint64_t>> dgpu_free_memory;
 
@@ -522,12 +514,13 @@ std::vector<size_t> OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimate
 
   if (all_dgpu_indices.empty())
   {
-    return {};
+    return selection;
   }
 
   if (dgpu_free_memory.empty())
   {
-    return all_dgpu_indices;
+    selection.m_candidateIndices = std::move(all_dgpu_indices);
+    return selection;
   }
 
   std::sort(dgpu_free_memory.begin(), dgpu_free_memory.end(),
@@ -541,12 +534,13 @@ std::vector<size_t> OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimate
     accumulated_free_vram += free_vram;
     if (accumulated_free_vram >= estimated_model_bytes)
     {
-      out_has_full_fit = true;
+      selection.m_hasFullFit = true;
       break;
     }
   }
 
-  return out_has_full_fit ? selected_indices : all_dgpu_indices;
+  selection.m_candidateIndices = selection.m_hasFullFit ? std::move(selected_indices) : std::move(all_dgpu_indices);
+  return selection;
 }
 
 OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_size_bytes) const
@@ -598,24 +592,23 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_
 #else
   // Desktop policy intentionally differs by device class:
   // dGPU allows best-effort partial offload, while iGPU requires a conservative full-fit gate.
-  bool has_full_dgpu_fit = false;
-  const std::vector<size_t> selected_dgpu_indices = select_minimum_gpu_subset(estimated_model_bytes, has_full_dgpu_fit);
-  if (!selected_dgpu_indices.empty())
+  const GpuSelectionResult gpu_selection = select_minimum_gpu_subset(estimated_model_bytes);
+  if (!gpu_selection.m_candidateIndices.empty())
   {
     LlmLoadPlan plan;
-    plan.m_mode = has_full_dgpu_fit ? PlacementMode::ACCELERATED_FULL : PlacementMode::ACCELERATED_PARTIAL;
-    plan.m_selectedCandidateIndices = selected_dgpu_indices;
+    plan.m_mode = gpu_selection.m_hasFullFit ? PlacementMode::ACCELERATED_FULL : PlacementMode::ACCELERATED_PARTIAL;
+    plan.m_selectedCandidateIndices = gpu_selection.m_candidateIndices;
     plan.m_shouldUseMlock = false;
     plan.m_shouldUseMmap = true;
     plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
-    plan.m_splitMode = selected_dgpu_indices.size() > 1 ? LLAMA_SPLIT_MODE_LAYER : LLAMA_SPLIT_MODE_NONE;
+    plan.m_splitMode = gpu_selection.m_candidateIndices.size() > 1 ? LLAMA_SPLIT_MODE_LAYER : LLAMA_SPLIT_MODE_NONE;
     plan.m_allowCpuRetry = true;
 
-    if (has_full_dgpu_fit)
+    if (gpu_selection.m_hasFullFit)
     {
       plan.m_reason = std::format("Desktop dGPU planner selected a minimum fitting subset of {} device(s) for an "
                                   "estimated {} MB model footprint.",
-                                  selected_dgpu_indices.size(), estimated_model_bytes / BYTES_PER_MB);
+                                  gpu_selection.m_candidateIndices.size(), estimated_model_bytes / BYTES_PER_MB);
     }
     else
     {
@@ -711,15 +704,17 @@ OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
   return candidate_devices;
 }
 
-bool OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>& items,
-                                                    const LLMModelConfig& llm_model_config, const ModelFiles& files)
+OdaiResult<void> OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>& items,
+                                                                const LLMModelConfig& llm_model_config,
+                                                                const ModelFiles& files)
 {
   std::unique_ptr<mtmd_context, MtmdContextDeleter> temp_ctx = nullptr;
 
-  if (!this->load_language_model(files, llm_model_config))
+  OdaiResult<void> load_res = this->load_language_model(files, llm_model_config);
+  if (!load_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load language model");
-    return false;
+    return tl::unexpected(load_res.error());
   }
 
   bool supports_image = this->m_loadedLlmState.m_mtmdContext != nullptr
@@ -736,35 +731,35 @@ bool OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>
     if (media_type == MediaType::INVALID)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Unsupported InputItemType for prompt");
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
     if (media_type == MediaType::IMAGE && !supports_image)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Model does not support image input");
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
     if (media_type == MediaType::AUDIO && !supports_audio)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Model does not support audio input");
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
     if (media_type == MediaType::TEXT && item.m_type != InputItemType::MEMORY_BUFFER)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Text input items must be provided as MEMORY_BUFFER");
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
     if ((media_type == MediaType::IMAGE || media_type == MediaType::AUDIO) && item.m_type != InputItemType::FILE_PATH)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Image / Audio input items must be provided as File Path");
-      return false;
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
   }
 
-  return true;
+  return {};
 }
 
 std::unique_ptr<llama_context, LlamaContextDeleter> OdaiLlamaEngine::get_new_llama_context(ModelType model_type)
@@ -943,13 +938,14 @@ OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const L
   return OdaiAudioTargetSpec{static_cast<uint32_t>(sample_rate), 1};
 }
 
-bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
+OdaiResult<void> OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
 {
   try
   {
     if (files.m_modelType != ModelType::EMBEDDING)
     {
-      return false;
+      ODAI_LOG(ODAI_LOG_ERROR, "Embedding loader received non-embedding model files");
+      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
     }
 
     std::string path = files.m_entries.at("base_model_path");
@@ -960,7 +956,7 @@ bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
       // update config though, some other params might have changed
       this->m_embeddingModelConfig = config;
       this->m_embeddingModelFiles = files;
-      return true;
+      return {};
     }
 
     llama_model_params embedding_model_params = llama_model_default_params();
@@ -975,40 +971,41 @@ bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const Embedd
     if (this->m_embeddingModel == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load embedding model");
-      return false;
+      return unexpected_internal_error<void>();
     }
 
     this->m_embeddingModelConfig = config;
     this->m_embeddingModelFiles = files;
 
     ODAI_LOG(ODAI_LOG_INFO, "successfully loaded embedding model {}", path);
-    return true;
+    return {};
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading embedding model: {}", e.what());
     this->m_embeddingModel.reset();
-    return false;
+    return unexpected_internal_error<void>();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading embedding model");
     this->m_embeddingModel.reset();
-    return false;
+    return unexpected_internal_error<void>();
   }
 }
 
-bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
+OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
 {
   if (files.m_modelType != ModelType::LLM)
   {
-    return false;
+    ODAI_LOG(ODAI_LOG_ERROR, "Language model loader received non-LLM model files");
+    return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
   }
 
   if (this->m_loadedLlmState.matches(files, config))
   {
     ODAI_LOG(ODAI_LOG_INFO, "Model is already loaded with same config");
-    return true;
+    return {};
   }
 
   const std::string& base_path = files.m_entries.at("base_model_path");
@@ -1025,7 +1022,7 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   if (model_size_error)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to determine model file size for {}: {}", base_path, model_size_error.message());
-    return false;
+    return unexpected_internal_error<void>();
   }
 
   const LlmLoadPlan llm_load_plan = this->plan_llm_load(model_file_size_bytes);
@@ -1034,13 +1031,14 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   this->m_loadedLlmState.clear();
   ODAI_LOG(ODAI_LOG_INFO, "Released previously loaded LLM state before starting reload transaction");
 
-  LoadedLanguageModelState loaded_state;
-  if (!this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan, loaded_state))
+  OdaiResult<LoadedLanguageModelState> loaded_state_res =
+      this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan);
+  if (!loaded_state_res)
   {
     if (!llm_load_plan.m_allowCpuRetry || (llm_load_plan.m_mode == PlacementMode::CPU_ONLY))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "LLM reload transaction failed without a CPU retry path");
-      return false;
+      return tl::unexpected(loaded_state_res.error());
     }
 
     const LlmLoadPlan cpu_retry_plan = this->make_cpu_only_llm_plan(
@@ -1048,19 +1046,21 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
                                            llm_load_plan.m_reason));
     ODAI_LOG(ODAI_LOG_WARN, "Accelerated LLM load failed; retrying with CPU-only plan: {}", cpu_retry_plan.m_reason);
 
-    if (!this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan, loaded_state))
+    loaded_state_res = this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan);
+    if (!loaded_state_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "CPU retry also failed for {}", base_path);
-      return false;
+      return tl::unexpected(loaded_state_res.error());
     }
   }
 
+  LoadedLanguageModelState loaded_state = std::move(loaded_state_res.value());
   loaded_state.m_config = config;
   loaded_state.m_files = files;
   this->m_loadedLlmState = std::move(loaded_state);
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}", base_path);
-  return true;
+  return {};
 }
 
 OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string& input, bool is_first,
@@ -1176,14 +1176,14 @@ void OdaiLlamaEngine::add_tokens_to_batch(const std::vector<llama_token>& tokens
   batch.logits[batch.n_tokens - 1] = set_logit_request_for_last_token ? 1 : 0; // request logits for the last token
 }
 
-bool OdaiLlamaEngine::load_tokens_into_context_impl(llama_context& model_context,
-                                                    const std::vector<llama_token>& tokens, uint32_t& next_pos,
-                                                    const bool request_logits_for_last_token)
+OdaiResult<uint32_t> OdaiLlamaEngine::load_tokens_into_context_impl(llama_context& model_context,
+                                                                    const std::vector<llama_token>& tokens,
+                                                                    const bool request_logits_for_last_token)
 {
   if (tokens.empty())
   {
     ODAI_LOG(ODAI_LOG_WARN, "empty token sequence passed");
-    return true;
+    return static_cast<uint32_t>(std::max(llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) + 1, 0));
   }
 
   const uint32_t n_ctx = llama_n_ctx(&model_context);
@@ -1193,10 +1193,10 @@ bool OdaiLlamaEngine::load_tokens_into_context_impl(llama_context& model_context
   {
     ODAI_LOG(ODAI_LOG_ERROR, "token sequence length {} exceeds model context window (used {}/{}).", tokens.size(),
              n_ctx_used, n_ctx);
-    return false;
+    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
-  next_pos = n_ctx_used;
+  uint32_t next_pos = n_ctx_used;
 
   std::unique_ptr<llama_batch, LlamaBatchDeleter> batch = nullptr;
 
@@ -1207,14 +1207,14 @@ bool OdaiLlamaEngine::load_tokens_into_context_impl(llama_context& model_context
   if (llama_decode(&model_context, *batch) != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama_decode failed");
-    return false;
+    return unexpected_internal_error<uint32_t>();
   }
 
-  return true;
+  return next_pos;
 }
 
-bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std::string& prompt, uint32_t& next_pos,
-                                        const bool request_logits_for_last_token)
+OdaiResult<uint32_t> OdaiLlamaEngine::load_into_context(llama_context& model_context, const std::string& prompt,
+                                                        const bool request_logits_for_last_token)
 {
   const bool is_first = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
 
@@ -1223,26 +1223,27 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt, error code: {}",
              static_cast<std::uint32_t>(prompt_tokens_res.error()));
-    return false;
+    return tl::unexpected(prompt_tokens_res.error());
   }
 
-  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens_res.value(), next_pos,
+  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, prompt_tokens_res.value(),
                                                         request_logits_for_last_token);
 }
 
-bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std::vector<llama_token>& tokens,
-                                        uint32_t& next_pos, const bool request_logits_for_last_token)
+OdaiResult<uint32_t> OdaiLlamaEngine::load_into_context(llama_context& model_context,
+                                                        const std::vector<llama_token>& tokens,
+                                                        const bool request_logits_for_last_token)
 {
-  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, tokens, next_pos, request_logits_for_last_token);
+  return OdaiLlamaEngine::load_tokens_into_context_impl(model_context, tokens, request_logits_for_last_token);
 }
 
-bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std::string& prompt,
-                                        const std::vector<mtmd::bitmap>& bitmaps, uint32_t& next_pos,
-                                        bool request_logits_for_last_token)
+OdaiResult<uint32_t> OdaiLlamaEngine::load_into_context(llama_context& model_context, const std::string& prompt,
+                                                        const std::vector<mtmd::bitmap>& bitmaps,
+                                                        bool request_logits_for_last_token)
 {
   if (bitmaps.empty())
   {
-    return this->load_into_context(model_context, prompt, next_pos, request_logits_for_last_token);
+    return this->load_into_context(model_context, prompt, request_logits_for_last_token);
   }
 
   mtmd_input_text text;
@@ -1262,7 +1263,7 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
   if (res != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt with mtmd, res = {}", res);
-    return false;
+    return unexpected_internal_error<uint32_t>();
   }
 
   llama_pos n_past = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) + 1;
@@ -1275,42 +1276,37 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
                               n_batch, request_logits_for_last_token, &new_n_past) != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to evaluate chunks using mtmd in context");
-    return false;
+    return unexpected_internal_error<uint32_t>();
   }
 
-  next_pos = static_cast<uint32_t>(new_n_past);
-  return true;
+  return static_cast<uint32_t>(new_n_past);
 }
 
-bool OdaiLlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
-                                          const bool append_to_context)
+OdaiResult<llama_token> OdaiLlamaEngine::generate_next_token(llama_context& model_context, llama_sampler& sampler,
+                                                             const bool append_to_context)
 {
-
   llama_token generated_token = llama_sampler_sample(&sampler, &model_context, -1);
 
   if (generated_token == LLAMA_TOKEN_NULL)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama_sampler_sample failed");
-    return false;
+    return unexpected_internal_error<llama_token>();
   }
 
   llama_sampler_accept(&sampler, generated_token);
 
-  out_token = generated_token;
-
-  uint32_t next_pos = 0;
-
   if (append_to_context)
   {
     std::vector<llama_token> token_vec = {generated_token};
-    if (!load_into_context(model_context, token_vec, next_pos, true))
+    OdaiResult<uint32_t> load_res = load_into_context(model_context, token_vec, true);
+    if (!load_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to append generated token to context");
-      return false;
+      return tl::unexpected(load_res.error());
     }
   }
 
-  return true;
+  return generated_token;
 }
 
 OdaiResult<StreamingStats>
@@ -1318,26 +1314,26 @@ OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, 
                                                   const std::string& prompt, const std::vector<mtmd::bitmap>& bitmaps,
                                                   OdaiStreamRespCallbackFn callback, void* user_data)
 {
-  uint32_t next_pos = 0;
-
-  if (!this->load_into_context(model_context, prompt, bitmaps, next_pos, true))
+  OdaiResult<uint32_t> load_prompt_res = this->load_into_context(model_context, prompt, bitmaps, true);
+  if (!load_prompt_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load prompt into context");
-    return unexpected_internal_error<StreamingStats>();
+    return tl::unexpected(load_prompt_res.error());
   }
 
-  llama_token generated_token = 0;
   std::vector<llama_token> buffered_tokens;
   int32_t total_tokens = 0;
   std::string output_buffer;
 
   while (true)
   {
-    if (!OdaiLlamaEngine::generate_next_token(model_context, sampler, generated_token, true))
+    OdaiResult<llama_token> generated_token_res = OdaiLlamaEngine::generate_next_token(model_context, sampler, true);
+    if (!generated_token_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to generate next token");
-      return unexpected_internal_error<StreamingStats>();
+      return tl::unexpected(generated_token_res.error());
     }
+    const llama_token generated_token = generated_token_res.value();
 
     // Check if model is done
     if (llama_vocab_is_eog(this->m_loadedLlmState.m_vocab, generated_token))
@@ -1413,16 +1409,20 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
     return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
-  if (!does_model_support_input_data(prompt, llm_model_config, model_files))
+  OdaiResult<void> input_support_res = does_model_support_input_data(prompt, llm_model_config, model_files);
+  if (!input_support_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid input data");
-    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    ODAI_LOG(ODAI_LOG_ERROR, "Input data validation/support check failed with error code: {}",
+             static_cast<std::uint32_t>(input_support_res.error()));
+    return tl::unexpected(input_support_res.error());
   }
 
-  if (!this->load_language_model(model_files, llm_model_config))
+  OdaiResult<void> load_model_res = this->load_language_model(model_files, llm_model_config);
+  if (!load_model_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return unexpected_internal_error<StreamingStats>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model, error code: {}",
+             static_cast<std::uint32_t>(load_model_res.error()));
+    return tl::unexpected(load_model_res.error());
   }
 
   std::unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
@@ -1674,12 +1674,11 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   const std::string& formatted_prompt = formatted_prompt_res.value();
 
   // Load the formatted prompt into the context to build KV cache
-  uint32_t next_pos = 0;
-
-  if (!this->load_into_context(*llm_llama_context, formatted_prompt, bitmaps, next_pos, false))
+  OdaiResult<uint32_t> load_prompt_res = this->load_into_context(*llm_llama_context, formatted_prompt, bitmaps, false);
+  if (!load_prompt_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load formatted prompt into context");
-    return unexpected_internal_error<std::unique_ptr<llama_context, LlamaContextDeleter>>();
+    return tl::unexpected(load_prompt_res.error());
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context");
@@ -1717,16 +1716,20 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
     return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
-  if (!does_model_support_input_data(prompt, llm_model_config, model_files))
+  OdaiResult<void> input_support_res = does_model_support_input_data(prompt, llm_model_config, model_files);
+  if (!input_support_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Invalid input data");
-    return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    ODAI_LOG(ODAI_LOG_ERROR, "Input data validation/support check failed with error code: {}",
+             static_cast<std::uint32_t>(input_support_res.error()));
+    return tl::unexpected(input_support_res.error());
   }
 
-  if (!this->load_language_model(model_files, llm_model_config))
+  OdaiResult<void> load_model_res = this->load_language_model(model_files, llm_model_config);
+  if (!load_model_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return unexpected_internal_error<StreamingStats>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model, error code: {}",
+             static_cast<std::uint32_t>(load_model_res.error()));
+    return tl::unexpected(load_model_res.error());
   }
 
   OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>> chat_context_res =

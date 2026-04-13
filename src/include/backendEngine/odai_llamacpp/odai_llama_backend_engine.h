@@ -168,6 +168,18 @@ private:
     std::string m_reason;
   };
 
+  struct GpuSelectionResult
+  {
+    std::vector<size_t> m_candidateIndices;
+    bool m_hasFullFit = false;
+  };
+
+  struct PreparedLlmModelParams
+  {
+    llama_model_params m_params = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> m_selectedDevices;
+  };
+
   struct LoadedLanguageModelState
   {
     std::unique_ptr<llama_model, LlamaModelDeleter> m_model = nullptr;
@@ -227,9 +239,8 @@ private:
   /// If the model estimate fits, returns the minimum subset whose combined free VRAM is sufficient.
   /// Otherwise returns all discovered dGPUs so llama.cpp can still offload layers best-effort.
   /// @param estimated_model_bytes Estimated VRAM needed for the base model load.
-  /// @param out_has_full_fit Set to true when the returned subset satisfies the estimate.
-  /// @return Indices into m_deviceInventory.m_candidates for the selected dGPUs.
-  std::vector<size_t> select_minimum_gpu_subset(uint64_t estimated_model_bytes, bool& out_has_full_fit) const;
+  /// @return Selected dGPU indices plus whether the returned subset satisfies the estimate.
+  GpuSelectionResult select_minimum_gpu_subset(uint64_t estimated_model_bytes) const;
 
   /// Queries the current free memory reported by a ggml backend device.
   /// @param backend_handle The ggml device handle to query.
@@ -244,22 +255,18 @@ private:
 
   /// Materializes llama.cpp model params and the temporary NULL-terminated device buffer for one load plan.
   /// @param llm_load_plan Placement plan to convert into llama.cpp model params.
-  /// @param out_model_params Params populated for llama_model_load_from_file().
-  /// @param out_selected_devices Temporary device-handle buffer that must outlive the load call.
-  /// @return true if the plan could be materialized, false if it referenced an invalid candidate.
-  bool build_llm_model_params(const LlmLoadPlan& llm_load_plan, llama_model_params& out_model_params,
-                              std::vector<ggml_backend_dev_t>& out_selected_devices) const;
+  /// @return Materialized params and the temporary device-handle buffer needed by llama_model_load_from_file().
+  OdaiResult<PreparedLlmModelParams> build_llm_model_params(const LlmLoadPlan& llm_load_plan) const;
 
   /// Attempts to load the base LLM and optional multimodal projector for a single plan into transaction-local state.
   /// @param base_model_path Path to the base GGUF model.
   /// @param mmproj_model_path Optional multimodal projector path.
   /// @param llm_load_plan Placement plan to execute.
-  /// @param out_loaded_state Transaction-local loaded state populated on success.
-  /// @return true if the planned load succeeded, false otherwise.
-  bool try_load_language_model_for_plan(const std::string& base_model_path,
-                                        const std::optional<std::string>& mmproj_model_path,
-                                        const LlmLoadPlan& llm_load_plan,
-                                        LoadedLanguageModelState& out_loaded_state) const;
+  /// @return Transaction-local loaded state populated on success.
+  OdaiResult<LoadedLanguageModelState>
+  try_load_language_model_for_plan(const std::string& base_model_path,
+                                   const std::optional<std::string>& mmproj_model_path,
+                                   const LlmLoadPlan& llm_load_plan) const;
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
@@ -272,9 +279,9 @@ private:
   /// Checks if the given input data is valid / supported.
   /// @param input_items The input items to validate against the model capabilities.
   /// @param model_files The model files containing mmproj path.
-  /// @return true if the data is valid, false otherwise
-  bool does_model_support_input_data(const std::vector<InputItem>& input_items, const LLMModelConfig& llm_model_config,
-                                     const ModelFiles& model_files);
+  /// @return empty result when the data is valid, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<void> does_model_support_input_data(const std::vector<InputItem>& input_items,
+                                                 const LLMModelConfig& llm_model_config, const ModelFiles& model_files);
 
   /// Returns the required audio specification for the given GGUF model.
   /// @param config The LLM model configuration to check requirements for.
@@ -285,15 +292,15 @@ private:
   /// If the same model is already loaded, only updates the configuration.
   /// @param files The generic model files containing paths.
   /// @param config Configuration containing parameters.
-  /// @return true if model loaded successfully, false otherwise
-  bool load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config);
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<void> load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config);
 
   /// Loads a language model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
   /// @param files The generic model files containing paths.
   /// @param config Configuration containing parameters.
-  /// @return true if model loaded successfully, false otherwise
-  bool load_language_model(const ModelFiles& files, const LLMModelConfig& config);
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<void> load_language_model(const ModelFiles& files, const LLMModelConfig& config);
 
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for
@@ -336,50 +343,44 @@ private:
   /// then we don't clear it. we just append
   /// @param model_context Language Model context to load the prompt into
   /// @param prompt The prompt string to load
-  /// @param next_pos This will be updated to the indicate next position after
-  /// loading the prompt
   /// @param request_logits_for_last_token Whether to request logits for the
   /// last token in the prompt, (do it if you are generating next token after
   /// this)
-  /// @return true if loading succeeded, false otherwise
-  bool load_into_context(llama_context& model_context, const std::string& prompt, uint32_t& next_pos,
-                         bool request_logits_for_last_token);
+  /// @return Next context position on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<uint32_t> load_into_context(llama_context& model_context, const std::string& prompt,
+                                         bool request_logits_for_last_token);
 
   /// Loads the given tokens into the provided llama context.
   /// If the context already has some other context (Eg: some message hisotry)
   /// then we don't clear it. we just append
   /// @param model_context Language Model context to load the tokens into
   /// @param tokens Vector of tokens to load
-  /// @param next_pos This will be updated to the indicate next position after
-  /// loading the tokens
   /// @param request_logits_for_last_token Whether to request logits for the
   /// last token, (do it if you are generating next token after this)
-  /// @return true if loading succeeded, false otherwise
-  static bool load_into_context(llama_context& model_context, const std::vector<llama_token>& tokens,
-                                uint32_t& next_pos, bool request_logits_for_last_token);
+  /// @return Next context position on success, or an unexpected OdaiResultEnum on failure.
+  static OdaiResult<uint32_t> load_into_context(llama_context& model_context, const std::vector<llama_token>& tokens,
+                                                bool request_logits_for_last_token);
 
   /// Loads the given prompt string and its accompanying mtmd bitmaps into the provided llama context.
   /// Handles chunking logic with mtmd internally if there are multimodal bitmaps.
   /// @param model_context Language Model context
   /// @param prompt The prompt string to load
   /// @param bitmaps The vector of extracted mtmd bitmaps
-  /// @param next_pos This will be updated to the indicate next position after loading
   /// @param request_logits_for_last_token Whether to request logits for the last token
-  /// @return true if loading succeeded, false otherwise
-  bool load_into_context(llama_context& model_context, const std::string& prompt,
-                         const std::vector<mtmd::bitmap>& bitmaps, uint32_t& next_pos,
-                         bool request_logits_for_last_token);
+  /// @return Next context position on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<uint32_t> load_into_context(llama_context& model_context, const std::string& prompt,
+                                         const std::vector<mtmd::bitmap>& bitmaps, bool request_logits_for_last_token);
 
   /// Helper function that performs the common logic for loading tokens into
   /// context.
   /// @param model_context Language Model context to load tokens into
   /// @param tokens Vector of tokens to load
-  /// @param next_pos Starting position (updated to next position after loading)
   /// @param request_logits_for_last_token Whether to request logits for the
   /// last token
-  /// @return true if loading succeeded, false otherwise
-  static bool load_tokens_into_context_impl(llama_context& model_context, const std::vector<llama_token>& tokens,
-                                            uint32_t& next_pos, bool request_logits_for_last_token);
+  /// @return Next context position on success, or an unexpected OdaiResultEnum on failure.
+  static OdaiResult<uint32_t> load_tokens_into_context_impl(llama_context& model_context,
+                                                            const std::vector<llama_token>& tokens,
+                                                            bool request_logits_for_last_token);
 
   /// Loads the provided sequence of chat messages into the model's context
   /// @param messages Vector of chat messages (in order) to load into the
@@ -392,13 +393,11 @@ private:
   /// @param model_context Language Model context (has KV cache of old tokens
   /// and other stuff) to use for generation
   /// @param sampler sampler to use for token sampling
-  /// @param out_token Output parameter to receive the generated token
   /// @param append_to_context Whether to append the generated token to the
   /// context's memory
-  /// @return false if token generation failed or if appending to context is set
-  /// and failed, true otherwise
-  static bool generate_next_token(llama_context& model_context, llama_sampler& sampler, llama_token& out_token,
-                                  bool append_to_context);
+  /// @return Generated token on success, or an unexpected OdaiResultEnum on failure.
+  static OdaiResult<llama_token> generate_next_token(llama_context& model_context, llama_sampler& sampler,
+                                                     bool append_to_context);
 
   /// Processes buffered tokens into a UTF-8 safe string for streaming.
   /// Detokenizes tokens, appends to output buffer, then splits at a safe UTF-8

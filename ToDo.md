@@ -32,6 +32,7 @@
     - [ ] Implement vector storage and retrieval using sqlite vector extension
 - [ ] Maybe can have a async variant of odai_generate_streaming_response
 - [ ] Qualcomm Hexagon, QNN, Apple CoreML llama cpp integration pending
+- [ ] when limited vram Think / explore on vision, audio encoder on GPU and LLM on cpu vs vice versa, both are useful for different workload
 
 
 ### Build System
