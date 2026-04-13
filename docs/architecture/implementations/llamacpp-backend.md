@@ -52,9 +52,23 @@ The plan currently carries:
 
 The dGPU versus iGPU rationale for this split lives in [`nuances.md`](../../nuances.md#desktop-gpu-placement-uses-different-dgpu-and-igpu-rules).
 
+## Load Execution and Reload
+
+Base LLM loading now executes as an internal reload transaction instead of mutating live engine state inline.
+
+Current execution behavior is:
+
+- Convert `LlmLoadPlan` into transaction-local `llama_model_params`
+- Materialize the NULL-terminated ggml device buffer only for the duration of the load call
+- Release the previously committed LLM, vocab, and multimodal projector state before attempting the new load so GPU-backed allocations do not overlap
+- Attempt the planned accelerated load first when applicable, then retry once with an explicit CPU-only plan if the planner allowed fallback
+- Commit the newly loaded model, vocab, projector context, and cached config/files to engine state only after the transaction succeeds
+
+This keeps the planner responsible for policy while the load step only executes one concrete plan at a time.
+
 ## Model Caching
 
-The engine caches the currently loaded LLM and embedding model (`m_llmModel`, `m_embeddingModel`). If a generation call requests the same model that's already loaded, it skips reloading.
+The engine caches the currently loaded LLM state and embedding model. LLM cache state is held as one internal ownership unit containing the model, vocab, multimodal projector context, and the matching config/files. If a generation call requests the same model with the same config, it skips reloading.
 
 ### Expected Model Files
 

@@ -8,7 +8,7 @@
 class IOdaiBackendEngine
 {
 protected:
-  BackendEngineConfig m_backendEngineconfig{};
+  BackendEngineConfig m_backendEngineConfig{};
 
 public:
   IOdaiBackendEngine(const BackendEngineConfig& config)
@@ -18,7 +18,7 @@ public:
       throw std::invalid_argument("Invalid BackendEngineConfig provided");
     }
 
-    m_backendEngineconfig = config;
+    m_backendEngineConfig = config;
   };
 
   IOdaiBackendEngine(const IOdaiBackendEngine&) = delete;

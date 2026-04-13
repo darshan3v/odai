@@ -14,6 +14,8 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
     - [Explicit SDK Shutdown for Deterministic Backend Cleanup](#explicit-sdk-shutdown-for-deterministic-backend-cleanup)
     - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
     - [Desktop GPU Placement Uses Different dGPU and iGPU Rules](#desktop-gpu-placement-uses-different-dgpu-and-igpu-rules)
+    - [LLM Reload Releases Old State Before Retry and Commit](#llm-reload-releases-old-state-before-retry-and-commit)
+    - [llama.cpp Load Failures Must Collapse to Return Paths for Fallback](#llamacpp-load-failures-must-collapse-to-return-paths-for-fallback)
 
 ## Build System (CMake)
 
@@ -102,12 +104,22 @@ When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vul
 * **What ggml does:** In the local llama.cpp source (`build/_deps/llama-src/ggml/src/ggml-vulkan/ggml-vulkan.cpp`), Vulkan devices report `GGML_BACKEND_DEVICE_TYPE_IGPU` when Vulkan exposes the physical device as an integrated GPU, otherwise they report `GGML_BACKEND_DEVICE_TYPE_GPU`.
 * **Why this matters for ODAI:** On Android, Vulkan is usually the compute API for the SoC's integrated GPU. That means probing `"vulkan"` with an ODAI target type of `GPU` can miss a valid Android Vulkan device if ggml classifies it as `IGPU`.
 * **Design implication:** Treat Vulkan as a backend family only. Device-selection policy should rely on ggml's reported device type, and Android-specific selection logic should decide whether a Vulkan iGPU satisfies a user request for "GPU acceleration" or should remain distinct from explicit `IGPU`.
-* **Current discovery policy implication:** Desktop `AUTO` probes prioritized dGPU backends and then falls back directly to CPU; it does **not** run a separate iGPU-only pass. Android keeps its accelerated Vulkan path by allowing the GPU probe to accept Vulkan devices reported as `IGPU`.
 
 ### Desktop GPU Placement Uses Different dGPU and iGPU Rules
 Desktop accelerated placement should not treat discrete GPUs and integrated GPUs as the same kind of target.
 
-* **What ODAI does now:** Base LLM loading first creates an internal `LlmLoadPlan` from the discovered device inventory and model-file size estimate.
 * **dGPU rule:** Query fresh free VRAM, then greedily pick the minimum discrete-GPU subset whose combined free VRAM satisfies the estimate. If ODAI cannot prove a full fit, it still passes all discovered dGPUs to llama.cpp so layer offload can remain best-effort instead of becoming all-or-nothing.
 * **iGPU rule:** Require a full-fit check against the integrated GPU's fresh free-memory reading. If that check fails, or the free-memory reading is unavailable, ODAI falls back to an explicit CPU-only plan.
 * **Why the split exists:** Partial offload across dGPUs is still useful when a full fit is uncertain, but integrated GPUs are much more likely to compete with CPU/system memory and to regress badly when ODAI guesses wrong. Treating iGPU placement as a gate keeps CPU fallback explicit instead of silently leaving llama.cpp on an accelerator that did not actually have enough headroom.
+
+### LLM Reload Releases Old State Before Retry and Commit
+LLM reload is intentionally not an "old model stays live until new model fully succeeds" transaction.
+
+* **Why the old state is released first:** GPU-backed models can consume enough VRAM that attempting to hold both the old and new models at once makes reload failures nondeterministic. Releasing the old state first gives the new plan a clean memory picture and makes CPU retry meaningful instead of competing with stale allocations.
+* **Why cached config/files are also cleared before retry:** If the new load fails after the old state was released, keeping the previous `m_llmModelFiles` / `m_llmModelConfig` would make future equality checks think a model was still loaded when the engine was actually empty.
+
+### llama.cpp Load Failures Must Collapse to Return Paths for Fallback
+ODAI's CPU-retry logic only works if accelerated-load failures stay inside the normal `bool`/result flow.
+
+* **Why local catch blocks are needed:** `llama_model_load_from_file()` does catch some internal `std::exception` cases in upstream `llama.cpp`, but not the entire wrapper path around model construction, device-list setup, or every downstream helper. `mtmd_init_from_file()` is also outside ODAI's control. If either load step throws past ODAI, the accelerated path can bypass the planned CPU retry entirely.
+* **Implementation rule:** Keep exception guards directly around ODAI's load attempts and translate any thrown failure into a logged `false`/error result. That preserves fallback behavior and keeps exceptions from leaking toward higher layers or the C API boundary.

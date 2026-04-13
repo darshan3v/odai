@@ -49,6 +49,8 @@ BackendDeviceType to_cpp_backend_device_type(c_BackendDeviceType c)
     return BackendDeviceType::CPU;
   case ODAI_BACKEND_DEVICE_TYPE_GPU:
     return BackendDeviceType::GPU;
+  case ODAI_BACKEND_DEVICE_TYPE_IGPU:
+    return BackendDeviceType::IGPU;
   case ODAI_BACKEND_DEVICE_TYPE_AUTO:
     return BackendDeviceType::AUTO;
   }

@@ -168,24 +168,36 @@ private:
     std::string m_reason;
   };
 
+  struct LoadedLanguageModelState
+  {
+    std::unique_ptr<llama_model, LlamaModelDeleter> m_model = nullptr;
+    // managed automatically by llama.cpp
+    // so no need of unique_ptr
+    const llama_vocab* m_vocab = nullptr;
+    std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+    LLMModelConfig m_config{};
+    ModelFiles m_files{};
+
+    void clear() { *this = {}; }
+
+    bool is_loaded() const { return (m_model != nullptr) && (m_vocab != nullptr); }
+
+    bool matches(const ModelFiles& files, const LLMModelConfig& config) const
+    {
+      return is_loaded() && (m_files == files) && (m_config == config);
+    }
+  };
+
   bool m_isInitialized{false};
 
   DeviceInventory m_deviceInventory{};
 
   EmbeddingModelConfig m_embeddingModelConfig{};
-  LLMModelConfig m_llmModelConfig{};
 
   ModelFiles m_embeddingModelFiles{};
-  ModelFiles m_llmModelFiles{};
 
   std::unique_ptr<llama_model, LlamaModelDeleter> m_embeddingModel = nullptr;
-  std::unique_ptr<llama_model, LlamaModelDeleter> m_llmModel = nullptr;
-
-  // managed automatically by llama.cpp
-  // so no need of unique_ptr
-  const llama_vocab* m_llmVocab = nullptr;
-
-  std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+  LoadedLanguageModelState m_loadedLlmState{};
 
   /// Registers ggml backends, then discovers candidate devices according to ODAI's runtime policy.
   /// @param preferred_type The desired device preference (AUTO, GPU, IGPU, CPU)
@@ -230,6 +242,25 @@ private:
   /// @return CPU-only load plan.
   LlmLoadPlan make_cpu_only_llm_plan(uint64_t model_file_size_bytes, std::string reason) const;
 
+  /// Materializes llama.cpp model params and the temporary NULL-terminated device buffer for one load plan.
+  /// @param llm_load_plan Placement plan to convert into llama.cpp model params.
+  /// @param out_model_params Params populated for llama_model_load_from_file().
+  /// @param out_selected_devices Temporary device-handle buffer that must outlive the load call.
+  /// @return true if the plan could be materialized, false if it referenced an invalid candidate.
+  bool build_llm_model_params(const LlmLoadPlan& llm_load_plan, llama_model_params& out_model_params,
+                              std::vector<ggml_backend_dev_t>& out_selected_devices) const;
+
+  /// Attempts to load the base LLM and optional multimodal projector for a single plan into transaction-local state.
+  /// @param base_model_path Path to the base GGUF model.
+  /// @param mmproj_model_path Optional multimodal projector path.
+  /// @param llm_load_plan Placement plan to execute.
+  /// @param out_loaded_state Transaction-local loaded state populated on success.
+  /// @return true if the planned load succeeded, false otherwise.
+  bool try_load_language_model_for_plan(const std::string& base_model_path,
+                                        const std::optional<std::string>& mmproj_model_path,
+                                        const LlmLoadPlan& llm_load_plan,
+                                        LoadedLanguageModelState& out_loaded_state) const;
+
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
   /// @param key The entry key to validate (e.g., "base_model_path")
@@ -248,7 +279,7 @@ private:
   /// Returns the required audio specification for the given GGUF model.
   /// @param config The LLM model configuration to check requirements for.
   /// @param files The associated model files containing text model and multimodal projectors.
-  OdaiResult<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config, const ModelFiles& files);
+  OdaiResult<OdaiAudioTargetSpec> get_required_audio_spec(const LLMModelConfig& config, const ModelFiles& files) const;
 
   /// Loads an embedding model from the specified configuration.
   /// If the same model is already loaded, only updates the configuration.
@@ -281,7 +312,7 @@ private:
   /// @param is_first Whether this is the first prompt
   /// @param model_type Type of model (LLM or EMBEDDING) to use for tokenization
   /// @return Tokens on success, or an unexpected OdaiResultEnum on failure.
-  OdaiResult<std::vector<llama_token>> tokenize(const std::string& input, bool is_first, ModelType model_type);
+  OdaiResult<std::vector<llama_token>> tokenize(const std::string& input, bool is_first, ModelType model_type) const;
 
   /// Adds tokens to a llama batch for processing. we set the logits request for
   /// the last token.
@@ -298,7 +329,7 @@ private:
   /// Converts a vector of tokens back into a string.
   /// @param tokens Vector of tokens to detokenize
   /// @return Detokenized string on success, or an unexpected OdaiResultEnum on failure.
-  OdaiResult<std::string> detokenize(const std::vector<llama_token>& tokens);
+  OdaiResult<std::string> detokenize(const std::vector<llama_token>& tokens) const;
 
   /// Loads the given prompt into the provided llama context.
   /// If the context already has some other context (Eg: some message hisotry)
@@ -387,7 +418,7 @@ private:
   /// @return Formatted prompt string on success, or an unexpected OdaiResultEnum on failure.
   OdaiResult<std::string>
   format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
-                                 bool add_generation_prompt);
+                                 bool add_generation_prompt) const;
 
   /// Processes input items to extract formatted text and multimodal bitmaps.
   /// @todo Replace current mtmd image decoding logic with our custom internal image decoder

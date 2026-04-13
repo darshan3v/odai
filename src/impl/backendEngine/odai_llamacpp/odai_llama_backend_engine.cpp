@@ -393,6 +393,108 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_cpu_only_llm_plan(uint64_t mo
   return plan;
 }
 
+bool OdaiLlamaEngine::build_llm_model_params(const LlmLoadPlan& llm_load_plan, llama_model_params& out_model_params,
+                                             std::vector<ggml_backend_dev_t>& out_selected_devices) const
+{
+  out_model_params = llama_model_default_params();
+  out_model_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
+  out_model_params.devices = nullptr;
+  out_model_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
+  out_model_params.split_mode = llm_load_plan.m_splitMode;
+  out_model_params.use_mlock = llm_load_plan.m_shouldUseMlock;
+  out_model_params.use_mmap = llm_load_plan.m_shouldUseMmap;
+
+  if (llm_load_plan.m_selectedCandidateIndices.empty())
+  {
+    return true;
+  }
+
+  out_selected_devices.clear();
+  out_selected_devices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
+  for (size_t candidate_index : llm_load_plan.m_selectedCandidateIndices)
+  {
+    if (candidate_index >= m_deviceInventory.m_candidates.size())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid candidate device index {}", candidate_index);
+      return false;
+    }
+
+    out_selected_devices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
+  }
+
+  out_selected_devices.push_back(nullptr);
+  out_model_params.devices = out_selected_devices.data();
+  return true;
+}
+
+bool OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_path,
+                                                       const std::optional<std::string>& mmproj_model_path,
+                                                       const LlmLoadPlan& llm_load_plan,
+                                                       LoadedLanguageModelState& out_loaded_state) const
+{
+  try
+  {
+    llama_model_params llm_model_params = llama_model_default_params();
+    std::vector<ggml_backend_dev_t> selected_devices;
+    if (!build_llm_model_params(llm_load_plan, llm_model_params, selected_devices))
+    {
+      return false;
+    }
+
+    out_loaded_state = {};
+    out_loaded_state.m_model.reset(llama_model_load_from_file(base_model_path.c_str(), llm_model_params));
+    if (out_loaded_state.m_model == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model with plan: {}", llm_load_plan.m_reason);
+      return false;
+    }
+
+    out_loaded_state.m_vocab = llama_model_get_vocab(out_loaded_state.m_model.get());
+    if (out_loaded_state.m_vocab == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary from language model");
+      out_loaded_state = {};
+      return false;
+    }
+
+    if (mmproj_model_path.has_value())
+    {
+      mtmd_context_params mparams = mtmd_context_params_default();
+      mparams.use_gpu = false;
+      mparams.print_timings = false;
+      mparams.image_min_tokens = 0;
+      mparams.image_max_tokens = 0;
+
+      mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_model_path->c_str(), out_loaded_state.m_model.get(), mparams);
+      if (temp_ctx == nullptr)
+      {
+        ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from: {}", mmproj_model_path.value());
+        out_loaded_state = {};
+        return false;
+      }
+
+      out_loaded_state.m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
+      ODAI_LOG(ODAI_LOG_INFO, "Loaded multimodal projector from {}", mmproj_model_path.value());
+    }
+
+    return true;
+  }
+  catch (const std::exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading language model with plan '{}': {}", llm_load_plan.m_reason,
+             e.what());
+    out_loaded_state = {};
+    return false;
+  }
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading language model with plan '{}'",
+             llm_load_plan.m_reason);
+    out_loaded_state = {};
+    return false;
+  }
+}
+
 std::vector<size_t> OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimated_model_bytes,
                                                                bool& out_has_full_fit) const
 {
@@ -575,7 +677,7 @@ OdaiResult<void> OdaiLlamaEngine::initialize_engine()
   {
     llama_backend_init();
 
-    OdaiResult<void> config_res = discover_candidate_devices(m_backendEngineconfig.m_preferredDeviceType);
+    OdaiResult<void> config_res = discover_candidate_devices(m_backendEngineConfig.m_preferredDeviceType);
     if (!config_res)
     {
       return config_res;
@@ -620,8 +722,12 @@ bool OdaiLlamaEngine::does_model_support_input_data(const std::vector<InputItem>
     return false;
   }
 
-  bool supports_image = this->m_mtmdContext != nullptr ? mtmd_support_vision(this->m_mtmdContext.get()) : false;
-  bool supports_audio = this->m_mtmdContext != nullptr ? mtmd_support_audio(this->m_mtmdContext.get()) : false;
+  bool supports_image = this->m_loadedLlmState.m_mtmdContext != nullptr
+                            ? mtmd_support_vision(this->m_loadedLlmState.m_mtmdContext.get())
+                            : false;
+  bool supports_audio = this->m_loadedLlmState.m_mtmdContext != nullptr
+                            ? mtmd_support_audio(this->m_loadedLlmState.m_mtmdContext.get())
+                            : false;
 
   for (const InputItem& item : items)
   {
@@ -671,7 +777,7 @@ std::unique_ptr<llama_context, LlamaContextDeleter> OdaiLlamaEngine::get_new_lla
 
   if (model_type == ModelType::LLM)
   {
-    model = this->m_llmModel.get();
+    model = this->m_loadedLlmState.m_model.get();
     context_params.n_ctx = 2048;
     context_params.embeddings = false;
   }
@@ -809,24 +915,24 @@ OdaiResult<bool> OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
 }
 
 OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const LLMModelConfig& config,
-                                                                         const ModelFiles& model_files)
+                                                                         const ModelFiles& model_files) const
 {
   (void)config;
   (void)model_files;
 
-  if (this->m_mtmdContext == nullptr)
+  if (this->m_loadedLlmState.m_mtmdContext == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "MtmD context not initialized");
     return unexpected_not_initialized<OdaiAudioTargetSpec>();
   }
 
-  if (!mtmd_support_audio(this->m_mtmdContext.get()))
+  if (!mtmd_support_audio(this->m_loadedLlmState.m_mtmdContext.get()))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Loaded model does not support audio");
     return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
   }
 
-  int sample_rate = mtmd_get_audio_sample_rate(this->m_mtmdContext.get());
+  int sample_rate = mtmd_get_audio_sample_rate(this->m_loadedLlmState.m_mtmdContext.get());
 
   if (sample_rate <= 0)
   {
@@ -839,43 +945,57 @@ OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const L
 
 bool OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, const EmbeddingModelConfig& config)
 {
-
-  if (files.m_modelType != ModelType::EMBEDDING)
+  try
   {
-    return false;
-  }
+    if (files.m_modelType != ModelType::EMBEDDING)
+    {
+      return false;
+    }
 
-  std::string path = files.m_entries.at("base_model_path");
+    std::string path = files.m_entries.at("base_model_path");
 
-  if (this->m_embeddingModelFiles.m_entries.at("base_model_path") == path)
-  {
-    ODAI_LOG(ODAI_LOG_INFO, "embedding model {} is already loaded", path);
-    // update config though, some other params might have changed
+    if (this->m_embeddingModelFiles.m_entries.at("base_model_path") == path)
+    {
+      ODAI_LOG(ODAI_LOG_INFO, "embedding model {} is already loaded", path);
+      // update config though, some other params might have changed
+      this->m_embeddingModelConfig = config;
+      this->m_embeddingModelFiles = files;
+      return true;
+    }
+
+    llama_model_params embedding_model_params = llama_model_default_params();
+    embedding_model_params.n_gpu_layers = 0; // Load entire model on CPU
+    embedding_model_params.devices = nullptr;
+    embedding_model_params.main_gpu = -1;
+    embedding_model_params.split_mode = LLAMA_SPLIT_MODE_NONE;
+    embedding_model_params.use_mlock = false;
+
+    this->m_embeddingModel.reset(llama_model_load_from_file(path.c_str(), embedding_model_params));
+
+    if (this->m_embeddingModel == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load embedding model");
+      return false;
+    }
+
     this->m_embeddingModelConfig = config;
     this->m_embeddingModelFiles = files;
+
+    ODAI_LOG(ODAI_LOG_INFO, "successfully loaded embedding model {}", path);
     return true;
   }
-
-  llama_model_params embedding_model_params = llama_model_default_params();
-  embedding_model_params.n_gpu_layers = 0; // Load entire model on CPU
-  embedding_model_params.devices = nullptr;
-  embedding_model_params.main_gpu = -1;
-  embedding_model_params.split_mode = LLAMA_SPLIT_MODE_NONE;
-  embedding_model_params.use_mlock = false;
-
-  this->m_embeddingModel.reset(llama_model_load_from_file(path.c_str(), embedding_model_params));
-
-  if (this->m_embeddingModel == nullptr)
+  catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load embedding model");
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading embedding model: {}", e.what());
+    this->m_embeddingModel.reset();
     return false;
   }
-
-  this->m_embeddingModelConfig = config;
-  this->m_embeddingModelFiles = files;
-
-  ODAI_LOG(ODAI_LOG_INFO, "successfully loaded embedding model {}", path);
-  return true;
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading embedding model");
+    this->m_embeddingModel.reset();
+    return false;
+  }
 }
 
 bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMModelConfig& config)
@@ -885,16 +1005,20 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
     return false;
   }
 
-  if ((files == this->m_llmModelFiles) && (config == this->m_llmModelConfig))
+  if (this->m_loadedLlmState.matches(files, config))
   {
     ODAI_LOG(ODAI_LOG_INFO, "Model is already loaded with same config");
     return true;
   }
 
-  std::string base_path = files.m_entries.at("base_model_path");
+  const std::string& base_path = files.m_entries.at("base_model_path");
+  std::optional<std::string> mmproj_path = std::nullopt;
+  if (files.m_entries.contains("mmproj_model_path") && !files.m_entries.at("mmproj_model_path").empty())
+  {
+    mmproj_path = files.m_entries.at("mmproj_model_path");
+  }
 
-  ODAI_LOG(ODAI_LOG_INFO, "Cleared all chat contexts and mtmd context as new model is being loaded");
-  this->m_mtmdContext.reset();
+  ODAI_LOG(ODAI_LOG_INFO, "Preparing LLM reload transaction for {}", base_path);
 
   std::error_code model_size_error;
   const uint64_t model_file_size_bytes = std::filesystem::file_size(base_path, model_size_error);
@@ -907,77 +1031,40 @@ bool OdaiLlamaEngine::load_language_model(const ModelFiles& files, const LLMMode
   const LlmLoadPlan llm_load_plan = this->plan_llm_load(model_file_size_bytes);
   ODAI_LOG(ODAI_LOG_INFO, "LLM placement plan: {}", llm_load_plan.m_reason);
 
-  llama_model_params llm_model_params = llama_model_default_params();
-  llm_model_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
-  llm_model_params.devices = nullptr;
-  llm_model_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
-  llm_model_params.split_mode = llm_load_plan.m_splitMode;
-  llm_model_params.use_mlock = llm_load_plan.m_shouldUseMlock;
-  llm_model_params.use_mmap = llm_load_plan.m_shouldUseMmap;
+  this->m_loadedLlmState.clear();
+  ODAI_LOG(ODAI_LOG_INFO, "Released previously loaded LLM state before starting reload transaction");
 
-  std::vector<ggml_backend_dev_t> selected_devices;
-  if (!llm_load_plan.m_selectedCandidateIndices.empty())
+  LoadedLanguageModelState loaded_state;
+  if (!this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan, loaded_state))
   {
-    selected_devices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
-    for (size_t candidate_index : llm_load_plan.m_selectedCandidateIndices)
+    if (!llm_load_plan.m_allowCpuRetry || (llm_load_plan.m_mode == PlacementMode::CPU_ONLY))
     {
-      if (candidate_index >= m_deviceInventory.m_candidates.size())
-      {
-        ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid candidate device index {}", candidate_index);
-        return false;
-      }
-
-      selected_devices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
-    }
-    selected_devices.push_back(nullptr);
-    llm_model_params.devices = selected_devices.data();
-  }
-
-  this->m_llmModel.reset(llama_model_load_from_file(base_path.c_str(), llm_model_params));
-
-  if (this->m_llmModel == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model");
-    return false;
-  }
-
-  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
-
-  if (this->m_llmVocab == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
-    return false;
-  }
-  if (files.m_entries.contains("mmproj_model_path"))
-  {
-    const std::string& mmproj_path = files.m_entries.at("mmproj_model_path");
-    mtmd_context_params mparams = mtmd_context_params_default();
-    mparams.use_gpu = false;
-    mparams.print_timings = false;
-
-    // For vision models requiring min/max token settings
-    mparams.image_min_tokens = 0; // default
-    mparams.image_max_tokens = 0; // default
-
-    mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_path.c_str(), this->m_llmModel.get(), mparams);
-    if (temp_ctx == nullptr)
-    {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from: {}", mmproj_path);
+      ODAI_LOG(ODAI_LOG_ERROR, "LLM reload transaction failed without a CPU retry path");
       return false;
     }
-    this->m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
-    ODAI_LOG(ODAI_LOG_INFO, "Loaded multimodal projector from {}", mmproj_path);
+
+    const LlmLoadPlan cpu_retry_plan = this->make_cpu_only_llm_plan(
+        model_file_size_bytes, std::format("Accelerated load failed, retrying {} on CPU. Original plan: {}", base_path,
+                                           llm_load_plan.m_reason));
+    ODAI_LOG(ODAI_LOG_WARN, "Accelerated LLM load failed; retrying with CPU-only plan: {}", cpu_retry_plan.m_reason);
+
+    if (!this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan, loaded_state))
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "CPU retry also failed for {}", base_path);
+      return false;
+    }
   }
 
-  this->m_llmModelConfig = config;
-  this->m_llmModelFiles = files;
+  loaded_state.m_config = config;
+  loaded_state.m_files = files;
+  this->m_loadedLlmState = std::move(loaded_state);
 
   ODAI_LOG(ODAI_LOG_INFO, "successfully loaded language model {}", base_path);
   return true;
 }
 
 OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string& input, bool is_first,
-                                                               ModelType model_type)
+                                                               ModelType model_type) const
 {
 
   const llama_vocab* vocab = nullptr;
@@ -988,7 +1075,7 @@ OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string
   }
   else if (model_type == LLM)
   {
-    vocab = this->m_llmVocab;
+    vocab = this->m_loadedLlmState.m_vocab;
   }
   else
   {
@@ -1020,9 +1107,9 @@ OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string
   return tokens;
 }
 
-OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens)
+OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_token>& tokens) const
 {
-  if (this->m_llmVocab == nullptr)
+  if (this->m_loadedLlmState.m_vocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no LLM model loaded yet, so can't detokenize");
     return unexpected_not_initialized<std::string>();
@@ -1033,7 +1120,7 @@ OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_toke
   for (llama_token token : tokens)
   {
     char buf[128];
-    int32_t n = llama_token_to_piece(this->m_llmVocab, token, buf, sizeof(buf), 0, false);
+    int32_t n = llama_token_to_piece(this->m_loadedLlmState.m_vocab, token, buf, sizeof(buf), 0, false);
 
     if (n < 0)
     {
@@ -1170,8 +1257,8 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
     bitmaps_c_ptr[i] = bitmaps[i].ptr.get();
   }
 
-  int32_t res =
-      mtmd_tokenize(this->m_mtmdContext.get(), chunks.ptr.get(), &text, bitmaps_c_ptr.data(), bitmaps_c_ptr.size());
+  int32_t res = mtmd_tokenize(this->m_loadedLlmState.m_mtmdContext.get(), chunks.ptr.get(), &text, bitmaps_c_ptr.data(),
+                              bitmaps_c_ptr.size());
   if (res != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt with mtmd, res = {}", res);
@@ -1184,8 +1271,8 @@ bool OdaiLlamaEngine::load_into_context(llama_context& model_context, const std:
   uint32_t n_batch = 512;
   llama_pos new_n_past = 0;
 
-  if (mtmd_helper_eval_chunks(this->m_mtmdContext.get(), &model_context, chunks.ptr.get(), n_past, 0, n_batch,
-                              request_logits_for_last_token, &new_n_past) != 0)
+  if (mtmd_helper_eval_chunks(this->m_loadedLlmState.m_mtmdContext.get(), &model_context, chunks.ptr.get(), n_past, 0,
+                              n_batch, request_logits_for_last_token, &new_n_past) != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to evaluate chunks using mtmd in context");
     return false;
@@ -1253,7 +1340,7 @@ OdaiLlamaEngine::generate_streaming_response_impl(llama_context& model_context, 
     }
 
     // Check if model is done
-    if (llama_vocab_is_eog(this->m_llmVocab, generated_token))
+    if (llama_vocab_is_eog(this->m_loadedLlmState.m_vocab, generated_token))
     {
       // flush left over tokens
       if (!buffered_tokens.empty())
@@ -1335,14 +1422,6 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
   if (!this->load_language_model(model_files, llm_model_config))
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to load given language model");
-    return unexpected_internal_error<StreamingStats>();
-  }
-
-  this->m_llmVocab = llama_model_get_vocab(this->m_llmModel.get());
-
-  if (this->m_llmVocab == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary");
     return unexpected_internal_error<StreamingStats>();
   }
 
@@ -1441,7 +1520,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (!cached_audio_spec.has_value())
       {
         OdaiResult<OdaiAudioTargetSpec> spec_res =
-            get_required_audio_spec(this->m_llmModelConfig, this->m_llmModelFiles);
+            get_required_audio_spec(this->m_loadedLlmState.m_config, this->m_loadedLlmState.m_files);
         if (!spec_res)
         {
           ODAI_LOG(ODAI_LOG_ERROR, "Failed to get target audio spec, error code: {}",
@@ -1478,16 +1557,16 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
 
 OdaiResult<std::string>
 OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std::string, std::string>>& messages,
-                                                bool add_generation_prompt)
+                                                bool add_generation_prompt) const
 {
-  if (this->m_llmModel == nullptr)
+  if (this->m_loadedLlmState.m_model == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet");
     return unexpected_not_initialized<std::string>();
   }
 
   // Get the chat template from the model
-  const char* tmpl = llama_model_chat_template(this->m_llmModel.get(), nullptr);
+  const char* tmpl = llama_model_chat_template(this->m_loadedLlmState.m_model.get(), nullptr);
 
   if (tmpl == nullptr)
   {
