@@ -86,8 +86,23 @@ bool is_accelerated_device_type(BackendDeviceType type)
 }
 
 constexpr int32_t N_GPU_LAYERS_ALL_POSSIBLE = -1;
-constexpr uint64_t LLM_VRAM_OVERHEAD_BUFFER = 350ULL * BYTES_PER_MB;
 constexpr uint64_t CPU_MLOCK_HEADROOM = 2ULL * BYTES_PER_GB;
+constexpr uint64_t SHARED_ACCELERATOR_SAFETY_MARGIN = 2ULL * BYTES_PER_GB;
+constexpr uint32_t FIXED_LLAMA_BATCH_SIZE = 512;
+
+llama_context_params make_base_llm_context_params(uint32_t context_window, bool offload_kqv)
+{
+  llama_context_params context_params = llama_context_default_params();
+  context_params.n_ctx = context_window;
+  context_params.n_batch = FIXED_LLAMA_BATCH_SIZE;
+  context_params.n_ubatch = FIXED_LLAMA_BATCH_SIZE;
+  context_params.n_seq_max = 1;
+  context_params.n_threads = 4;
+  context_params.n_threads_batch = 4;
+  context_params.embeddings = false;
+  context_params.offload_kqv = offload_kqv;
+  return context_params;
+}
 } // namespace
 
 /// Redirects llama.cpp log messages to the Odai logging system.
@@ -393,19 +408,38 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_cpu_only_llm_plan(uint64_t mo
   return plan;
 }
 
-OdaiResult<OdaiLlamaEngine::PreparedLlmModelParams>
-OdaiLlamaEngine::build_llm_model_params(const LlmLoadPlan& llm_load_plan) const
+OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_accelerated_llm_plan(std::vector<size_t> selected_candidate_indices,
+                                                                        PlacementMode mode, llama_split_mode split_mode,
+                                                                        std::string reason)
 {
-  PreparedLlmModelParams prepared_params;
-  prepared_params.m_params.n_gpu_layers = llm_load_plan.m_nGpuLayers;
-  prepared_params.m_params.devices = nullptr;
-  prepared_params.m_params.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
-  prepared_params.m_params.split_mode = llm_load_plan.m_splitMode;
-  prepared_params.m_params.use_mlock = llm_load_plan.m_shouldUseMlock;
-  prepared_params.m_params.use_mmap = llm_load_plan.m_shouldUseMmap;
+  LlmLoadPlan plan;
+  plan.m_mode = mode;
+  plan.m_selectedCandidateIndices = std::move(selected_candidate_indices);
+  plan.m_shouldUseMlock = false;
+  plan.m_shouldUseMmap = true;
+  plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
+  plan.m_splitMode = split_mode;
+  plan.m_allowCpuRetry = true;
+  plan.m_reason = std::move(reason);
+  return plan;
+}
+
+OdaiResult<OdaiLlamaEngine::PreparedLlmRuntimeParams>
+OdaiLlamaEngine::prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan, const LLMModelConfig& config,
+                                            bool offload_kqv) const
+{
+  PreparedLlmRuntimeParams prepared_params;
+  prepared_params.m_modelParams.n_gpu_layers = llm_load_plan.m_nGpuLayers;
+  prepared_params.m_modelParams.devices = nullptr;
+  prepared_params.m_modelParams.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
+  prepared_params.m_modelParams.split_mode = llm_load_plan.m_splitMode;
+  prepared_params.m_modelParams.use_mlock = llm_load_plan.m_shouldUseMlock;
+  prepared_params.m_modelParams.use_mmap = llm_load_plan.m_shouldUseMmap;
+  prepared_params.m_contextParams = make_base_llm_context_params(config.m_contextWindow, offload_kqv);
 
   if (llm_load_plan.m_selectedCandidateIndices.empty())
   {
+    prepared_params.bind_buffers();
     return prepared_params;
   }
 
@@ -422,28 +456,182 @@ OdaiLlamaEngine::build_llm_model_params(const LlmLoadPlan& llm_load_plan) const
   }
 
   prepared_params.m_selectedDevices.push_back(nullptr);
-  prepared_params.m_params.devices = prepared_params.m_selectedDevices.data();
+  OdaiResult<std::vector<size_t>> margins_res = build_llm_fit_margins(llm_load_plan);
+  if (!margins_res)
+  {
+    return tl::unexpected(margins_res.error());
+  }
+  prepared_params.m_fitBuffers.m_margins = std::move(margins_res.value());
+
+  prepared_params.m_fitBuffers.m_tensorSplit.resize(llama_max_devices(), 0.0F);
+  prepared_params.m_fitBuffers.m_tensorBuftOverrides.resize(llama_max_tensor_buft_overrides(), {nullptr, nullptr});
+  prepared_params.bind_buffers();
   return prepared_params;
 }
 
-OdaiResult<OdaiLlamaEngine::LoadedLanguageModelState>
-OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_path,
-                                                  const std::optional<std::string>& mmproj_model_path,
-                                                  const LlmLoadPlan& llm_load_plan) const
+OdaiResult<OdaiLlamaEngine::PlannedLlmLoad> OdaiLlamaEngine::finalize_llm_plan(const LlmLoadPlan& policy,
+                                                                               const LLMModelConfig& config,
+                                                                               bool offload_kqv,
+                                                                               std::string_view reason_suffix) const
+{
+  OdaiResult<PreparedLlmRuntimeParams> runtime_params_res = prepare_llm_runtime_params(policy, config, offload_kqv);
+  if (!runtime_params_res)
+  {
+    return tl::unexpected(runtime_params_res.error());
+  }
+
+  PlannedLlmLoad planned_load;
+  planned_load.m_policy = policy;
+  planned_load.m_runtimeParams = std::move(runtime_params_res.value());
+  if (!reason_suffix.empty())
+  {
+    planned_load.m_policy.m_reason += std::format(" {}", reason_suffix);
+  }
+
+  return planned_load;
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+OdaiResult<bool> OdaiLlamaEngine::fit_llm_runtime_params_for_plan(const std::string& base_model_path,
+                                                                  const LLMModelConfig& config,
+                                                                  PreparedLlmRuntimeParams& runtime_params) const
+{
+  runtime_params.bind_buffers();
+
+  if (runtime_params.m_modelParams.devices == nullptr)
+  {
+    return true;
+  }
+
+  if (runtime_params.m_fitBuffers.m_margins.empty())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Accelerated LLM planning is missing per-device fit margins");
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  const llama_params_fit_status fit_status = llama_params_fit(
+      base_model_path.c_str(), &runtime_params.m_modelParams, &runtime_params.m_contextParams,
+      runtime_params.m_fitBuffers.m_tensorSplit.data(), runtime_params.m_fitBuffers.m_tensorBuftOverrides.data(),
+      runtime_params.m_fitBuffers.m_margins.data(), config.m_contextWindow, GGML_LOG_LEVEL_INFO);
+
+  if (fit_status == LLAMA_PARAMS_FIT_STATUS_ERROR)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "llama_params_fit() failed for {}", base_model_path);
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  if (fit_status == LLAMA_PARAMS_FIT_STATUS_FAILURE)
+  {
+    ODAI_LOG(ODAI_LOG_WARN, "llama_params_fit() could not find an accelerated placement for context window {}",
+             config.m_contextWindow);
+    return false;
+  }
+
+  if (runtime_params.m_contextParams.n_ctx != config.m_contextWindow)
+  {
+    ODAI_LOG(ODAI_LOG_WARN,
+             "Rejecting accelerated llama.cpp fit because it changed requested context window from {} to {}",
+             config.m_contextWindow, runtime_params.m_contextParams.n_ctx);
+    return false;
+  }
+
+  return true;
+}
+
+OdaiResult<std::vector<size_t>> OdaiLlamaEngine::build_llm_fit_margins(const LlmLoadPlan& llm_load_plan) const
+{
+  std::vector<size_t> margins(llm_load_plan.m_selectedCandidateIndices.size(), 0);
+  if (llm_load_plan.m_selectedCandidateIndices.empty())
+  {
+    return margins;
+  }
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+  if (llm_load_plan.m_selectedCandidateIndices.size() != 1)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unified-memory accelerated LLM planning expected exactly one selected device");
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  margins[0] = SHARED_ACCELERATOR_SAFETY_MARGIN;
+  return margins;
+#else
+  if (llm_load_plan.m_selectedCandidateIndices.size() == 1)
+  {
+    const size_t candidate_index = llm_load_plan.m_selectedCandidateIndices.front();
+    if (candidate_index >= m_deviceInventory.m_candidates.size())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid candidate device index {}", candidate_index);
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    }
+
+    if (m_deviceInventory.m_candidates[candidate_index].m_info.m_type == BackendDeviceType::IGPU)
+    {
+      margins[0] = SHARED_ACCELERATOR_SAFETY_MARGIN;
+    }
+  }
+
+  return margins;
+#endif
+}
+
+OdaiResult<OdaiLlamaEngine::PlannedLlmLoad>
+OdaiLlamaEngine::finalize_accelerated_llm_plan(const std::string& base_model_path, const LlmLoadPlan& policy,
+                                               const LLMModelConfig& config) const
+{
+  OdaiResult<PlannedLlmLoad> default_plan_res = finalize_llm_plan(policy, config, true);
+  if (!default_plan_res)
+  {
+    return tl::unexpected(default_plan_res.error());
+  }
+
+  OdaiResult<bool> default_fit_res =
+      fit_llm_runtime_params_for_plan(base_model_path, config, default_plan_res->m_runtimeParams);
+  if (!default_fit_res)
+  {
+    return tl::unexpected(default_fit_res.error());
+  }
+  if (default_fit_res.value())
+  {
+    return default_plan_res;
+  }
+
+  OdaiResult<PlannedLlmLoad> no_kqv_plan_res =
+      finalize_llm_plan(policy, config, false,
+                        "Planner disabled `offload_kqv` because default accelerated fit could not preserve the "
+                        "requested context window.");
+  if (!no_kqv_plan_res)
+  {
+    return tl::unexpected(no_kqv_plan_res.error());
+  }
+
+  OdaiResult<bool> no_kqv_fit_res =
+      fit_llm_runtime_params_for_plan(base_model_path, config, no_kqv_plan_res->m_runtimeParams);
+  if (!no_kqv_fit_res)
+  {
+    return tl::unexpected(no_kqv_fit_res.error());
+  }
+  if (no_kqv_fit_res.value())
+  {
+    return no_kqv_plan_res;
+  }
+
+  return tl::make_unexpected(OdaiResultEnum::VALIDATION_FAILED);
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+OdaiResult<OdaiLlamaEngine::LoadedLanguageModelState> OdaiLlamaEngine::try_load_language_model_for_plan(
+    const std::string& base_model_path, const std::optional<std::string>& mmproj_model_path,
+    const PlannedLlmLoad& llm_load_plan, const LLMModelConfig& config) const
 {
   try
   {
-    OdaiResult<PreparedLlmModelParams> prepared_params_res = build_llm_model_params(llm_load_plan);
-    if (!prepared_params_res)
-    {
-      return tl::unexpected(prepared_params_res.error());
-    }
-
     LoadedLanguageModelState loaded_state;
-    loaded_state.m_model.reset(llama_model_load_from_file(base_model_path.c_str(), prepared_params_res->m_params));
+    loaded_state.m_model.reset(
+        llama_model_load_from_file(base_model_path.c_str(), llm_load_plan.m_runtimeParams.m_modelParams));
     if (loaded_state.m_model == nullptr)
     {
-      ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model with plan: {}", llm_load_plan.m_reason);
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to load language model with plan: {}", llm_load_plan.m_policy.m_reason);
       return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
 
@@ -453,6 +641,25 @@ OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load vocabulary from language model");
       return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
     }
+
+    loaded_state.m_reusableContext.reset(
+        llama_init_from_model(loaded_state.m_model.get(), llm_load_plan.m_runtimeParams.m_contextParams));
+    if (loaded_state.m_reusableContext == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to preallocate reusable llama context with requested window {}",
+               config.m_contextWindow);
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    }
+
+    const uint32_t actual_context_window = llama_n_ctx(loaded_state.m_reusableContext.get());
+    if (actual_context_window != config.m_contextWindow)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "preallocated reusable llama context window {} does not match requested window {}",
+               actual_context_window, config.m_contextWindow);
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    }
+
+    ODAI_LOG(ODAI_LOG_INFO, "Preallocated reusable llama context with requested window {}", config.m_contextWindow);
 
     if (mmproj_model_path.has_value())
     {
@@ -477,23 +684,23 @@ OdaiLlamaEngine::try_load_language_model_for_plan(const std::string& base_model_
   }
   catch (const std::exception& e)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading language model with plan '{}': {}", llm_load_plan.m_reason,
-             e.what());
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading language model with plan '{}': {}",
+             llm_load_plan.m_policy.m_reason, e.what());
     return unexpected_internal_error<LoadedLanguageModelState>();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading language model with plan '{}'",
-             llm_load_plan.m_reason);
+             llm_load_plan.m_policy.m_reason);
     return unexpected_internal_error<LoadedLanguageModelState>();
   }
 }
 
-OdaiLlamaEngine::GpuSelectionResult OdaiLlamaEngine::select_minimum_gpu_subset(uint64_t estimated_model_bytes) const
+std::vector<size_t> OdaiLlamaEngine::rank_dgpu_candidates_by_free_memory() const
 {
-  GpuSelectionResult selection;
-  std::vector<size_t> all_dgpu_indices;
+  std::vector<size_t> ranked_indices;
   std::vector<std::pair<size_t, uint64_t>> dgpu_free_memory;
+  std::vector<size_t> dgpus_without_telemetry;
 
   for (size_t idx = 0; idx < m_deviceInventory.m_candidates.size(); ++idx)
   {
@@ -503,56 +710,76 @@ OdaiLlamaEngine::GpuSelectionResult OdaiLlamaEngine::select_minimum_gpu_subset(u
       continue;
     }
 
-    all_dgpu_indices.push_back(idx);
-
     const std::optional<uint64_t> free_mem = get_device_free_memory_bytes(record.m_handle);
     if (free_mem.has_value())
     {
       dgpu_free_memory.emplace_back(idx, free_mem.value());
     }
-  }
-
-  if (all_dgpu_indices.empty())
-  {
-    return selection;
-  }
-
-  if (dgpu_free_memory.empty())
-  {
-    selection.m_candidateIndices = std::move(all_dgpu_indices);
-    return selection;
+    else
+    {
+      dgpus_without_telemetry.push_back(idx);
+    }
   }
 
   std::sort(dgpu_free_memory.begin(), dgpu_free_memory.end(),
             [](const auto& lhs, const auto& rhs) { return lhs.second > rhs.second; });
 
-  std::vector<size_t> selected_indices;
-  uint64_t accumulated_free_vram = 0;
   for (const auto& [candidate_index, free_vram] : dgpu_free_memory)
   {
-    selected_indices.push_back(candidate_index);
-    accumulated_free_vram += free_vram;
-    if (accumulated_free_vram >= estimated_model_bytes)
-    {
-      selection.m_hasFullFit = true;
-      break;
-    }
+    (void)free_vram;
+    ranked_indices.push_back(candidate_index);
   }
 
-  selection.m_candidateIndices = selection.m_hasFullFit ? std::move(selected_indices) : std::move(all_dgpu_indices);
-  return selection;
+  ranked_indices.insert(ranked_indices.end(), dgpus_without_telemetry.begin(), dgpus_without_telemetry.end());
+  return ranked_indices;
 }
 
-OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_size_bytes) const
+OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_shared_memory_accelerator_load(size_t candidate_index,
+                                                                                  uint64_t model_file_size_bytes,
+                                                                                  uint64_t safety_margin_bytes,
+                                                                                  std::string_view policy_label) const
 {
-  const uint64_t estimated_model_bytes = model_file_size_bytes + LLM_VRAM_OVERHEAD_BUFFER;
+  const CandidateDeviceRecord& record = m_deviceInventory.m_candidates[candidate_index];
+  const std::optional<uint64_t> free_memory = get_device_free_memory_bytes(record.m_handle);
 
+  LlmLoadPlan plan;
+
+  if (!free_memory.has_value())
+  {
+    return make_cpu_only_llm_plan(
+        model_file_size_bytes,
+        std::format("{} left accelerator '{}' on CPU because no fresh free-memory reading was available.", policy_label,
+                    record.m_info.m_name));
+  }
+
+  if (free_memory.value() > safety_margin_bytes)
+  {
+    return make_accelerated_llm_plan(
+        {candidate_index}, PlacementMode::ACCELERATED_FULL, LLAMA_SPLIT_MODE_NONE,
+        std::format("{} selected accelerator '{}' for reserve-aware fit validation with {} MB free and a "
+                    "{} MB shared-memory reserve.",
+                    policy_label, record.m_info.m_name, free_memory.value() / BYTES_PER_MB,
+                    safety_margin_bytes / BYTES_PER_MB));
+  }
+
+  return make_cpu_only_llm_plan(model_file_size_bytes,
+                                std::format("{} left accelerator '{}' on CPU because only {} MB free remained after "
+                                            "applying the {} MB reserve.",
+                                            policy_label, record.m_info.m_name, free_memory.value() / BYTES_PER_MB,
+                                            safety_margin_bytes / BYTES_PER_MB));
+}
+
+OdaiResult<OdaiLlamaEngine::PlannedLlmLoad> OdaiLlamaEngine::plan_llm_load(const std::string& base_model_path,
+                                                                           uint64_t model_file_size_bytes,
+                                                                           const LLMModelConfig& config) const
+{
   // `AUTO` does not need its own branch here. Device discovery already resolved the user's
   // preference into candidate inventory, so planning only needs to inspect that inventory and
   // apply the platform-specific placement rules below.
   if (m_deviceInventory.m_requestedType == BackendDeviceType::CPU)
   {
-    return make_cpu_only_llm_plan(model_file_size_bytes, "CPU-only mode was explicitly requested.");
+    return finalize_llm_plan(make_cpu_only_llm_plan(model_file_size_bytes, "CPU-only mode was explicitly requested."),
+                             config, false);
   }
 
   std::optional<size_t> first_accelerator_index = std::nullopt;
@@ -569,55 +796,70 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_
   {
     // This is the soft-fallback path for inventories that ended up CPU-only after discovery.
     // We materialize that fallback explicitly instead of relying on llama.cpp defaults.
-    return make_cpu_only_llm_plan(model_file_size_bytes,
-                                  "No accelerator candidate was discovered, so the model will load on CPU.");
+    return finalize_llm_plan(make_cpu_only_llm_plan(model_file_size_bytes,
+                                                    "No accelerator candidate was discovered, so the model will load "
+                                                    "on CPU."),
+                             config, false);
   }
 
 #if defined(__APPLE__) || defined(__ANDROID__)
-  // Phase 3 treats Apple and Android as single-accelerator / unified-memory targets:
-  // once an accelerator is present, prefer full offload on that device.
-  const CandidateDeviceRecord& record = m_deviceInventory.m_candidates[first_accelerator_index.value()];
-
-  LlmLoadPlan plan;
-  plan.m_mode = PlacementMode::ACCELERATED_FULL;
-  plan.m_selectedCandidateIndices = {first_accelerator_index.value()};
-  plan.m_shouldUseMlock = false;
-  plan.m_shouldUseMmap = true;
-  plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
-  plan.m_splitMode = LLAMA_SPLIT_MODE_NONE;
-  plan.m_allowCpuRetry = true;
-  plan.m_reason =
-      std::format("Unified-memory platform selected accelerator '{}' for full offload.", record.m_info.m_name);
-  return plan;
-#else
-  // Desktop policy intentionally differs by device class:
-  // dGPU allows best-effort partial offload, while iGPU requires a conservative full-fit gate.
-  const GpuSelectionResult gpu_selection = select_minimum_gpu_subset(estimated_model_bytes);
-  if (!gpu_selection.m_candidateIndices.empty())
+  const LlmLoadPlan accelerated_policy =
+      plan_shared_memory_accelerator_load(first_accelerator_index.value(), model_file_size_bytes,
+                                          SHARED_ACCELERATOR_SAFETY_MARGIN, "Unified-memory planner");
+  if (accelerated_policy.m_mode == PlacementMode::CPU_ONLY)
   {
-    LlmLoadPlan plan;
-    plan.m_mode = gpu_selection.m_hasFullFit ? PlacementMode::ACCELERATED_FULL : PlacementMode::ACCELERATED_PARTIAL;
-    plan.m_selectedCandidateIndices = gpu_selection.m_candidateIndices;
-    plan.m_shouldUseMlock = false;
-    plan.m_shouldUseMmap = true;
-    plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
-    plan.m_splitMode = gpu_selection.m_candidateIndices.size() > 1 ? LLAMA_SPLIT_MODE_LAYER : LLAMA_SPLIT_MODE_NONE;
-    plan.m_allowCpuRetry = true;
+    return finalize_llm_plan(accelerated_policy, config, false);
+  }
 
-    if (gpu_selection.m_hasFullFit)
+  OdaiResult<PlannedLlmLoad> accelerated_plan_res =
+      finalize_accelerated_llm_plan(base_model_path, accelerated_policy, config);
+  if (accelerated_plan_res)
+  {
+    return accelerated_plan_res;
+  }
+
+  return finalize_llm_plan(
+      make_cpu_only_llm_plan(model_file_size_bytes,
+                             std::format("Unified-memory planner rejected accelerated placement for requested context "
+                                         "window {} and will use CPU instead. Original plan: {}",
+                                         config.m_contextWindow, accelerated_policy.m_reason)),
+      config, false);
+#else
+  // Desktop dGPU now tries progressively larger subsets in fresh free-VRAM order and lets llama.cpp fit
+  // decide whether the requested context can be preserved on each subset.
+  const std::vector<size_t> ranked_dgpu_indices = rank_dgpu_candidates_by_free_memory();
+  if (!ranked_dgpu_indices.empty())
+  {
+    for (size_t subset_size = ranked_dgpu_indices.size(); subset_size > 0; --subset_size)
     {
-      plan.m_reason = std::format("Desktop dGPU planner selected a minimum fitting subset of {} device(s) for an "
-                                  "estimated {} MB model footprint.",
-                                  gpu_selection.m_candidateIndices.size(), estimated_model_bytes / BYTES_PER_MB);
-    }
-    else
-    {
-      plan.m_reason = std::format("Desktop dGPU planner could not prove a full fit for the estimated {} MB model "
-                                  "footprint, so it selected all discovered dGPUs for best-effort partial offload.",
-                                  estimated_model_bytes / BYTES_PER_MB);
+      LlmLoadPlan plan = make_accelerated_llm_plan(
+          std::vector<size_t>(ranked_dgpu_indices.begin(), ranked_dgpu_indices.begin() + subset_size),
+          subset_size == ranked_dgpu_indices.size() ? PlacementMode::ACCELERATED_FULL
+                                                    : PlacementMode::ACCELERATED_PARTIAL,
+          subset_size > 1 ? LLAMA_SPLIT_MODE_LAYER : LLAMA_SPLIT_MODE_NONE,
+          std::format("Desktop dGPU planner is trying the top {} ranked device(s) in fresh free-VRAM order while "
+                      "preserving requested context window {}.",
+                      subset_size, config.m_contextWindow));
+
+      OdaiResult<PlannedLlmLoad> accelerated_plan_res = finalize_accelerated_llm_plan(base_model_path, plan, config);
+      if (accelerated_plan_res)
+      {
+        return accelerated_plan_res;
+      }
+
+      if (subset_size < ranked_dgpu_indices.size())
+      {
+        // Once shrinking has already started, a later smaller prefix is not expected to recover fit.
+        break;
+      }
     }
 
-    return plan;
+    return finalize_llm_plan(
+        make_cpu_only_llm_plan(model_file_size_bytes,
+                               std::format("Desktop dGPU planner could not preserve requested context window {} on any "
+                                           "ranked GPU subset and will use CPU instead.",
+                                           config.m_contextWindow)),
+        config, false);
   }
 
   for (size_t idx = 0; idx < m_deviceInventory.m_candidates.size(); ++idx)
@@ -628,39 +870,32 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::plan_llm_load(uint64_t model_file_
       continue;
     }
 
-    const std::optional<uint64_t> free_memory = get_device_free_memory_bytes(record.m_handle);
-    if (!free_memory.has_value())
+    const LlmLoadPlan accelerated_policy = plan_shared_memory_accelerator_load(
+        idx, model_file_size_bytes, SHARED_ACCELERATOR_SAFETY_MARGIN, "Desktop iGPU planner");
+    if (accelerated_policy.m_mode == PlacementMode::CPU_ONLY)
     {
-      return make_cpu_only_llm_plan(
-          model_file_size_bytes,
-          std::format("Desktop iGPU '{}' reported no free-memory reading, so ODAI will not risk accelerated load.",
-                      record.m_info.m_name));
+      return finalize_llm_plan(accelerated_policy, config, false);
     }
 
-    if (free_memory.value() < estimated_model_bytes)
+    OdaiResult<PlannedLlmLoad> accelerated_plan_res =
+        finalize_accelerated_llm_plan(base_model_path, accelerated_policy, config);
+    if (accelerated_plan_res)
     {
-      return make_cpu_only_llm_plan(
-          model_file_size_bytes,
-          std::format("Desktop iGPU '{}' has {} MB free but the model estimate is {} MB, so ODAI will use CPU instead.",
-                      record.m_info.m_name, free_memory.value() / BYTES_PER_MB, estimated_model_bytes / BYTES_PER_MB));
+      return accelerated_plan_res;
     }
 
-    LlmLoadPlan plan;
-    plan.m_mode = PlacementMode::ACCELERATED_FULL;
-    plan.m_selectedCandidateIndices = {idx};
-    plan.m_shouldUseMlock = false;
-    plan.m_shouldUseMmap = true;
-    plan.m_nGpuLayers = N_GPU_LAYERS_ALL_POSSIBLE;
-    plan.m_splitMode = LLAMA_SPLIT_MODE_NONE;
-    plan.m_allowCpuRetry = true;
-    plan.m_reason = std::format(
-        "Desktop iGPU '{}' passed the full-fit gate with {} MB free for an estimated {} MB model footprint.",
-        record.m_info.m_name, free_memory.value() / BYTES_PER_MB, estimated_model_bytes / BYTES_PER_MB);
-    return plan;
+    return finalize_llm_plan(
+        make_cpu_only_llm_plan(model_file_size_bytes,
+                               std::format("Desktop iGPU planner rejected accelerated placement for requested context "
+                                           "window {} and will use CPU instead. Original plan: {}",
+                                           config.m_contextWindow, accelerated_policy.m_reason)),
+        config, false);
   }
 
-  return make_cpu_only_llm_plan(model_file_size_bytes,
-                                "No desktop dGPU or iGPU candidate was available for accelerated placement.");
+  return finalize_llm_plan(
+      make_cpu_only_llm_plan(model_file_size_bytes,
+                             "No desktop dGPU or iGPU candidate was available for accelerated placement."),
+      config, false);
 #endif
 }
 
@@ -762,24 +997,68 @@ OdaiResult<void> OdaiLlamaEngine::does_model_support_input_data(const std::vecto
   return {};
 }
 
+OdaiResult<void> OdaiLlamaEngine::clear_llm_context(llama_context& context)
+{
+  llama_memory_t memory = llama_get_memory(&context);
+  if (memory == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to get llama context memory");
+    return unexpected_internal_error<void>();
+  }
+
+  llama_memory_clear(memory, true);
+  return {};
+}
+
+OdaiResult<std::reference_wrapper<llama_context>>
+OdaiLlamaEngine::prepare_reusable_llm_context_for_request(const std::vector<ChatMessage>* chat_history)
+{
+  if (this->m_loadedLlmState.m_reusableContext == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "No reusable llama context is available because no LLM is loaded");
+    return unexpected_not_initialized<std::reference_wrapper<llama_context>>();
+  }
+
+  llama_context& reusable_context = *this->m_loadedLlmState.m_reusableContext;
+
+  OdaiResult<void> clear_context_res = OdaiLlamaEngine::clear_llm_context(reusable_context);
+  if (!clear_context_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to clear reusable llama context, error code: {}",
+             static_cast<std::uint32_t>(clear_context_res.error()));
+    return tl::unexpected(clear_context_res.error());
+  }
+
+  if (chat_history != nullptr && !chat_history->empty())
+  {
+    OdaiResult<void> chat_context_res = this->load_chat_messages_into_context(reusable_context, *chat_history);
+    if (!chat_context_res)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into reusable llama context, error code: {}",
+               static_cast<std::uint32_t>(chat_context_res.error()));
+      return tl::unexpected(chat_context_res.error());
+    }
+  }
+
+  return reusable_context;
+}
+
 std::unique_ptr<llama_context, LlamaContextDeleter> OdaiLlamaEngine::get_new_llama_context(ModelType model_type)
 {
   std::unique_ptr<llama_context, LlamaContextDeleter> context = nullptr;
   llama_context_params context_params = llama_context_default_params();
   llama_model* model = nullptr;
 
-  context_params.n_threads = 4;
-
   if (model_type == ModelType::LLM)
   {
     model = this->m_loadedLlmState.m_model.get();
-    context_params.n_ctx = 2048;
-    context_params.embeddings = false;
+    context_params = make_base_llm_context_params(this->m_loadedLlmState.m_config.m_contextWindow, false);
   }
   else if (model_type == ModelType::EMBEDDING)
   {
     model = this->m_embeddingModel.get();
-    context_params.n_ctx = 512;
+    context_params.n_ctx = DEFAULT_EMBEDDING_CONTEXT_WINDOW;
+    context_params.n_threads = 4;
     context_params.embeddings = true;
   }
   else
@@ -1025,28 +1304,49 @@ OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, c
     return unexpected_internal_error<void>();
   }
 
-  const LlmLoadPlan llm_load_plan = this->plan_llm_load(model_file_size_bytes);
-  ODAI_LOG(ODAI_LOG_INFO, "LLM placement plan: {}", llm_load_plan.m_reason);
+  OdaiResult<PlannedLlmLoad> llm_load_plan_res = this->plan_llm_load(base_path, model_file_size_bytes, config);
+  if (!llm_load_plan_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to prepare LLM placement plan for {}", base_path);
+    return tl::unexpected(llm_load_plan_res.error());
+  }
+  PlannedLlmLoad llm_load_plan = std::move(llm_load_plan_res.value());
+  ODAI_LOG(ODAI_LOG_INFO, "LLM placement plan: {}", llm_load_plan.m_policy.m_reason);
 
   this->m_loadedLlmState.clear();
   ODAI_LOG(ODAI_LOG_INFO, "Released previously loaded LLM state before starting reload transaction");
 
   OdaiResult<LoadedLanguageModelState> loaded_state_res =
-      this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan);
+      this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan, config);
   if (!loaded_state_res)
   {
-    if (!llm_load_plan.m_allowCpuRetry || (llm_load_plan.m_mode == PlacementMode::CPU_ONLY))
+    if (!llm_load_plan.m_policy.m_allowCpuRetry || (llm_load_plan.m_policy.m_mode == PlacementMode::CPU_ONLY))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "LLM reload transaction failed without a CPU retry path");
       return tl::unexpected(loaded_state_res.error());
     }
 
-    const LlmLoadPlan cpu_retry_plan = this->make_cpu_only_llm_plan(
+    const LlmLoadPlan cpu_retry_policy = this->make_cpu_only_llm_plan(
         model_file_size_bytes, std::format("Accelerated load failed, retrying {} on CPU. Original plan: {}", base_path,
-                                           llm_load_plan.m_reason));
-    ODAI_LOG(ODAI_LOG_WARN, "Accelerated LLM load failed; retrying with CPU-only plan: {}", cpu_retry_plan.m_reason);
+                                           llm_load_plan.m_policy.m_reason));
+    OdaiResult<PreparedLlmRuntimeParams> cpu_retry_runtime_params_res =
+        this->prepare_llm_runtime_params(cpu_retry_policy, config, false);
+    if (!cpu_retry_runtime_params_res)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Failed to prepare CPU retry runtime params for {}", base_path);
+      return tl::unexpected(cpu_retry_runtime_params_res.error());
+    }
 
-    loaded_state_res = this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan);
+    PlannedLlmLoad cpu_retry_plan;
+    cpu_retry_plan.m_policy = cpu_retry_policy;
+    cpu_retry_plan.m_runtimeParams = std::move(cpu_retry_runtime_params_res.value());
+
+    ODAI_LOG(ODAI_LOG_WARN, "Accelerated LLM load failed; retrying with CPU-only plan: {}",
+             cpu_retry_plan.m_policy.m_reason);
+    this->m_loadedLlmState.clear();
+    ODAI_LOG(ODAI_LOG_INFO, "Confirmed LLM state is clear before CPU-only retry");
+
+    loaded_state_res = this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan, config);
     if (!loaded_state_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "CPU retry also failed for {}", base_path);
@@ -1425,13 +1725,15 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
     return tl::unexpected(load_model_res.error());
   }
 
-  std::unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
-
-  if (llm_llama_context == nullptr)
+  OdaiResult<std::reference_wrapper<llama_context>> prepared_context_res =
+      this->prepare_reusable_llm_context_for_request();
+  if (!prepared_context_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create context");
-    return unexpected_internal_error<StreamingStats>();
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to prepare reusable llama context for prompt request, error code: {}",
+             static_cast<std::uint32_t>(prepared_context_res.error()));
+    return tl::unexpected(prepared_context_res.error());
   }
+  llama_context& llm_llama_context = prepared_context_res->get();
 
   std::unique_ptr<llama_sampler, LlamaSamplerDeleter> llm_llama_sampler =
       OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
@@ -1453,7 +1755,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
   std::string text_prompt = process_result->first;
   std::vector<mtmd::bitmap> bitmaps = std::move(process_result->second);
 
-  return generate_streaming_response_impl(*llm_llama_context, *llm_llama_sampler, text_prompt, bitmaps, callback,
+  return generate_streaming_response_impl(llm_llama_context, *llm_llama_sampler, text_prompt, bitmaps, callback,
                                           user_data);
 }
 
@@ -1622,22 +1924,13 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   return std::string(formatted_buffer.data());
 }
 
-OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>>
-OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>& messages)
+OdaiResult<void> OdaiLlamaEngine::load_chat_messages_into_context(llama_context& context,
+                                                                  const std::vector<ChatMessage>& messages)
 {
-
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
-    return unexpected_not_initialized<std::unique_ptr<llama_context, LlamaContextDeleter>>();
-  }
-
-  std::unique_ptr<llama_context, LlamaContextDeleter> llm_llama_context = this->get_new_llama_context(ModelType::LLM);
-
-  if (llm_llama_context == nullptr)
-  {
-    ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create context");
-    return unexpected_internal_error<std::unique_ptr<llama_context, LlamaContextDeleter>>();
+    return unexpected_not_initialized<void>();
   }
 
   std::vector<mtmd::bitmap> bitmaps;
@@ -1674,7 +1967,7 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   const std::string& formatted_prompt = formatted_prompt_res.value();
 
   // Load the formatted prompt into the context to build KV cache
-  OdaiResult<uint32_t> load_prompt_res = this->load_into_context(*llm_llama_context, formatted_prompt, bitmaps, false);
+  OdaiResult<uint32_t> load_prompt_res = this->load_into_context(context, formatted_prompt, bitmaps, false);
   if (!load_prompt_res)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to load formatted prompt into context");
@@ -1682,7 +1975,7 @@ OdaiLlamaEngine::load_chat_messages_into_context(const std::vector<ChatMessage>&
   }
 
   ODAI_LOG(ODAI_LOG_INFO, "Successfully loaded chat context");
-  return std::move(llm_llama_context);
+  return {};
 }
 
 OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
@@ -1732,15 +2025,15 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
     return tl::unexpected(load_model_res.error());
   }
 
-  OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>> chat_context_res =
-      this->load_chat_messages_into_context(chat_history);
-  if (!chat_context_res)
+  OdaiResult<std::reference_wrapper<llama_context>> prepared_context_res =
+      this->prepare_reusable_llm_context_for_request(&chat_history);
+  if (!prepared_context_res)
   {
-    ODAI_LOG(ODAI_LOG_ERROR, "Failed to load chat history into cache, error code: {}",
-             static_cast<std::uint32_t>(chat_context_res.error()));
-    return tl::unexpected(chat_context_res.error());
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to prepare reusable llama context for chat request, error code: {}",
+             static_cast<std::uint32_t>(prepared_context_res.error()));
+    return tl::unexpected(prepared_context_res.error());
   }
-  std::unique_ptr<llama_context, LlamaContextDeleter> chat_context = std::move(chat_context_res.value());
+  llama_context& chat_context = prepared_context_res->get();
 
   std::unique_ptr<llama_sampler, LlamaSamplerDeleter> sampler =
       OdaiLlamaEngine::get_new_llm_llama_sampler(sampler_config);
@@ -1773,8 +2066,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
   std::string formatted_prompt = formatted_prompt_res.value();
 
   // Use the cached context and sampler to generate streaming response
-  return this->generate_streaming_response_impl(*chat_context, *sampler, formatted_prompt, bitmaps, callback,
-                                                user_data);
+  return this->generate_streaming_response_impl(chat_context, *sampler, formatted_prompt, bitmaps, callback, user_data);
 }
 
 OdaiLlamaEngine::~OdaiLlamaEngine()

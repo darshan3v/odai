@@ -24,13 +24,14 @@ Media items in prompts must be `FILE_PATH` type; text must be `MEMORY_BUFFER` ty
 
 - **`BackendEngineConfig`** — Engine type + preferred device type
 - **`ModelFiles`** — Model type, engine type, and a `string→string` entries map for file paths
-- **`LLMModelConfig`** — Model name (used for caching/lookup)
+- **`LLMModelConfig`** — Model name plus requested context window (used for cache identity, placement validation, and load admission)
 - **`SamplerConfig`** — `maxTokens`, `topP`, `topK`
 
 ## Design Notes
 
 - Methods are intentionally **not `const`** — implementations may cache loaded models, maintain KV caches, or lazy-load backends.
 - The engine manages its own model lifecycle (loading, unloading, caching between calls).
+- Backends may define "loaded" state as more than just loaded weights. The current llama.cpp backend also preallocates one reusable generation context during load so request-time failures happen at the reload boundary instead of the first generation call.
 - The engine is responsible for its own media decoding — it internally creates and uses `IOdaiAudioDecoder` / `IOdaiImageDecoder` instances to process multimodal inputs before feeding them to the inference runtime.
 
 ## Current Implementation

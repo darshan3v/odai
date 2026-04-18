@@ -224,11 +224,13 @@ struct LLMModelConfig
   /// Name of the language model to use (must be registered via
   /// odai_register_model_files).
   ModelName m_modelName;
+  /// Requested LLM context window size in tokens.
+  uint32_t m_contextWindow = DEFAULT_LLM_CONTEXT_WINDOW;
 
   // This single line generates both == and !=
   bool operator==(const LLMModelConfig&) const = default;
 
-  bool is_sane() const { return !m_modelName.empty(); }
+  bool is_sane() const { return !m_modelName.empty() && (m_contextWindow > 0); }
 };
 
 /// Configuration for Fixed Size Chunking Strategy

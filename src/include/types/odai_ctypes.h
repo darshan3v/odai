@@ -155,6 +155,8 @@ struct c_LlmModelConfig
 {
   /// Name of the language model (must be registered).
   c_ModelName m_modelName;
+  /// Requested LLM context window size in tokens.
+  uint32_t m_contextWindow;
 };
 
 /// C-style configuration for Fixed Size Chunking Strategy

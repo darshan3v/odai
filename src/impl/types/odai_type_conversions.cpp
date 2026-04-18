@@ -115,7 +115,7 @@ EmbeddingModelConfig to_cpp(const c_EmbeddingModelConfig& c)
 
 LLMModelConfig to_cpp(const c_LlmModelConfig& c)
 {
-  return {std::string(c.m_modelName)};
+  return {std::string(c.m_modelName), c.m_contextWindow};
 }
 
 ChunkingConfig to_cpp(const c_ChunkingConfig& c)

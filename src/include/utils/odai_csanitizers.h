@@ -90,7 +90,7 @@ inline bool is_sane(const c_EmbeddingModelConfig* config)
 /// false otherwise
 inline bool is_sane(const c_LlmModelConfig* config)
 {
-  return config != nullptr && config->m_modelName != nullptr;
+  return config != nullptr && config->m_modelName != nullptr && config->m_contextWindow > 0;
 }
 
 /// Validates that a chunking configuration is sane and usable.

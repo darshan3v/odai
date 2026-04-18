@@ -33,42 +33,79 @@ Notes:
 
 ## LLM Placement Planning
 
-Base LLM loading now runs through an internal `LlmLoadPlan` before calling `llama_model_load_from_file()`. The planner keeps placement policy separate from load execution and records the reason for the selected placement.
+Base LLM loading now runs through an internal `LlmLoadPlan` plus planner-owned runtime-param preparation before calling `llama_model_load_from_file()`. The planner keeps placement policy separate from load execution and records the reason for the selected placement.
 
 Current planning policy is:
 
 - **Explicit CPU**: materialize a CPU-only plan directly
-- **Apple / Android unified-memory platforms**: use the first accelerated candidate for full offload
-- **Desktop dGPU**: query fresh free VRAM, choose the minimum fitting subset when possible, otherwise pass all discovered dGPUs for best-effort partial offload
-- **Desktop iGPU**: require a full-fit free-memory check, otherwise fall back to CPU
+- **Apple / Android unified-memory platforms**: use the first accelerated candidate, require fresh memory data, preserve a 2 GB shared-memory reserve as a precondition, and then rely on `llama_params_fit()` to keep as much acceleration as possible while preserving the requested context window
+- **Desktop dGPU**: rank discovered dGPUs by fresh free VRAM, then try the largest ranked prefix first and shrink toward smaller prefixes with `llama_params_fit()` until one preserves the requested context window; once a smaller prefix fails after that downward search begins, stop shrinking further and fall back explicitly to CPU
+- **Desktop iGPU**: use the first integrated GPU, require fresh memory data, preserve a 2 GB shared-memory reserve as a precondition, and then rely on `llama_params_fit()` to keep as much acceleration as possible while preserving the requested context window
 - **No accelerator candidate**: materialize an explicit CPU-only plan instead of relying on llama.cpp defaults
 
-The plan currently carries:
+The planner currently carries:
 
 - placement mode (`CPU_ONLY`, `ACCELERATED_FULL`, `ACCELERATED_PARTIAL`)
 - selected candidate-device indices
 - `n_gpu_layers`, `split_mode`, `use_mmap`, and `use_mlock`
+- planner-owned `llama_model_params` / `llama_context_params`
+- a nested fit-buffer bundle for `tensor_split`, `tensor_buft_overrides`, and per-device margins
 - a human-readable reason string used in runtime logs
 
-The dGPU versus iGPU rationale for this split lives in [`nuances.md`](../../nuances.md#desktop-gpu-placement-uses-different-dgpu-and-igpu-rules).
+Accelerated plans are now validated with `llama_params_fit()` against the requested `LLMModelConfig.m_contextWindow`.
+
+- Accelerated placement is accepted only if fit preserves the exact requested context window
+- the planner may retry accelerated placement with `offload_kqv = false` when that keeps the full requested context window better than the default accelerated settings
+- if acceleration cannot satisfy the requested context window exactly, the planner materializes an explicit CPU-only load plan instead of silently shrinking context
+
+The shared-memory reserve rationale for single-accelerator targets lives in
+[`nuances.md`](../../nuances.md#single-accelerator-placement-keeps-a-shared-memory-reserve).
 
 ## Load Execution and Reload
 
-Base LLM loading now executes as an internal reload transaction instead of mutating live engine state inline.
+Base LLM loading executes as an internal reload transaction instead of mutating live engine state inline.
 
 Current execution behavior is:
 
 - Convert `LlmLoadPlan` into transaction-local `llama_model_params`
+- Preallocate one reusable `llama_context` from the loaded model during the same transaction and verify that
+  `llama_n_ctx()` matches the requested `LLMModelConfig.m_contextWindow`
 - Materialize the NULL-terminated ggml device buffer only for the duration of the load call
-- Release the previously committed LLM, vocab, and multimodal projector state before attempting the new load so GPU-backed allocations do not overlap
+- Release the previously committed LLM, vocab, reusable context, and multimodal projector state before attempting the new
+  load so GPU-backed allocations do not overlap
 - Attempt the planned accelerated load first when applicable, then retry once with an explicit CPU-only plan if the planner allowed fallback
-- Commit the newly loaded model, vocab, projector context, and cached config/files to engine state only after the transaction succeeds
+- Commit the newly loaded model, vocab, reusable context, projector context, and cached config/files to engine state only
+  after the transaction succeeds
+
+The key internal helper boundaries are:
+
+- `plan_llm_load()` chooses placement policy and produces planner-owned runtime params
+- `try_load_language_model_for_plan()` executes one prepared load into transaction-local state
+- `load_language_model()` owns reload sequencing, state clearing, optional CPU retry, and final commit
 
 This keeps the planner responsible for policy while the load step only executes one concrete plan at a time.
 
+## Request-Time Context Reuse
+
+Prompt and chat generation share one internal request-context preparation helper.
+
+Current request-time behavior is:
+
+- Validate or load the requested LLM state first
+- Acquire the preallocated reusable llama context from that loaded state
+- Call `prepare_reusable_llm_context_for_request()`, which clears the reusable context through `clear_llm_context()`
+- Replay stored chat history into that same context only for chat generation
+- Return the prepared context to the thin request handler, which then formats the new prompt and starts generation
+
+This keeps context clearing and history replay behind one internal boundary while preserving detailed request-time
+errors from reusable-context reset and chat-history reconstruction.
+
 ## Model Caching
 
-The engine caches the currently loaded LLM state and embedding model. LLM cache state is held as one internal ownership unit containing the model, vocab, multimodal projector context, and the matching config/files. If a generation call requests the same model with the same config, it skips reloading.
+The engine caches the currently loaded LLM state and embedding model. LLM cache state is held as one internal ownership
+unit containing the model, vocab, reusable context, multimodal projector context, and the matching config/files. If a
+generation call requests the same model with the same config, including the requested context window, it skips
+reloading.
 
 ### Expected Model Files
 
@@ -95,6 +132,7 @@ Applications should release those resources through the normal SDK lifecycle (`O
 ## Known Limitations
 
 - Only supports **decoder-only** LLMs (no encoder-decoder models)
-- Context window is currently hardcoded to 4096 tokens
+- The backend currently reuses one preallocated llama context per loaded LLM, so concurrent LLM generations need a later
+  multi-context or pooled design instead of sharing one backend instance
 - Reasoning tokens are not handled separately from normal tokens
 - The `mtmd` API for multimodal is experimental

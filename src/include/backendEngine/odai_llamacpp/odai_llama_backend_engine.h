@@ -8,6 +8,7 @@
 #include "types/odai_common_types.h"
 #include "types/odai_result.h"
 #include "types/odai_types.h"
+#include <functional>
 #include <llama.h>
 #include <memory>
 #include <mtmd.h>
@@ -168,16 +169,37 @@ private:
     std::string m_reason;
   };
 
-  struct GpuSelectionResult
+  struct PreparedLlmRuntimeParams
   {
-    std::vector<size_t> m_candidateIndices;
-    bool m_hasFullFit = false;
+    struct FitBuffers
+    {
+      std::vector<float> m_tensorSplit;
+      std::vector<llama_model_tensor_buft_override> m_tensorBuftOverrides;
+      std::vector<size_t> m_margins;
+
+      void bind_to_model_params(llama_model_params& model_params)
+      {
+        model_params.tensor_split = m_tensorSplit.empty() ? nullptr : m_tensorSplit.data();
+        model_params.tensor_buft_overrides = m_tensorBuftOverrides.empty() ? nullptr : m_tensorBuftOverrides.data();
+      }
+    };
+
+    llama_model_params m_modelParams = llama_model_default_params();
+    llama_context_params m_contextParams = llama_context_default_params();
+    std::vector<ggml_backend_dev_t> m_selectedDevices;
+    FitBuffers m_fitBuffers{};
+
+    void bind_buffers()
+    {
+      m_modelParams.devices = m_selectedDevices.empty() ? nullptr : m_selectedDevices.data();
+      m_fitBuffers.bind_to_model_params(m_modelParams);
+    }
   };
 
-  struct PreparedLlmModelParams
+  struct PlannedLlmLoad
   {
-    llama_model_params m_params = llama_model_default_params();
-    std::vector<ggml_backend_dev_t> m_selectedDevices;
+    LlmLoadPlan m_policy{};
+    PreparedLlmRuntimeParams m_runtimeParams{};
   };
 
   struct LoadedLanguageModelState
@@ -187,12 +209,13 @@ private:
     // so no need of unique_ptr
     const llama_vocab* m_vocab = nullptr;
     std::unique_ptr<mtmd_context, MtmdContextDeleter> m_mtmdContext = nullptr;
+    std::unique_ptr<llama_context, LlamaContextDeleter> m_reusableContext = nullptr;
     LLMModelConfig m_config{};
     ModelFiles m_files{};
 
     void clear() { *this = {}; }
 
-    bool is_loaded() const { return (m_model != nullptr) && (m_vocab != nullptr); }
+    bool is_loaded() const { return (m_model != nullptr) && (m_vocab != nullptr) && (m_reusableContext != nullptr); }
 
     bool matches(const ModelFiles& files, const LLMModelConfig& config) const
     {
@@ -217,7 +240,7 @@ private:
   OdaiResult<void> discover_candidate_devices(BackendDeviceType preferred_type);
 
   /// Registers all ggml backend families found in the runtime backend directory.
-  /// ggml internally scores backend variants and loads the best match for each family.
+  /// ggml scores backend variants internally and loads the best match for each family.
   /// @return true if the registration step completed, false otherwise.
   static bool register_available_backends();
 
@@ -230,17 +253,28 @@ private:
                                         const std::vector<BackendDeviceType>& accepted_types);
 
   /// Plans base LLM placement from the discovered inventory and current platform policy.
-  /// The returned plan explains why ODAI chose CPU-only, full acceleration, or best-effort partial offload.
+  /// The returned plan owns the runtime params and writable fit buffers needed by llama.cpp.
+  /// Accelerated plans must preserve the requested context window exactly.
+  /// @param base_model_path Path to the GGUF model file used for llama.cpp fit checks.
   /// @param model_file_size_bytes Size of the GGUF file on disk.
-  /// @return Placement plan for the next base language model load.
-  LlmLoadPlan plan_llm_load(uint64_t model_file_size_bytes) const;
+  /// @param config Requested LLM runtime configuration.
+  /// @return Fully prepared load plan for the next base language model load.
+  OdaiResult<PlannedLlmLoad> plan_llm_load(const std::string& base_model_path, uint64_t model_file_size_bytes,
+                                           const LLMModelConfig& config) const;
 
-  /// Selects discrete GPUs for desktop llama.cpp offload.
-  /// If the model estimate fits, returns the minimum subset whose combined free VRAM is sufficient.
-  /// Otherwise returns all discovered dGPUs so llama.cpp can still offload layers best-effort.
-  /// @param estimated_model_bytes Estimated VRAM needed for the base model load.
-  /// @return Selected dGPU indices plus whether the returned subset satisfies the estimate.
-  GpuSelectionResult select_minimum_gpu_subset(uint64_t estimated_model_bytes) const;
+  /// Ranks desktop dGPU candidates by fresh free-VRAM readings, highest first.
+  /// Devices without telemetry are kept after ranked devices in discovery order.
+  /// @return Candidate indices in the order the planner should try subset prefixes.
+  std::vector<size_t> rank_dgpu_candidates_by_free_memory() const;
+
+  /// Plans placement for a shared-memory-style accelerator using a reserve-aware free-memory check.
+  /// @param candidate_index Selected accelerator index in the discovered inventory.
+  /// @param model_file_size_bytes Size of the GGUF file on disk.
+  /// @param safety_margin_bytes Extra headroom to preserve when the device shares memory with the CPU.
+  /// @param policy_label Human-readable label used in plan reasons.
+  /// @return Placement plan for the selected accelerator, or CPU-only when the device has too little headroom.
+  LlmLoadPlan plan_shared_memory_accelerator_load(size_t candidate_index, uint64_t model_file_size_bytes,
+                                                  uint64_t safety_margin_bytes, std::string_view policy_label) const;
 
   /// Queries the current free memory reported by a ggml backend device.
   /// @param backend_handle The ggml device handle to query.
@@ -253,20 +287,72 @@ private:
   /// @return CPU-only load plan.
   LlmLoadPlan make_cpu_only_llm_plan(uint64_t model_file_size_bytes, std::string reason) const;
 
-  /// Materializes llama.cpp model params and the temporary NULL-terminated device buffer for one load plan.
-  /// @param llm_load_plan Placement plan to convert into llama.cpp model params.
-  /// @return Materialized params and the temporary device-handle buffer needed by llama_model_load_from_file().
-  OdaiResult<PreparedLlmModelParams> build_llm_model_params(const LlmLoadPlan& llm_load_plan) const;
+  /// Produces a generic accelerated LLM placement policy from selected device indices.
+  /// @param selected_candidate_indices Devices chosen for this load policy.
+  /// @param mode Placement mode for the selected devices.
+  /// @param split_mode llama.cpp split mode for the load.
+  /// @param reason Human-readable explanation for the selected policy.
+  /// @return Accelerated load plan with common fields populated.
+  static LlmLoadPlan make_accelerated_llm_plan(std::vector<size_t> selected_candidate_indices, PlacementMode mode,
+                                               llama_split_mode split_mode, std::string reason);
+
+  /// Materializes llama.cpp runtime params and planner-owned writable buffers for one load policy.
+  /// @param llm_load_plan Placement policy to convert into llama.cpp runtime params.
+  /// @param config Requested LLM runtime configuration.
+  /// @param offload_kqv Whether to offload KQV/KV-cache operations in the prepared context params.
+  /// @return Materialized params and writable fit buffers needed by llama.cpp planning.
+  OdaiResult<PreparedLlmRuntimeParams> prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan,
+                                                                  const LLMModelConfig& config, bool offload_kqv) const;
+
+  /// Completes one load policy by attaching runtime params and optional reason suffix.
+  /// @param policy Placement policy selected by the planner.
+  /// @param config Requested LLM runtime configuration.
+  /// @param offload_kqv Whether the prepared context should offload KQV/KV-cache operations.
+  /// @param reason_suffix Optional additional reason text appended to the plan explanation.
+  /// @return Fully prepared load plan.
+  OdaiResult<PlannedLlmLoad> finalize_llm_plan(const LlmLoadPlan& policy, const LLMModelConfig& config,
+                                               bool offload_kqv, std::string_view reason_suffix = {}) const;
+
+  /// Runs llama.cpp fit planning for one prepared accelerated load.
+  /// The fit step may mutate the runtime params in place.
+  /// @param base_model_path Path to the GGUF model file used for the fit call.
+  /// @param config Requested LLM runtime configuration.
+  /// @param runtime_params Prepared params and writable buffers to mutate.
+  /// @return true if the accelerated params still satisfy the requested context window, false if they should be
+  /// rejected.
+  // Intentionally non-static: fit validation is only valid as part of an initialized engine instance lifecycle.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+  OdaiResult<bool> fit_llm_runtime_params_for_plan(const std::string& base_model_path, const LLMModelConfig& config,
+                                                   PreparedLlmRuntimeParams& runtime_params) const;
+
+  /// Computes per-device llama.cpp fit margins for one prepared load policy.
+  /// Shared-memory accelerators preserve the configured reserve; desktop dGPU planning uses zero explicit margin.
+  /// @param llm_load_plan Placement policy selected by the planner.
+  /// @return Per-device margins aligned with the selected device order.
+  OdaiResult<std::vector<size_t>> build_llm_fit_margins(const LlmLoadPlan& llm_load_plan) const;
+
+  /// Completes one accelerated load policy by running fit validation and the KQV-offload retry fallback.
+  /// @param base_model_path Path to the GGUF model file used for fit checks.
+  /// @param policy Accelerated placement policy selected by the planner.
+  /// @param config Requested LLM runtime configuration.
+  /// @return Fully prepared accelerated load plan, or VALIDATION_FAILED if acceleration should be rejected.
+  OdaiResult<PlannedLlmLoad> finalize_accelerated_llm_plan(const std::string& base_model_path,
+                                                           const LlmLoadPlan& policy,
+                                                           const LLMModelConfig& config) const;
 
   /// Attempts to load the base LLM and optional multimodal projector for a single plan into transaction-local state.
   /// @param base_model_path Path to the base GGUF model.
   /// @param mmproj_model_path Optional multimodal projector path.
-  /// @param llm_load_plan Placement plan to execute.
+  /// @param llm_load_plan Fully prepared load plan to execute.
+  /// @param config Requested LLM runtime configuration.
   /// @return Transaction-local loaded state populated on success.
+  // Intentionally non-static: plan execution is part of the initialized engine lifecycle even when it currently
+  // delegates only to library state plus explicit arguments.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
   OdaiResult<LoadedLanguageModelState>
   try_load_language_model_for_plan(const std::string& base_model_path,
                                    const std::optional<std::string>& mmproj_model_path,
-                                   const LlmLoadPlan& llm_load_plan) const;
+                                   const PlannedLlmLoad& llm_load_plan, const LLMModelConfig& config) const;
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries
@@ -301,6 +387,19 @@ private:
   /// @param config Configuration containing parameters.
   /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
   OdaiResult<void> load_language_model(const ModelFiles& files, const LLMModelConfig& config);
+
+  /// Clears the reusable llama context back to an empty request-ready state.
+  /// This is the first step of the shared request-preparation path used by both prompt and chat generation.
+  /// @param context The reusable llama context to clear.
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  static OdaiResult<void> clear_llm_context(llama_context& context);
+
+  /// Prepares the reusable llama context for one request.
+  /// Clears any previous state and optionally replays chat history into the same shared context before generation.
+  /// @param chat_history Optional chat history to restore before generation.
+  /// @return Reference to the prepared reusable context on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<std::reference_wrapper<llama_context>>
+  prepare_reusable_llm_context_for_request(const std::vector<ChatMessage>* chat_history = nullptr);
 
   /// Creates a new llama context for the specified model type.
   /// @param model_type Type of model (LLM or EMBEDDING) to create context for
@@ -383,11 +482,12 @@ private:
                                                             bool request_logits_for_last_token);
 
   /// Loads the provided sequence of chat messages into the model's context
+  /// without allocating a fresh context.
+  /// @param context Reusable llama context to populate
   /// @param messages Vector of chat messages (in order) to load into the
   /// context
-  /// @return Loaded llama context on success, or an unexpected OdaiResultEnum on failure.
-  OdaiResult<std::unique_ptr<llama_context, LlamaContextDeleter>>
-  load_chat_messages_into_context(const std::vector<ChatMessage>& messages);
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<void> load_chat_messages_into_context(llama_context& context, const std::vector<ChatMessage>& messages);
 
   /// Generates the next token using the provided llama context and sampler.
   /// @param model_context Language Model context (has KV cache of old tokens

@@ -13,8 +13,10 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
 - [Runtime Behavior](#runtime-behavior)
     - [Explicit SDK Shutdown for Deterministic Backend Cleanup](#explicit-sdk-shutdown-for-deterministic-backend-cleanup)
     - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
-    - [Desktop GPU Placement Uses Different dGPU and iGPU Rules](#desktop-gpu-placement-uses-different-dgpu-and-igpu-rules)
+    - [Single-Accelerator Placement Keeps a Shared-Memory Reserve](#single-accelerator-placement-keeps-a-shared-memory-reserve)
+    - [LLM Planner Rejects Context Shrink And May Disable KQV Offload](#llm-planner-rejects-context-shrink-and-may-disable-kqv-offload)
     - [LLM Reload Releases Old State Before Retry and Commit](#llm-reload-releases-old-state-before-retry-and-commit)
+    - [LLM Load Preallocates One Reusable Context](#llm-load-preallocates-one-reusable-context)
     - [llama.cpp Load Failures Must Collapse to Return Paths for Fallback](#llamacpp-load-failures-must-collapse-to-return-paths-for-fallback)
 
 ## Build System (CMake)
@@ -105,18 +107,33 @@ When ODAI uses llama.cpp / ggml's Vulkan backend, the backend family name (`"vul
 * **Why this matters for ODAI:** On Android, Vulkan is usually the compute API for the SoC's integrated GPU. That means probing `"vulkan"` with an ODAI target type of `GPU` can miss a valid Android Vulkan device if ggml classifies it as `IGPU`.
 * **Design implication:** Treat Vulkan as a backend family only. Device-selection policy should rely on ggml's reported device type, and Android-specific selection logic should decide whether a Vulkan iGPU satisfies a user request for "GPU acceleration" or should remain distinct from explicit `IGPU`.
 
-### Desktop GPU Placement Uses Different dGPU and iGPU Rules
-Desktop accelerated placement should not treat discrete GPUs and integrated GPUs as the same kind of target.
+### Single-Accelerator Placement Keeps a Shared-Memory Reserve
+ODAI now prefers "as much accelerator offload as possible" across platform/device classes, but single-accelerator targets that share memory with the CPU still keep a reserve.
 
-* **dGPU rule:** Query fresh free VRAM, then greedily pick the minimum discrete-GPU subset whose combined free VRAM satisfies the estimate. If ODAI cannot prove a full fit, it still passes all discovered dGPUs to llama.cpp so layer offload can remain best-effort instead of becoming all-or-nothing.
-* **iGPU rule:** Require a full-fit check against the integrated GPU's fresh free-memory reading. If that check fails, or the free-memory reading is unavailable, ODAI falls back to an explicit CPU-only plan.
-* **Why the split exists:** Partial offload across dGPUs is still useful when a full fit is uncertain, but integrated GPUs are much more likely to compete with CPU/system memory and to regress badly when ODAI guesses wrong. Treating iGPU placement as a gate keeps CPU fallback explicit instead of silently leaving llama.cpp on an accelerator that did not actually have enough headroom.
+* **Behavior summary:** The exact shared-memory placement flow lives in [`docs/architecture/implementations/llamacpp-backend.md`](docs/architecture/implementations/llamacpp-backend.md). The non-obvious part is that ODAI intentionally keeps a fixed 2 GB reserve before allowing llama.cpp fit planning to decide the final offload level.
+* **Why the reserve remains:** Shared-memory accelerators compete directly with the CPU and the rest of the process. The reserve prevents ODAI from consuming the last visible headroom just because llama.cpp can technically attempt partial offload.
+* **Why missing telemetry is still a hard block here:** Shared-memory placement is intentionally reserve-aware. If ODAI cannot observe a fresh free-memory reading, it cannot prove that the reserve still exists, so it stays on CPU instead of guessing.
+
+### LLM Planner Rejects Context Shrink And May Disable KQV Offload
+ODAI now uses `llama_params_fit()` during accelerated LLM planning, but it treats a reduced context window as a rejected accelerated plan rather than a successful fit.
+
+* **Behavior summary:** The architecture doc describes the planner flow. The non-obvious policy choices are that ODAI rejects any accelerated fit that shrinks `n_ctx`, and it retries once with `offload_kqv = false` before giving up on acceleration.
+* **Why this matters:** The requested context window is part of the runtime contract and cache identity. Quietly accepting a smaller fitted context would make the loaded runtime differ from the caller's requested model configuration.
+* **Why the KQV retry exists:** Moving KV/cache work off the accelerator can still preserve useful model-weight acceleration without changing the requested runtime contract.
+* **Why this is still a planner decision:** Disabling KQV offload is a placement-policy fallback, not a semantic change to the requested model configuration. If neither accelerated variant preserves the full requested context, ODAI materializes an explicit CPU plan instead of shrinking context.
 
 ### LLM Reload Releases Old State Before Retry and Commit
 LLM reload is intentionally not an "old model stays live until new model fully succeeds" transaction.
 
 * **Why the old state is released first:** GPU-backed models can consume enough VRAM that attempting to hold both the old and new models at once makes reload failures nondeterministic. Releasing the old state first gives the new plan a clean memory picture and makes CPU retry meaningful instead of competing with stale allocations.
 * **Why cached config/files are also cleared before retry:** If the new load fails after the old state was released, keeping the previous `m_llmModelFiles` / `m_llmModelConfig` would make future equality checks think a model was still loaded when the engine was actually empty.
+
+### LLM Load Preallocates One Reusable Context
+ODAI now treats a loaded LLM as "usable" only when the model load also succeeds in creating one reusable `llama_context`.
+
+* **Behavior summary:** The architecture doc describes the ownership shape. The non-obvious rule is that `llama_model_load_from_file()` alone is no longer enough to consider an LLM load successful; the same transaction must also allocate a reusable context and verify that `llama_n_ctx()` still equals the requested context window.
+* **Why load-time context allocation matters:** It moves context-allocation failures to the reload boundary instead of the first request, so cache hits represent a runtime that can actually serve generation immediately.
+* **Why only one reusable context exists right now:** The current ownership shape keeps the failure boundary correct without adding a context pool or extra synchronization rules. That also means one backend instance effectively supports one in-flight LLM generation at a time until a later multi-context design lands.
 
 ### llama.cpp Load Failures Must Collapse to Return Paths for Fallback
 ODAI's CPU-retry logic only works if accelerated-load failures stay inside the normal `bool`/result flow.

@@ -18,7 +18,6 @@
 - [ ] Probably cache chat config in rag engine, instead of querying for every chat response generation
 - [ ] Think on how to manage multiple chat sessions, may be LRU cache of chat sessions in backend engine, check mem constraints and handle accordingly
 - [ ] Also see about serializing chat sessions to disk, so that way we can restore them later
-- [ ] since we have removed contextWindowSize from config obj, and are using hardcoded ctx params size of 4096 for llm and mebedding models, think, Handle max tokens in llama context from sampler
 - [ ] Add Structured Output Support
 - [ ] Add a commit option in generating_streaming_chat_response, so that we can use it to try generate multiple answers without appending in chat history, useful for HYDE like thing 
 - [ ] Currently we are not handling reasoning tokens separately, we are just using it as a normal token, think on how to handle it properly
@@ -33,6 +32,8 @@
 - [ ] Maybe can have a async variant of odai_generate_streaming_response
 - [ ] Qualcomm Hexagon, QNN, Apple CoreML llama cpp integration pending
 - [ ] when limited vram Think / explore on vision, audio encoder on GPU and LLM on cpu vs vice versa, both are useful for different workload
+- [ ] Tune llama context batching instead of keeping `n_batch` / `n_ubatch` pinned to 512 for planning and request-time context creation
+- [ ] Replace remaining model-size-only planner heuristics with model-metadata-driven estimation (KV/cache/context-aware) after lightweight llama/GGUF metadata inspection, and keep `llama_params_fit()` as the final fit authority
 
 
 ### Build System

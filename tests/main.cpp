@@ -332,7 +332,7 @@ static bool test_streaming_text(const char* model_name)
 {
   std::cout << "\n--- Testing Streaming Response (Text) using " << model_name << " ---\n";
 
-  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name)};
+  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name), DEFAULT_LLM_CONTEXT_WINDOW};
   c_SamplerConfig sampler_conf = {MAX_TOKENS, TEMPERATURE, TOP_K};
 
   const char* prompt = "What is the capital of France?";
@@ -354,7 +354,7 @@ static bool test_streaming_image(const char* model_name)
 {
   std::cout << "\n--- Testing Streaming Response (Image) using " << model_name << " ---\n";
 
-  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name)};
+  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name), DEFAULT_LLM_CONTEXT_WINDOW};
   c_SamplerConfig sampler_conf = {MAX_TOKENS, TEMPERATURE, TOP_K};
 
   const char* prompt = "Describe this image";
@@ -379,7 +379,7 @@ static bool test_streaming_audio(const char* model_name)
 {
   std::cout << "\n--- Testing Streaming Response (Audio) using " << model_name << " ---\n";
 
-  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name)};
+  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name), DEFAULT_LLM_CONTEXT_WINDOW};
   c_SamplerConfig sampler_conf = {MAX_TOKENS, TEMPERATURE, TOP_K};
 
   const char* prompt = "Describe this audio briefly";
@@ -404,7 +404,7 @@ static bool test_chat_multimodal(const char* model_name)
 {
   std::cout << "\n--- Testing Chat (Multimodal) using " << model_name << " ---\n";
 
-  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name)};
+  c_LlmModelConfig llm_conf = {const_cast<char*>(model_name), DEFAULT_LLM_CONTEXT_WINDOW};
   c_ChatConfig chat_config = {true, "You are a helpful assistant.", llm_conf};
   c_ChatId chat_id = nullptr;
   c_OdaiResult res = odai_create_chat(nullptr, &chat_config, &chat_id);
