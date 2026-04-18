@@ -43,13 +43,13 @@ Current planning policy is:
 - **Desktop iGPU**: use the first integrated GPU, require fresh memory data, preserve a 2 GB shared-memory reserve as a precondition, and then rely on `llama_params_fit()` to keep as much acceleration as possible while preserving the requested context window
 - **No accelerator candidate**: materialize an explicit CPU-only plan instead of relying on llama.cpp defaults
 
-The planner currently carries:
+The prepared load state currently carries:
 
 - placement mode (`CPU_ONLY`, `ACCELERATED_FULL`, `ACCELERATED_PARTIAL`)
 - selected candidate-device indices
 - `n_gpu_layers`, `split_mode`, `use_mmap`, and `use_mlock`
-- planner-owned `llama_model_params` / `llama_context_params`
-- a nested fit-buffer bundle for `tensor_split`, `tensor_buft_overrides`, and per-device margins
+- prepared `llama_model_params` / `llama_context_params`
+- a fit-buffer bundle for `tensor_split`, `tensor_buft_overrides`, and per-device margins
 - a human-readable reason string used in runtime logs
 
 Accelerated plans are now validated with `llama_params_fit()` against the requested `LLMModelConfig.m_contextWindow`.
@@ -61,6 +61,18 @@ Accelerated plans are now validated with `llama_params_fit()` against the reques
 The shared-memory reserve rationale for single-accelerator targets lives in
 [`nuances.md`](../../nuances.md#single-accelerator-placement-keeps-a-shared-memory-reserve).
 
+## Thread Policy Hook
+
+llama context creation now goes through an internal thread-policy helper instead of setting raw literals inline at
+each call site.
+
+Current behavior is intentionally conservative:
+
+- the helper emits both `n_threads` and `n_threads_batch`
+- the baseline still returns fixed values for now
+- load placement and thread policy are separated so later platform-specific tuning can change one without reshaping the
+  other
+
 ## Load Execution and Reload
 
 Base LLM loading executes as an internal reload transaction instead of mutating live engine state inline.
@@ -68,22 +80,27 @@ Base LLM loading executes as an internal reload transaction instead of mutating 
 Current execution behavior is:
 
 - Convert `LlmLoadPlan` into transaction-local `llama_model_params`
+- Set `main_gpu` explicitly to the first entry in the prepared llama.cpp `devices` array whenever the base LLM load is accelerated instead of relying on the implicit first-device default
 - Preallocate one reusable `llama_context` from the loaded model during the same transaction and verify that
   `llama_n_ctx()` matches the requested `LLMModelConfig.m_contextWindow`
 - Materialize the NULL-terminated ggml device buffer only for the duration of the load call
 - Release the previously committed LLM, vocab, reusable context, and multimodal projector state before attempting the new
   load so GPU-backed allocations do not overlap
 - Attempt the planned accelerated load first when applicable, then retry once with an explicit CPU-only plan if the planner allowed fallback
-- Commit the newly loaded model, vocab, reusable context, projector context, and cached config/files to engine state only
-  after the transaction succeeds
+- After the base LLM is loaded, run a separate multimodal projector admission step against fresh post-LLM free-memory data on the base model's existing `main_gpu` path
+- Retry the projector once on CPU if an accelerated projector attempt fails
+- Commit the newly loaded model, vocab, reusable context, projector context, and cached config/files to engine state only after the full transaction succeeds
 
 The key internal helper boundaries are:
 
 - `plan_llm_load()` chooses placement policy and produces planner-owned runtime params
-- `try_load_language_model_for_plan()` executes one prepared load into transaction-local state
-- `load_language_model()` owns reload sequencing, state clearing, optional CPU retry, and final commit
+- `try_load_language_model_for_plan()` executes one prepared base-LLM load into transaction-local state
+- `load_optional_mmproj_into_state()` owns the optional experimental projector branch so normal LLM reload sequencing stays separate from `mtmd`
+- `plan_mmproj_load()` chooses whether the multimodal projector may reuse the base model's `main_gpu` path from the fresh post-LLM memory picture
+- `try_load_mmproj_for_plan()` executes one prepared projector load into transaction-local state
+- `load_language_model()` owns reload sequencing, state clearing, optional CPU retries, projector planning against the plan that actually loaded the base LLM, and final commit
 
-This keeps the planner responsible for policy while the load step only executes one concrete plan at a time.
+This keeps the planners responsible for policy while each load step only executes one concrete plan at a time.
 
 ## Request-Time Context Reuse
 
@@ -116,7 +133,24 @@ reloading.
 
 ## Multimodal Support
 
-When `mmproj_model_path` is registered, the engine creates an `mtmd_context` for processing images and audio. During `process_input_items()`, the engine:
+When `mmproj_model_path` is registered, the engine creates an `mtmd_context` for processing images and audio after the
+base LLM load succeeds. Projector placement is a separate admission decision, but its control surface is narrower than
+the base LLM's:
+
+- Explicit `CPU` runtime preference forces CPU projector placement
+- If the base LLM ended up on CPU, the projector also stays on CPU because `mtmd` only gets `use_gpu` plus the already-loaded `llama_model`; it does not pick an independent device
+- If the base LLM is accelerated, the projector may reuse that same `main_gpu` path after a fresh post-LLM headroom check
+- Shared-memory accelerator targets preserve the same 2 GB reserve before enabling accelerated projector placement on that reused `main_gpu` path
+- Accelerated projector loads retry once on CPU if `mtmd_init_from_file()` fails
+- `mtmd` does not expose an independent `n_ctx` knob in `mtmd_context_params`; request-time multimodal tokens are still evaluated into the regular reusable `llama_context`, so the active context window is the same `LLMModelConfig.m_contextWindow` already used for the base LLM
+
+Ownership and request-time behavior are split:
+
+- `mtmd_context` is long-lived loaded model state, similar to the loaded projector weights and capability metadata
+- It is not a second rolling inference context and does not hold the chat/prompt KV state
+- Request-time multimodal evaluation still happens against the normal reusable `llama_context` passed into `mtmd_helper_eval_chunks()`
+
+During `process_input_items()`, the engine:
 
 1. Creates audio/image decoder instances on-demand via `OdaiSdk::get_new_odai_audio_decoder_instance()` / `get_new_odai_image_decoder_instance()`
 2. Decodes media files into raw pixel/PCM data using those decoders

@@ -111,7 +111,7 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
       if (resized_ptr == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "stbir_resize_uint8_linear failed to resize the image");
-        return unexpected_internal_error<void>();
+        return unexpected_internal_error();
       }
     }
     else
@@ -128,6 +128,6 @@ OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, 
   catch (const std::bad_alloc&)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to allocate memory buffer for the decoded output image");
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }

@@ -117,7 +117,7 @@ public:
         - `c_OdaiResult` -> `ODAI_INTERNAL_ERROR`
         - `int32_t` streaming APIs -> `-1`
         - `bool` -> `false`
-        - `OdaiResult<T>` -> `unexpected_internal_error<T>()`
+        - `OdaiResult<T>` -> `unexpected_internal_error()`
         - `void` -> log and return
       - If a function needs additional exception-side cleanup, keep the full `catch` local instead of hiding cleanup behind a shared macro.
 

@@ -45,7 +45,7 @@ OdaiResult<void> OdaiRagEngine::initialize_rag_engine()
   if (!m_db)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Database implementation is not available");
-    return unexpected_not_initialized<void>();
+    return unexpected_not_initialized();
   }
 
   OdaiResult<void> db_res = m_db->initialize_db();
@@ -58,7 +58,7 @@ OdaiResult<void> OdaiRagEngine::initialize_rag_engine()
   if (!m_backendEngine)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Backend engine implementation is not available");
-    return unexpected_not_initialized<void>();
+    return unexpected_not_initialized();
   }
 
   OdaiResult<void> backend_res = m_backendEngine->initialize_engine();
@@ -78,7 +78,7 @@ OdaiResult<void> OdaiRagEngine::register_model_files(const ModelName& name, cons
   if (!m_backendEngine || !m_db)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
-    return unexpected_not_initialized<void>();
+    return unexpected_not_initialized();
   }
 
   OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(model_file_details);
@@ -122,7 +122,7 @@ OdaiResult<void> OdaiRagEngine::update_model_files(const ModelName& name, const 
   if (!m_backendEngine || !m_db)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "RAG engine dependencies are not initialized");
-    return unexpected_not_initialized<void>();
+    return unexpected_not_initialized();
   }
 
   OdaiResult<bool> validation_res = m_backendEngine->validate_model_files(new_model_file_details);

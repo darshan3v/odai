@@ -1,8 +1,16 @@
 #!/bin/bash
 # ODAI SDK Code Linter
-# Uses clang-tidy to enforce naming conventions and detect issues
+# Uses run-clang-tidy to lint source files in parallel
 
 set -e
+
+# Ensure Ctrl+C kills all child processes (run-clang-tidy spawns a worker pool).
+# Without this, interrupting during pre-commit leaves orphaned clang-tidy processes.
+cleanup() {
+    kill -- -$$ 2>/dev/null || true
+    exit 130
+}
+trap cleanup INT TERM
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
@@ -25,6 +33,7 @@ EXAMPLES:
 REQUIREMENTS:
     - compile_commands.json must exist in build/
     - Run CMake first: cmake --preset linux-default-debug
+    - run-clang-tidy must be installed (ships with clang-tidy)
 EOF
 }
 
@@ -48,14 +57,20 @@ for arg in "$@"; do
     esac
 done
 
+# Ensure run-clang-tidy is available
+if ! command -v run-clang-tidy &>/dev/null; then
+    echo "Error: run-clang-tidy not found."
+    echo "It ships with clang-tidy. Install it via your package manager."
+    exit 1
+fi
+
 # run cmake so that compile_commands.json is generated
 cmake --preset linux-default-release >/dev/null
 
 # Symlink compile_commands.json to project root if not exists
 ln -sf "$PROJECT_ROOT/build/compile_commands.json" "$PROJECT_ROOT/compile_commands.json"
 
-# Determine files to process
-# Always grab source files
+# Collect source files
 FILES=($(find "$PROJECT_ROOT/src" -type f \( -name "*.cpp" -o -name "*.c" -o -name "*.cc" \) 2>/dev/null))
 
 if [ ${#FILES[@]} -eq 0 ]; then
@@ -63,52 +78,35 @@ if [ ${#FILES[@]} -eq 0 ]; then
     exit 0
 fi
 
-# Build basic clang-tidy args
-# --header-filter: Only check headers in src/ (ignore dependencies)
-TIDY_ARGS=(-p "$PROJECT_ROOT" "--header-filter=$PROJECT_ROOT/src/.*")
+# Determine parallelism: use all available cores but cap at file count
+NPROC=$(nproc 2>/dev/null || echo 4)
+JOBS=$(( NPROC < ${#FILES[@]} ? NPROC : ${#FILES[@]} ))
+
+# Build run-clang-tidy args
+# -p: compilation database directory
+# -header-filter: only check headers under src/ (ignore deps)
+# -j: parallel jobs
+# -quiet: suppress clang-tidy's per-file "N warnings generated" noise
+RUN_ARGS=(
+    -p "$PROJECT_ROOT"
+    -header-filter "$PROJECT_ROOT/src/.*"
+    -j "$JOBS"
+    -quiet
+)
 
 if [ "$FIX_MODE" = true ]; then
-    echo "Linting and fixing ${#FILES[@]} file(s)..."
-    
-    # Create temp directory for fixes
-    FIX_DIR="$PROJECT_ROOT/.clang-tidy-fixes"
-    mkdir -p "$FIX_DIR"
-    # Ensure cleanup on exit
-    trap 'rm -rf "$FIX_DIR"' EXIT
-
-    # Process files individually
-    for f in "${FILES[@]}"; do
-        # Generate a unique yaml filename based on the source path
-        REL_PATH="${f#$PROJECT_ROOT/}"
-        SAFE_NAME=$(echo "$REL_PATH" | sed 's/[^a-zA-Z0-9]/_/g').yaml
-        
-        # Run clang-tidy
-        # We use || true because clang-tidy returns non-zero if issues are found, 
-        # but we want to continue processing other files.
-        echo "Checking $REL_PATH..."
-        clang-tidy "${TIDY_ARGS[@]}" -export-fixes="$FIX_DIR/$SAFE_NAME" "$f" || true
-    done
-
-    echo "Applying fixes..."
-    # Apply replacements
-    # -format: Formats changed code
-    # -style=file: Uses .clang-format
-    # -p: Compilation database path
-    clang-apply-replacements -format -style=file "$FIX_DIR"
-    
+    RUN_ARGS+=(-fix -format)
+    echo "Linting and fixing ${#FILES[@]} file(s) with $JOBS parallel jobs..."
 else
-    echo "Linting ${#FILES[@]} file(s)..."
-    # In non-fix mode, we can just run them all at once or individually. 
-    # Running individually gives better progress feedback but might be slower due to startup process? 
-    # Actually, clang-tidy usually takes multiple files fine. 
-    # Let's run all at once for speed in read-only mode, or keep it consistent?
-    # The existing script ran them all at once. Let's stick to that for read-only mode for now unless user asked otherwise.
-    # Wait, user said "apply clang tidy to file individually ... and apply the fixes then".
-    # This implies the individual processing is for the FIX workflow primarily to handle export-fixes safely.
-    # But for consistency, let's keep the existing bulk behavior for non-fix mode OR change it.
-    # Actually, `clang-tidy [files...]` is standard.
-    
-    clang-tidy "${TIDY_ARGS[@]}" "${FILES[@]}"
+    echo "Linting ${#FILES[@]} file(s) with $JOBS parallel jobs..."
 fi
+
+# run-clang-tidy accepts file-path regex filter as a positional arg.
+# Build a regex that matches exactly our source files under src/.
+# Escape the project root for regex safety and anchor to src/.
+ESCAPED_ROOT=$(printf '%s' "$PROJECT_ROOT" | sed 's/[.[\*^$()+?{|]/\\&/g')
+FILE_FILTER="${ESCAPED_ROOT}/src/.*\.(cpp|c|cc)$"
+
+run-clang-tidy "${RUN_ARGS[@]}" "$FILE_FILTER"
 
 echo "✓ Done!"

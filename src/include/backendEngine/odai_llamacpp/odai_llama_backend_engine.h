@@ -12,6 +12,7 @@
 #include <llama.h>
 #include <memory>
 #include <mtmd.h>
+#include <optional>
 #include <vector>
 
 struct LlamaModelDeleter
@@ -202,6 +203,19 @@ private:
     PreparedLlmRuntimeParams m_runtimeParams{};
   };
 
+  struct MmprojLoadPlan
+  {
+    bool m_useAccelerator = false;
+    bool m_allowCpuRetry = false;
+    std::string m_reason;
+  };
+
+  struct MmprojModelInfo
+  {
+    std::string m_path;
+    uint64_t m_fileSizeBytes = 0;
+  };
+
   struct LoadedLanguageModelState
   {
     std::unique_ptr<llama_model, LlamaModelDeleter> m_model = nullptr;
@@ -340,19 +354,66 @@ private:
                                                            const LlmLoadPlan& policy,
                                                            const LLMModelConfig& config) const;
 
-  /// Attempts to load the base LLM and optional multimodal projector for a single plan into transaction-local state.
+  /// Plans multimodal projector placement after the base LLM load established the current memory picture.
+  /// Projector acceleration can only reuse the base LLM's existing main-GPU path; it cannot pick an independent
+  /// device or split across multiple devices.
+  /// @param llm_load_plan Placement policy that was used to load the base LLM.
+  /// @param base_model_file_size_bytes Size of the base GGUF file used as the base-LLM buffer estimate.
+  /// @param mmproj_model_file_size_bytes Size of the projector GGUF file used as the projector buffer estimate.
+  /// @return Projector placement plan for the next multimodal load attempt.
+  OdaiResult<MmprojLoadPlan> plan_mmproj_load(const LlmLoadPlan& llm_load_plan, uint64_t base_model_file_size_bytes,
+                                              uint64_t mmproj_model_file_size_bytes) const;
+
+  /// Produces a CPU-only multimodal projector plan.
+  /// @param reason Human-readable explanation for choosing CPU-only projector placement.
+  /// @return CPU-only projector plan.
+  static MmprojLoadPlan make_cpu_only_mmproj_plan(std::string reason);
+
+  /// Produces an accelerated multimodal projector plan that reuses the base LLM's current main-GPU path.
+  /// @param reason Human-readable explanation for choosing accelerated projector placement.
+  /// @return Accelerated projector plan with CPU retry enabled.
+  static MmprojLoadPlan make_accelerated_mmproj_plan(std::string reason);
+
+  /// Extracts the optional multimodal projector registration details from LLM model files.
+  /// @param files Registered model files for the LLM.
+  /// @return Empty optional when no projector is registered, or the validated projector path + file size.
+  static OdaiResult<std::optional<MmprojModelInfo>> get_mmproj_model_info(const ModelFiles& files);
+
+  /// Attempts to load only the base LLM for a single plan into transaction-local state.
   /// @param base_model_path Path to the base GGUF model.
-  /// @param mmproj_model_path Optional multimodal projector path.
   /// @param llm_load_plan Fully prepared load plan to execute.
   /// @param config Requested LLM runtime configuration.
   /// @return Transaction-local loaded state populated on success.
   // Intentionally non-static: plan execution is part of the initialized engine lifecycle even when it currently
   // delegates only to library state plus explicit arguments.
   // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
-  OdaiResult<LoadedLanguageModelState>
-  try_load_language_model_for_plan(const std::string& base_model_path,
-                                   const std::optional<std::string>& mmproj_model_path,
-                                   const PlannedLlmLoad& llm_load_plan, const LLMModelConfig& config) const;
+  OdaiResult<LoadedLanguageModelState> try_load_language_model_for_plan(const std::string& base_model_path,
+                                                                        const PlannedLlmLoad& llm_load_plan,
+                                                                        const LLMModelConfig& config) const;
+
+  /// Attempts to load the multimodal projector for a single plan into transaction-local LLM state.
+  /// @param loaded_state Transaction-local LLM state that already owns the loaded base model.
+  /// @param mmproj_model_path Path to the multimodal projector GGUF model.
+  /// @param mmproj_load_plan Projector placement plan to execute.
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  // Intentionally non-static: projector load execution depends on the initialized engine lifecycle and current backend
+  // inventory, even though the immediate inputs are explicit.
+  // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+  OdaiResult<void> try_load_mmproj_for_plan(LoadedLanguageModelState& loaded_state,
+                                            const std::string& mmproj_model_path,
+                                            const MmprojLoadPlan& mmproj_load_plan) const;
+
+  /// Loads the optional multimodal projector into transaction-local LLM state after the base model is already loaded.
+  /// This keeps experimental mtmd planning/retry behavior behind a separate boundary from normal LLM load flow.
+  /// @param loaded_state Transaction-local LLM state that already owns the loaded base model.
+  /// @param llm_load_plan Placement plan that succeeded for the base LLM.
+  /// @param base_model_file_size_bytes Size of the base GGUF file used for logging / projector planning context.
+  /// @param mmproj_model_info Optional projector registration details.
+  /// @return empty result on success, or an unexpected OdaiResultEnum on failure.
+  OdaiResult<void> load_optional_mmproj_into_state(LoadedLanguageModelState& loaded_state,
+                                                   const PlannedLlmLoad& llm_load_plan,
+                                                   uint64_t base_model_file_size_bytes,
+                                                   const std::optional<MmprojModelInfo>& mmproj_model_info) const;
 
   /// Validates if a specific entry key exists in the model files and points to a valid file on the filesystem.
   /// @param entries The map of model file entries

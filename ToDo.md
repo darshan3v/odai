@@ -32,7 +32,7 @@
 - [ ] Maybe can have a async variant of odai_generate_streaming_response
 - [ ] Qualcomm Hexagon, QNN, Apple CoreML llama cpp integration pending
 - [ ] when limited vram Think / explore on vision, audio encoder on GPU and LLM on cpu vs vice versa, both are useful for different workload
-- [ ] Tune llama context batching instead of keeping `n_batch` / `n_ubatch` pinned to 512 for planning and request-time context creation
+- [ ] Explore a better llama runtime policy for `n_batch`, `n_ubatch`, `n_threads`, and `n_threads_batch` instead of keeping the current fixed conservative defaults
 - [ ] Replace remaining model-size-only planner heuristics with model-metadata-driven estimation (KV/cache/context-aware) after lightweight llama/GGUF metadata inspection, and keep `llama_params_fit()` as the final fit authority
 
 

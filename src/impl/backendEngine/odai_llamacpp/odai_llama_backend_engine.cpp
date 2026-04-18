@@ -89,16 +89,34 @@ constexpr int32_t N_GPU_LAYERS_ALL_POSSIBLE = -1;
 constexpr uint64_t CPU_MLOCK_HEADROOM = 2ULL * BYTES_PER_GB;
 constexpr uint64_t SHARED_ACCELERATOR_SAFETY_MARGIN = 2ULL * BYTES_PER_GB;
 constexpr uint32_t FIXED_LLAMA_BATCH_SIZE = 512;
+constexpr uint32_t FIXED_LLAMA_UBATCH_SIZE = 512;
+constexpr int32_t FIXED_LLAMA_DECODE_THREADS = 4;
+constexpr int32_t FIXED_LLAMA_BATCH_THREADS = 4;
+
+uint64_t estimate_mmproj_memory_requirement(uint64_t mmproj_model_file_size_bytes)
+{
+  return mmproj_model_file_size_bytes;
+}
+
+void apply_base_llm_thread_policy(llama_context_params& context_params)
+{
+  context_params.n_threads = FIXED_LLAMA_DECODE_THREADS;
+  context_params.n_threads_batch = FIXED_LLAMA_BATCH_THREADS;
+}
+
+void apply_base_llm_batch_policy(llama_context_params& context_params)
+{
+  context_params.n_batch = FIXED_LLAMA_BATCH_SIZE;
+  context_params.n_ubatch = FIXED_LLAMA_UBATCH_SIZE;
+}
 
 llama_context_params make_base_llm_context_params(uint32_t context_window, bool offload_kqv)
 {
   llama_context_params context_params = llama_context_default_params();
   context_params.n_ctx = context_window;
-  context_params.n_batch = FIXED_LLAMA_BATCH_SIZE;
-  context_params.n_ubatch = FIXED_LLAMA_BATCH_SIZE;
+  apply_base_llm_batch_policy(context_params);
   context_params.n_seq_max = 1;
-  context_params.n_threads = 4;
-  context_params.n_threads_batch = 4;
+  apply_base_llm_thread_policy(context_params);
   context_params.embeddings = false;
   context_params.offload_kqv = offload_kqv;
   return context_params;
@@ -173,7 +191,7 @@ OdaiResult<void> OdaiLlamaEngine::discover_candidate_devices(BackendDeviceType p
     if (!OdaiLlamaEngine::register_available_backends())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Critical failure: CPU backend library not found");
-      return unexpected_internal_error<void>();
+      return unexpected_internal_error();
     }
 
     ODAI_LOG(ODAI_LOG_INFO, "Discovering candidate devices for preferred type {}", device_type_name(preferred_type));
@@ -271,7 +289,7 @@ OdaiResult<void> OdaiLlamaEngine::discover_candidate_devices(BackendDeviceType p
       else
       {
         ODAI_LOG(ODAI_LOG_ERROR, "CPU backend was registered but no CPU device was discovered");
-        return unexpected_internal_error<void>();
+        return unexpected_internal_error();
       }
     }
 
@@ -299,7 +317,7 @@ OdaiResult<void> OdaiLlamaEngine::discover_candidate_devices(BackendDeviceType p
 
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 bool OdaiLlamaEngine::append_backend_candidate_devices(const std::string& backend_name,
@@ -424,6 +442,50 @@ OdaiLlamaEngine::LlmLoadPlan OdaiLlamaEngine::make_accelerated_llm_plan(std::vec
   return plan;
 }
 
+OdaiLlamaEngine::MmprojLoadPlan OdaiLlamaEngine::make_cpu_only_mmproj_plan(std::string reason)
+{
+  MmprojLoadPlan plan;
+  plan.m_useAccelerator = false;
+  plan.m_allowCpuRetry = false;
+  plan.m_reason = std::move(reason);
+  return plan;
+}
+
+OdaiLlamaEngine::MmprojLoadPlan OdaiLlamaEngine::make_accelerated_mmproj_plan(std::string reason)
+{
+  MmprojLoadPlan plan;
+  plan.m_useAccelerator = true;
+  plan.m_allowCpuRetry = true;
+  plan.m_reason = std::move(reason);
+  return plan;
+}
+
+OdaiResult<std::optional<OdaiLlamaEngine::MmprojModelInfo>>
+OdaiLlamaEngine::get_mmproj_model_info(const ModelFiles& files)
+{
+  if (!files.m_entries.contains("mmproj_model_path"))
+  {
+    return std::nullopt;
+  }
+
+  const std::string& mmproj_path = files.m_entries.at("mmproj_model_path");
+  if (mmproj_path.empty())
+  {
+    return std::nullopt;
+  }
+
+  std::error_code mmproj_size_error;
+  const uint64_t mmproj_file_size_bytes = std::filesystem::file_size(mmproj_path, mmproj_size_error);
+  if (mmproj_size_error)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "failed to determine projector file size for {}: {}", mmproj_path,
+             mmproj_size_error.message());
+    return unexpected_internal_error();
+  }
+
+  return MmprojModelInfo{.m_path = mmproj_path, .m_fileSizeBytes = mmproj_file_size_bytes};
+}
+
 OdaiResult<OdaiLlamaEngine::PreparedLlmRuntimeParams>
 OdaiLlamaEngine::prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan, const LLMModelConfig& config,
                                             bool offload_kqv) const
@@ -431,7 +493,6 @@ OdaiLlamaEngine::prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan, co
   PreparedLlmRuntimeParams prepared_params;
   prepared_params.m_modelParams.n_gpu_layers = llm_load_plan.m_nGpuLayers;
   prepared_params.m_modelParams.devices = nullptr;
-  prepared_params.m_modelParams.main_gpu = llm_load_plan.m_mode == PlacementMode::CPU_ONLY ? -1 : 0;
   prepared_params.m_modelParams.split_mode = llm_load_plan.m_splitMode;
   prepared_params.m_modelParams.use_mlock = llm_load_plan.m_shouldUseMlock;
   prepared_params.m_modelParams.use_mmap = llm_load_plan.m_shouldUseMmap;
@@ -439,8 +500,16 @@ OdaiLlamaEngine::prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan, co
 
   if (llm_load_plan.m_selectedCandidateIndices.empty())
   {
+    prepared_params.m_modelParams.main_gpu = -1;
     prepared_params.bind_buffers();
     return prepared_params;
+  }
+
+  const size_t main_gpu_candidate_index = llm_load_plan.m_selectedCandidateIndices.front();
+  if (main_gpu_candidate_index >= m_deviceInventory.m_candidates.size())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "LLM load plan selected invalid main GPU candidate index {}", main_gpu_candidate_index);
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 
   prepared_params.m_selectedDevices.reserve(llm_load_plan.m_selectedCandidateIndices.size() + 1);
@@ -455,6 +524,9 @@ OdaiLlamaEngine::prepare_llm_runtime_params(const LlmLoadPlan& llm_load_plan, co
     prepared_params.m_selectedDevices.push_back(m_deviceInventory.m_candidates[candidate_index].m_handle);
   }
 
+  // llama.cpp interprets main_gpu as an index into the caller-provided devices array,
+  // not as a global backend inventory index. We always place the chosen main device first.
+  prepared_params.m_modelParams.main_gpu = 0;
   prepared_params.m_selectedDevices.push_back(nullptr);
   OdaiResult<std::vector<size_t>> margins_res = build_llm_fit_margins(llm_load_plan);
   if (!margins_res)
@@ -619,10 +691,117 @@ OdaiLlamaEngine::finalize_accelerated_llm_plan(const std::string& base_model_pat
   return tl::make_unexpected(OdaiResultEnum::VALIDATION_FAILED);
 }
 
+OdaiResult<OdaiLlamaEngine::MmprojLoadPlan>
+OdaiLlamaEngine::plan_mmproj_load(const LlmLoadPlan& llm_load_plan, uint64_t base_model_file_size_bytes,
+                                  uint64_t mmproj_model_file_size_bytes) const
+{
+  const uint64_t base_llm_buffer_bytes = base_model_file_size_bytes;
+  const uint64_t mmproj_buffer_bytes = estimate_mmproj_memory_requirement(mmproj_model_file_size_bytes);
+
+  if (m_backendEngineConfig.m_preferredDeviceType == BackendDeviceType::CPU)
+  {
+    return make_cpu_only_mmproj_plan(
+        std::format("Projector planner kept the multimodal projector on CPU because the requested runtime mode is "
+                    "explicit CPU. Base LLM buffer ~{} MB, projector buffer ~{} MB.",
+                    bytes_to_mb(base_llm_buffer_bytes), bytes_to_mb(mmproj_buffer_bytes)));
+  }
+
+  if (llm_load_plan.m_mode == PlacementMode::CPU_ONLY || llm_load_plan.m_selectedCandidateIndices.empty())
+  {
+    return make_cpu_only_mmproj_plan(
+        std::format("Projector planner kept the multimodal projector on CPU because the loaded base LLM is already "
+                    "CPU-only, and `mtmd` can only reuse that model's existing main-GPU path instead of choosing an "
+                    "independent device. Base LLM buffer ~{} MB, projector buffer ~{} MB.",
+                    bytes_to_mb(base_llm_buffer_bytes), bytes_to_mb(mmproj_buffer_bytes)));
+  }
+
+  const size_t main_gpu_candidate_index = llm_load_plan.m_selectedCandidateIndices.front();
+  if (main_gpu_candidate_index >= m_deviceInventory.m_candidates.size())
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Projector planner selected invalid main-GPU candidate index {}",
+             main_gpu_candidate_index);
+    return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+  }
+
+  const CandidateDeviceRecord& main_gpu_record = m_deviceInventory.m_candidates[main_gpu_candidate_index];
+  const std::optional<uint64_t> free_memory = get_device_free_memory_bytes(main_gpu_record.m_handle);
+  if (!free_memory.has_value())
+  {
+    return make_cpu_only_mmproj_plan(std::format(
+        "Projector planner kept the multimodal projector on CPU because no fresh free-memory reading "
+        "was available for the base LLM's main GPU '{}'. Base LLM buffer ~{} MB, projector buffer "
+        "~{} MB.",
+        main_gpu_record.m_info.m_name, bytes_to_mb(base_llm_buffer_bytes), bytes_to_mb(mmproj_buffer_bytes)));
+  }
+
+#if defined(__APPLE__) || defined(__ANDROID__)
+  const uint64_t required_free_memory = SHARED_ACCELERATOR_SAFETY_MARGIN + mmproj_buffer_bytes;
+  if (free_memory.value() > required_free_memory)
+  {
+    return make_accelerated_mmproj_plan(std::format(
+        "Projector planner kept acceleration enabled on the base LLM's main GPU '{}' with {} MB free "
+        "after the base LLM load. `mtmd` cannot choose a separate device, so the projector reuses that "
+        "main-GPU path and preserves a {} MB shared-memory reserve plus a dedicated projector buffer of "
+        "~{} MB while tracking the base LLM buffer separately at ~{} MB.",
+        main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()), bytes_to_mb(SHARED_ACCELERATOR_SAFETY_MARGIN),
+        bytes_to_mb(mmproj_buffer_bytes), bytes_to_mb(base_llm_buffer_bytes)));
+  }
+
+  return make_cpu_only_mmproj_plan(std::format(
+      "Projector planner kept the multimodal projector on CPU because the base LLM's main GPU '{}' "
+      "reported only {} MB free after the base LLM load, which is not enough to preserve a {} MB "
+      "shared-memory reserve plus the dedicated projector buffer of ~{} MB. Base LLM buffer tracked "
+      "separately at ~{} MB.",
+      main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()), bytes_to_mb(SHARED_ACCELERATOR_SAFETY_MARGIN),
+      bytes_to_mb(mmproj_buffer_bytes), bytes_to_mb(base_llm_buffer_bytes)));
+#else
+  if (main_gpu_record.m_info.m_type == BackendDeviceType::IGPU)
+  {
+    const uint64_t required_free_memory = SHARED_ACCELERATOR_SAFETY_MARGIN + mmproj_buffer_bytes;
+    if (free_memory.value() > required_free_memory)
+    {
+      return make_accelerated_mmproj_plan(
+          std::format("Projector planner kept acceleration enabled on the base LLM's main GPU '{}' with {} MB free "
+                      "after the base LLM load. `mtmd` cannot choose a separate device, so the projector reuses "
+                      "that iGPU main path and preserves a {} MB shared-memory reserve plus a dedicated projector "
+                      "buffer of ~{} MB while tracking the base LLM buffer separately at ~{} MB.",
+                      main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()),
+                      bytes_to_mb(SHARED_ACCELERATOR_SAFETY_MARGIN), bytes_to_mb(mmproj_buffer_bytes),
+                      bytes_to_mb(base_llm_buffer_bytes)));
+    }
+
+    return make_cpu_only_mmproj_plan(std::format(
+        "Projector planner kept the multimodal projector on CPU because the base LLM's main iGPU '{}' "
+        "reported only {} MB free after the base LLM load, which is not enough to preserve a {} MB "
+        "shared-memory reserve plus the dedicated projector buffer of ~{} MB. Base LLM buffer tracked "
+        "separately at ~{} MB.",
+        main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()), bytes_to_mb(SHARED_ACCELERATOR_SAFETY_MARGIN),
+        bytes_to_mb(mmproj_buffer_bytes), bytes_to_mb(base_llm_buffer_bytes)));
+  }
+
+  if (free_memory.value() > mmproj_buffer_bytes)
+  {
+    return make_accelerated_mmproj_plan(
+        std::format("Projector planner kept acceleration enabled on the base LLM's main GPU '{}' with {} MB free "
+                    "after the base LLM load. `mtmd` cannot choose or split across separate devices, so the "
+                    "projector reuses that main-GPU path and only checks dedicated projector headroom of ~{} MB "
+                    "while tracking the base LLM buffer separately at ~{} MB.",
+                    main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()), bytes_to_mb(mmproj_buffer_bytes),
+                    bytes_to_mb(base_llm_buffer_bytes)));
+  }
+
+  return make_cpu_only_mmproj_plan(
+      std::format("Projector planner kept the multimodal projector on CPU because the base LLM's main GPU '{}' "
+                  "reported only {} MB free after the base LLM load, below the dedicated projector buffer estimate "
+                  "of ~{} MB. Base LLM buffer tracked separately at ~{} MB.",
+                  main_gpu_record.m_info.m_name, bytes_to_mb(free_memory.value()), bytes_to_mb(mmproj_buffer_bytes),
+                  bytes_to_mb(base_llm_buffer_bytes)));
+#endif
+}
+
 // NOLINTNEXTLINE(readability-convert-member-functions-to-static)
 OdaiResult<OdaiLlamaEngine::LoadedLanguageModelState> OdaiLlamaEngine::try_load_language_model_for_plan(
-    const std::string& base_model_path, const std::optional<std::string>& mmproj_model_path,
-    const PlannedLlmLoad& llm_load_plan, const LLMModelConfig& config) const
+    const std::string& base_model_path, const PlannedLlmLoad& llm_load_plan, const LLMModelConfig& config) const
 {
   try
   {
@@ -661,39 +840,116 @@ OdaiResult<OdaiLlamaEngine::LoadedLanguageModelState> OdaiLlamaEngine::try_load_
 
     ODAI_LOG(ODAI_LOG_INFO, "Preallocated reusable llama context with requested window {}", config.m_contextWindow);
 
-    if (mmproj_model_path.has_value())
-    {
-      mtmd_context_params mparams = mtmd_context_params_default();
-      mparams.use_gpu = false;
-      mparams.print_timings = false;
-      mparams.image_min_tokens = 0;
-      mparams.image_max_tokens = 0;
-
-      mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_model_path->c_str(), loaded_state.m_model.get(), mparams);
-      if (temp_ctx == nullptr)
-      {
-        ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from: {}", mmproj_model_path.value());
-        return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
-      }
-
-      loaded_state.m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
-      ODAI_LOG(ODAI_LOG_INFO, "Loaded multimodal projector from {}", mmproj_model_path.value());
-    }
-
     return loaded_state;
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading language model with plan '{}': {}",
              llm_load_plan.m_policy.m_reason, e.what());
-    return unexpected_internal_error<LoadedLanguageModelState>();
+    return unexpected_internal_error();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading language model with plan '{}'",
              llm_load_plan.m_policy.m_reason);
-    return unexpected_internal_error<LoadedLanguageModelState>();
+    return unexpected_internal_error();
   }
+}
+
+// NOLINTNEXTLINE(readability-convert-member-functions-to-static)
+OdaiResult<void> OdaiLlamaEngine::try_load_mmproj_for_plan(LoadedLanguageModelState& loaded_state,
+                                                           const std::string& mmproj_model_path,
+                                                           const MmprojLoadPlan& mmproj_load_plan) const
+{
+  try
+  {
+    if (loaded_state.m_model == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Cannot initialize multimodal projector before the base LLM is loaded");
+      return tl::unexpected(OdaiResultEnum::NOT_INITIALIZED);
+    }
+
+    mtmd_context_params mparams = mtmd_context_params_default();
+    mparams.use_gpu = mmproj_load_plan.m_useAccelerator;
+    mparams.print_timings = false;
+    mparams.image_min_tokens = 0;
+    mparams.image_max_tokens = 0;
+
+    mtmd_context* temp_ctx = mtmd_init_from_file(mmproj_model_path.c_str(), loaded_state.m_model.get(), mparams);
+    if (temp_ctx == nullptr)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "failed to initialize mtmd context from '{}' with plan: {}", mmproj_model_path,
+               mmproj_load_plan.m_reason);
+      return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
+    }
+
+    loaded_state.m_mtmdContext = std::unique_ptr<mtmd_context, MtmdContextDeleter>(temp_ctx);
+    ODAI_LOG(ODAI_LOG_INFO, "Loaded multimodal projector from {} using {} placement", mmproj_model_path,
+             mmproj_load_plan.m_useAccelerator ? "accelerated" : "CPU");
+    return {};
+  }
+  catch (const std::exception& e)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading multimodal projector with plan '{}': {}",
+             mmproj_load_plan.m_reason, e.what());
+    return unexpected_internal_error();
+  }
+  catch (...)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading multimodal projector with plan '{}'",
+             mmproj_load_plan.m_reason);
+    return unexpected_internal_error();
+  }
+}
+
+OdaiResult<void> OdaiLlamaEngine::load_optional_mmproj_into_state(
+    LoadedLanguageModelState& loaded_state, const PlannedLlmLoad& llm_load_plan, uint64_t base_model_file_size_bytes,
+    const std::optional<MmprojModelInfo>& mmproj_model_info) const
+{
+  if (!mmproj_model_info.has_value())
+  {
+    return {};
+  }
+
+  OdaiResult<MmprojLoadPlan> mmproj_load_plan_res =
+      this->plan_mmproj_load(llm_load_plan.m_policy, base_model_file_size_bytes, mmproj_model_info->m_fileSizeBytes);
+  if (!mmproj_load_plan_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Failed to prepare multimodal projector placement plan for {}", mmproj_model_info->m_path);
+    return tl::unexpected(mmproj_load_plan_res.error());
+  }
+
+  MmprojLoadPlan mmproj_load_plan = std::move(mmproj_load_plan_res.value());
+  ODAI_LOG(ODAI_LOG_INFO, "Multimodal projector placement plan: {}", mmproj_load_plan.m_reason);
+
+  OdaiResult<void> mmproj_load_res =
+      this->try_load_mmproj_for_plan(loaded_state, mmproj_model_info->m_path, mmproj_load_plan);
+  if (mmproj_load_res)
+  {
+    return {};
+  }
+
+  if (!mmproj_load_plan.m_allowCpuRetry || !mmproj_load_plan.m_useAccelerator)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Multimodal projector load failed without a CPU retry path");
+    return tl::unexpected(mmproj_load_res.error());
+  }
+
+  MmprojLoadPlan cpu_retry_mmproj_plan =
+      make_cpu_only_mmproj_plan(std::format("Accelerated projector load failed, retrying {} on CPU. Original plan: {}",
+                                            mmproj_model_info->m_path, mmproj_load_plan.m_reason));
+  ODAI_LOG(ODAI_LOG_WARN, "Accelerated projector load failed; retrying with CPU-only plan: {}",
+           cpu_retry_mmproj_plan.m_reason);
+  loaded_state.m_mtmdContext.reset();
+
+  mmproj_load_res = this->try_load_mmproj_for_plan(loaded_state, mmproj_model_info->m_path, cpu_retry_mmproj_plan);
+  if (!mmproj_load_res)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "CPU retry also failed for multimodal projector {}", mmproj_model_info->m_path);
+    return tl::unexpected(mmproj_load_res.error());
+  }
+
+  return {};
 }
 
 std::vector<size_t> OdaiLlamaEngine::rank_dgpu_candidates_by_free_memory() const
@@ -919,7 +1175,7 @@ OdaiResult<void> OdaiLlamaEngine::initialize_engine()
     this->m_isInitialized = true;
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<std::vector<BackendDevice>> OdaiLlamaEngine::get_candidate_devices()
@@ -943,8 +1199,6 @@ OdaiResult<void> OdaiLlamaEngine::does_model_support_input_data(const std::vecto
                                                                 const LLMModelConfig& llm_model_config,
                                                                 const ModelFiles& files)
 {
-  std::unique_ptr<mtmd_context, MtmdContextDeleter> temp_ctx = nullptr;
-
   OdaiResult<void> load_res = this->load_language_model(files, llm_model_config);
   if (!load_res)
   {
@@ -1003,7 +1257,7 @@ OdaiResult<void> OdaiLlamaEngine::clear_llm_context(llama_context& context)
   if (memory == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to get llama context memory");
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 
   llama_memory_clear(memory, true);
@@ -1016,7 +1270,7 @@ OdaiLlamaEngine::prepare_reusable_llm_context_for_request(const std::vector<Chat
   if (this->m_loadedLlmState.m_reusableContext == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "No reusable llama context is available because no LLM is loaded");
-    return unexpected_not_initialized<std::reference_wrapper<llama_context>>();
+    return unexpected_not_initialized();
   }
 
   llama_context& reusable_context = *this->m_loadedLlmState.m_reusableContext;
@@ -1179,12 +1433,12 @@ OdaiResult<bool> OdaiLlamaEngine::validate_model_files(const ModelFiles& files)
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while validating model files: {}", e.what());
-    return unexpected_internal_error<bool>();
+    return unexpected_internal_error();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while validating model files");
-    return unexpected_internal_error<bool>();
+    return unexpected_internal_error();
   }
 }
 
@@ -1197,7 +1451,7 @@ OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const L
   if (this->m_loadedLlmState.m_mtmdContext == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "MtmD context not initialized");
-    return unexpected_not_initialized<OdaiAudioTargetSpec>();
+    return unexpected_not_initialized();
   }
 
   if (!mtmd_support_audio(this->m_loadedLlmState.m_mtmdContext.get()))
@@ -1211,7 +1465,7 @@ OdaiResult<OdaiAudioTargetSpec> OdaiLlamaEngine::get_required_audio_spec(const L
   if (sample_rate <= 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Invalid audio sample rate reported by mtmd: {}", sample_rate);
-    return unexpected_internal_error<OdaiAudioTargetSpec>();
+    return unexpected_internal_error();
   }
 
   return OdaiAudioTargetSpec{static_cast<uint32_t>(sample_rate), 1};
@@ -1250,7 +1504,7 @@ OdaiResult<void> OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, 
     if (this->m_embeddingModel == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to load embedding model");
-      return unexpected_internal_error<void>();
+      return unexpected_internal_error();
     }
 
     this->m_embeddingModelConfig = config;
@@ -1263,13 +1517,13 @@ OdaiResult<void> OdaiLlamaEngine::load_embedding_model(const ModelFiles& files, 
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Exception caught while loading embedding model: {}", e.what());
     this->m_embeddingModel.reset();
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
   catch (...)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Unknown exception caught while loading embedding model");
     this->m_embeddingModel.reset();
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -1288,11 +1542,12 @@ OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, c
   }
 
   const std::string& base_path = files.m_entries.at("base_model_path");
-  std::optional<std::string> mmproj_path = std::nullopt;
-  if (files.m_entries.contains("mmproj_model_path") && !files.m_entries.at("mmproj_model_path").empty())
+  OdaiResult<std::optional<MmprojModelInfo>> mmproj_model_info_res = get_mmproj_model_info(files);
+  if (!mmproj_model_info_res)
   {
-    mmproj_path = files.m_entries.at("mmproj_model_path");
+    return tl::unexpected(mmproj_model_info_res.error());
   }
+  const std::optional<MmprojModelInfo> mmproj_model_info = std::move(mmproj_model_info_res.value());
 
   ODAI_LOG(ODAI_LOG_INFO, "Preparing LLM reload transaction for {}", base_path);
 
@@ -1301,7 +1556,7 @@ OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, c
   if (model_size_error)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to determine model file size for {}: {}", base_path, model_size_error.message());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 
   OdaiResult<PlannedLlmLoad> llm_load_plan_res = this->plan_llm_load(base_path, model_file_size_bytes, config);
@@ -1311,13 +1566,14 @@ OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, c
     return tl::unexpected(llm_load_plan_res.error());
   }
   PlannedLlmLoad llm_load_plan = std::move(llm_load_plan_res.value());
+  PlannedLlmLoad active_llm_load_plan = llm_load_plan;
   ODAI_LOG(ODAI_LOG_INFO, "LLM placement plan: {}", llm_load_plan.m_policy.m_reason);
 
   this->m_loadedLlmState.clear();
   ODAI_LOG(ODAI_LOG_INFO, "Released previously loaded LLM state before starting reload transaction");
 
   OdaiResult<LoadedLanguageModelState> loaded_state_res =
-      this->try_load_language_model_for_plan(base_path, mmproj_path, llm_load_plan, config);
+      this->try_load_language_model_for_plan(base_path, llm_load_plan, config);
   if (!loaded_state_res)
   {
     if (!llm_load_plan.m_policy.m_allowCpuRetry || (llm_load_plan.m_policy.m_mode == PlacementMode::CPU_ONLY))
@@ -1346,15 +1602,24 @@ OdaiResult<void> OdaiLlamaEngine::load_language_model(const ModelFiles& files, c
     this->m_loadedLlmState.clear();
     ODAI_LOG(ODAI_LOG_INFO, "Confirmed LLM state is clear before CPU-only retry");
 
-    loaded_state_res = this->try_load_language_model_for_plan(base_path, mmproj_path, cpu_retry_plan, config);
+    loaded_state_res = this->try_load_language_model_for_plan(base_path, cpu_retry_plan, config);
     if (!loaded_state_res)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "CPU retry also failed for {}", base_path);
       return tl::unexpected(loaded_state_res.error());
     }
+
+    active_llm_load_plan = std::move(cpu_retry_plan);
   }
 
   LoadedLanguageModelState loaded_state = std::move(loaded_state_res.value());
+  OdaiResult<void> mmproj_load_res = this->load_optional_mmproj_into_state(loaded_state, active_llm_load_plan,
+                                                                           model_file_size_bytes, mmproj_model_info);
+  if (!mmproj_load_res)
+  {
+    return tl::unexpected(mmproj_load_res.error());
+  }
+
   loaded_state.m_config = config;
   loaded_state.m_files = files;
   this->m_loadedLlmState = std::move(loaded_state);
@@ -1386,7 +1651,7 @@ OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string
   if (vocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no vocab present for tokenization");
-    return unexpected_not_initialized<std::vector<llama_token>>();
+    return unexpected_not_initialized();
   }
 
   // 1. Ask llama.cpp how much space we need
@@ -1395,7 +1660,7 @@ OdaiResult<std::vector<llama_token>> OdaiLlamaEngine::tokenize(const std::string
   if (n_tokens < 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize give input");
-    return unexpected_internal_error<std::vector<llama_token>>();
+    return unexpected_internal_error();
   }
 
   std::vector<llama_token> tokens(n_tokens);
@@ -1412,7 +1677,7 @@ OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_toke
   if (this->m_loadedLlmState.m_vocab == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no LLM model loaded yet, so can't detokenize");
-    return unexpected_not_initialized<std::string>();
+    return unexpected_not_initialized();
   }
 
   std::string result;
@@ -1425,7 +1690,7 @@ OdaiResult<std::string> OdaiLlamaEngine::detokenize(const std::vector<llama_toke
     if (n < 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to detokenize give input");
-      return unexpected_internal_error<std::string>();
+      return unexpected_internal_error();
     }
 
     result += std::string(buf, n);
@@ -1507,7 +1772,7 @@ OdaiResult<uint32_t> OdaiLlamaEngine::load_tokens_into_context_impl(llama_contex
   if (llama_decode(&model_context, *batch) != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama_decode failed");
-    return unexpected_internal_error<uint32_t>();
+    return unexpected_internal_error();
   }
 
   return next_pos;
@@ -1546,6 +1811,12 @@ OdaiResult<uint32_t> OdaiLlamaEngine::load_into_context(llama_context& model_con
     return this->load_into_context(model_context, prompt, request_logits_for_last_token);
   }
 
+  if (this->m_loadedLlmState.m_mtmdContext == nullptr)
+  {
+    ODAI_LOG(ODAI_LOG_ERROR, "Cannot evaluate multimodal prompt because no mtmd context is loaded");
+    return unexpected_not_initialized();
+  }
+
   mtmd_input_text text;
   text.text = prompt.c_str();
   text.add_special = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) == -1;
@@ -1563,20 +1834,19 @@ OdaiResult<uint32_t> OdaiLlamaEngine::load_into_context(llama_context& model_con
   if (res != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to tokenize prompt with mtmd, res = {}", res);
-    return unexpected_internal_error<uint32_t>();
+    return unexpected_internal_error();
   }
 
   llama_pos n_past = llama_memory_seq_pos_max(llama_get_memory(&model_context), 0) + 1;
   n_past = std::max(n_past, 0);
 
-  uint32_t n_batch = 512;
   llama_pos new_n_past = 0;
 
   if (mtmd_helper_eval_chunks(this->m_loadedLlmState.m_mtmdContext.get(), &model_context, chunks.ptr.get(), n_past, 0,
-                              n_batch, request_logits_for_last_token, &new_n_past) != 0)
+                              FIXED_LLAMA_BATCH_SIZE, request_logits_for_last_token, &new_n_past) != 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to evaluate chunks using mtmd in context");
-    return unexpected_internal_error<uint32_t>();
+    return unexpected_internal_error();
   }
 
   return static_cast<uint32_t>(new_n_past);
@@ -1590,7 +1860,7 @@ OdaiResult<llama_token> OdaiLlamaEngine::generate_next_token(llama_context& mode
   if (generated_token == LLAMA_TOKEN_NULL)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama_sampler_sample failed");
-    return unexpected_internal_error<llama_token>();
+    return unexpected_internal_error();
   }
 
   llama_sampler_accept(&sampler, generated_token);
@@ -1687,7 +1957,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet hence can't generate response");
-    return unexpected_not_initialized<StreamingStats>();
+    return unexpected_not_initialized();
   }
 
   if (callback == nullptr)
@@ -1741,7 +2011,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_response(
   if (llm_llama_sampler == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "something went wrong, couldn't create sampler");
-    return unexpected_internal_error<StreamingStats>();
+    return unexpected_internal_error();
   }
 
   OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);
@@ -1783,7 +2053,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (!image_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No image decoder available to decode image input");
-        return unexpected_not_initialized<std::pair<std::string, std::vector<mtmd::bitmap>>>();
+        return unexpected_not_initialized();
       }
 
       // Request original dimensions but exactly 3 channels (RGB) for mtmd
@@ -1805,7 +2075,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (bmp == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to create mtmd_bitmap from decoded image");
-        return unexpected_internal_error<std::pair<std::string, std::vector<mtmd::bitmap>>>();
+        return unexpected_internal_error();
       }
       bitmaps.emplace_back(bmp);
     }
@@ -1816,7 +2086,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (!audio_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No audio decoder available to decode audio input");
-        return unexpected_not_initialized<std::pair<std::string, std::vector<mtmd::bitmap>>>();
+        return unexpected_not_initialized();
       }
 
       if (!cached_audio_spec.has_value())
@@ -1843,7 +2113,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       if (bmp == nullptr)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "failed to create mtmd_bitmap from audio");
-        return unexpected_internal_error<std::pair<std::string, std::vector<mtmd::bitmap>>>();
+        return unexpected_internal_error();
       }
       bitmaps.emplace_back(bmp);
     }
@@ -1864,7 +2134,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   if (this->m_loadedLlmState.m_model == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "no model loaded yet");
-    return unexpected_not_initialized<std::string>();
+    return unexpected_not_initialized();
   }
 
   // Get the chat template from the model
@@ -1873,7 +2143,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   if (tmpl == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to get chat template from model");
-    return unexpected_internal_error<std::string>();
+    return unexpected_internal_error();
   }
 
   ODAI_LOG(ODAI_LOG_TRACE, "Got chat template from model: {}", tmpl);
@@ -1903,7 +2173,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
   if (needed_size <= 0)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "failed to calculate required template buffer size");
-    return unexpected_internal_error<std::string>();
+    return unexpected_internal_error();
   }
 
   if (needed_size > static_cast<int32_t>(formatted_buffer.size()))
@@ -1916,7 +2186,7 @@ OdaiLlamaEngine::format_chat_messages_to_prompt(const std::vector<std::pair<std:
     if (actual_size <= 0)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "failed to apply chat template");
-      return unexpected_internal_error<std::string>();
+      return unexpected_internal_error();
     }
   }
 
@@ -1930,7 +2200,7 @@ OdaiResult<void> OdaiLlamaEngine::load_chat_messages_into_context(llama_context&
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet");
-    return unexpected_not_initialized<void>();
+    return unexpected_not_initialized();
   }
 
   std::vector<mtmd::bitmap> bitmaps;
@@ -1987,7 +2257,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
   if (!this->m_isInitialized)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama backend is not Initialized yet hence can't generate response");
-    return unexpected_not_initialized<StreamingStats>();
+    return unexpected_not_initialized();
   }
 
   if (callback == nullptr)
@@ -2041,7 +2311,7 @@ OdaiResult<StreamingStats> OdaiLlamaEngine::generate_streaming_chat_response(
   if (sampler == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create new sampler");
-    return unexpected_internal_error<StreamingStats>();
+    return unexpected_internal_error();
   }
 
   OdaiResult<std::pair<std::string, std::vector<mtmd::bitmap>>> process_result = this->process_input_items(prompt);

@@ -58,7 +58,7 @@ OdaiResult<void> OdaiSqliteDb::initialize_db()
     if (!register_vec_extension())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to register sqlite-vec extension");
-      return unexpected_internal_error<void>();
+      return unexpected_internal_error();
     }
 
     if (!std::filesystem::exists(m_dbConfig.m_mediaStorePath))
@@ -66,7 +66,7 @@ OdaiResult<void> OdaiSqliteDb::initialize_db()
       if (!std::filesystem::create_directories(m_dbConfig.m_mediaStorePath))
       {
         ODAI_LOG(ODAI_LOG_ERROR, "Failed to create media store directory: {}", m_dbConfig.m_mediaStorePath);
-        return unexpected_internal_error<void>();
+        return unexpected_internal_error();
       }
     }
 
@@ -95,7 +95,7 @@ OdaiResult<void> OdaiSqliteDb::initialize_db()
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to initialize DB : {} Error: {}", m_dbConfig.m_dbPath, e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -106,7 +106,7 @@ OdaiResult<void> OdaiSqliteDb::begin_transaction()
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     m_transactionDepth++;
@@ -129,7 +129,7 @@ OdaiResult<void> OdaiSqliteDb::begin_transaction()
     {
       m_transactionDepth--;
     }
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -140,7 +140,7 @@ OdaiResult<void> OdaiSqliteDb::commit_transaction()
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (m_transactionDepth > 0)
@@ -165,7 +165,7 @@ OdaiResult<void> OdaiSqliteDb::commit_transaction()
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to commit transaction: {}", e.what());
     // If commit fails, we leave the transaction object (destructor will rollback if reset/destroyed)
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -176,7 +176,7 @@ OdaiResult<void> OdaiSqliteDb::rollback_transaction()
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     // Regardless of depth, we roll back everything
@@ -189,7 +189,7 @@ OdaiResult<void> OdaiSqliteDb::rollback_transaction()
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to rollback transaction: {}", e.what());
     m_transactionDepth = 0;
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -201,7 +201,7 @@ OdaiResult<void> OdaiSqliteDb::register_model_files(const ModelName& name, const
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (checksums.empty())
@@ -264,7 +264,7 @@ OdaiResult<ModelFiles> OdaiSqliteDb::get_model_files(const ModelName& name)
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<ModelFiles>();
+      return unexpected_not_initialized();
     }
 
     SQLite::Statement query(*m_db, "SELECT json(file_details) as file_details FROM models WHERE name = :name LIMIT 1");
@@ -283,7 +283,7 @@ OdaiResult<ModelFiles> OdaiSqliteDb::get_model_files(const ModelName& name)
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model file details: {}, Error: {}", name, e.what());
-    return unexpected_internal_error<ModelFiles>();
+    return unexpected_internal_error();
   }
 }
 
@@ -294,7 +294,7 @@ OdaiResult<std::string> OdaiSqliteDb::get_model_checksums(const ModelName& name)
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<std::string>();
+      return unexpected_not_initialized();
     }
 
     SQLite::Statement query(*m_db, "SELECT json(checksums) as checksums FROM models WHERE name = :name LIMIT 1");
@@ -311,7 +311,7 @@ OdaiResult<std::string> OdaiSqliteDb::get_model_checksums(const ModelName& name)
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to get model checksums: {}, Error: {}", name, e.what());
-    return unexpected_internal_error<std::string>();
+    return unexpected_internal_error();
   }
 }
 
@@ -323,7 +323,7 @@ OdaiResult<void> OdaiSqliteDb::update_model_files(const ModelName& name, const M
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     nlohmann::json j = new_model_file_details;
@@ -403,7 +403,7 @@ OdaiResult<InputItem> OdaiSqliteDb::store_media_item_impl(const InputItem& item,
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to store media item: {}", e.what());
-    return unexpected_internal_error<InputItem>();
+    return unexpected_internal_error();
   }
 }
 
@@ -414,7 +414,7 @@ OdaiResult<InputItem> OdaiSqliteDb::store_media_item(const InputItem& item)
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<InputItem>();
+      return unexpected_not_initialized();
     }
 
     if (!item.is_sane())
@@ -427,7 +427,7 @@ OdaiResult<InputItem> OdaiSqliteDb::store_media_item(const InputItem& item)
 
     if (media_type == MediaType::IMAGE || media_type == MediaType::AUDIO)
     {
-      OdaiResult<std::string> checksum_res = unexpected_internal_error<std::string>();
+      OdaiResult<std::string> checksum_res = unexpected_internal_error();
 
       if (item.m_type == InputItemType::FILE_PATH)
       {
@@ -481,7 +481,7 @@ OdaiResult<InputItem> OdaiSqliteDb::store_media_item(const InputItem& item)
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to store media item: {}", e.what());
-    return unexpected_internal_error<InputItem>();
+    return unexpected_internal_error();
   }
 }
 
@@ -492,7 +492,7 @@ OdaiResult<void> OdaiSqliteDb::create_semantic_space(const SemanticSpaceConfig& 
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (!config.is_sane())
@@ -522,12 +522,12 @@ OdaiResult<void> OdaiSqliteDb::create_semantic_space(const SemanticSpaceConfig& 
     }
 
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space: {}, SQLite Error: {}", config.m_name, e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create semantic space: {}, Error: {}", config.m_name, e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -538,7 +538,7 @@ OdaiResult<SemanticSpaceConfig> OdaiSqliteDb::get_semantic_space_config(const Se
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<SemanticSpaceConfig>();
+      return unexpected_not_initialized();
     }
 
     SQLite::Statement query(*m_db, "SELECT json(config) as config FROM semantic_spaces WHERE name = :name LIMIT 1");
@@ -557,7 +557,7 @@ OdaiResult<SemanticSpaceConfig> OdaiSqliteDb::get_semantic_space_config(const Se
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to get semantic space config: {}, Error: {}", name, e.what());
-    return unexpected_internal_error<SemanticSpaceConfig>();
+    return unexpected_internal_error();
   }
 }
 
@@ -568,7 +568,7 @@ OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSqliteDb::list_semantic_spaces(
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<std::vector<SemanticSpaceConfig>>();
+      return unexpected_not_initialized();
     }
 
     std::vector<SemanticSpaceConfig> spaces;
@@ -588,7 +588,7 @@ OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSqliteDb::list_semantic_spaces(
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to list semantic spaces, Error: {}", e.what());
-    return unexpected_internal_error<std::vector<SemanticSpaceConfig>>();
+    return unexpected_internal_error();
   }
 }
 
@@ -599,7 +599,7 @@ OdaiResult<void> OdaiSqliteDb::delete_semantic_space(const SemanticSpaceName& na
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     SQLite::Statement query(*m_db, "DELETE FROM semantic_spaces WHERE name = :name");
@@ -616,7 +616,7 @@ OdaiResult<void> OdaiSqliteDb::delete_semantic_space(const SemanticSpaceName& na
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to delete semantic space: {}, Error: {}", name, e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -627,7 +627,7 @@ OdaiResult<bool> OdaiSqliteDb::chat_id_exists(const ChatId& chat_id)
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<bool>();
+      return unexpected_not_initialized();
     }
 
     // "SELECT 1" is enough. We limit to 1 so the DB stops searching immediately.
@@ -641,12 +641,12 @@ OdaiResult<bool> OdaiSqliteDb::chat_id_exists(const ChatId& chat_id)
   catch (const SQLite::Exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Check Exists SQLite Error for chat_id {}: {}", chat_id, e.what());
-    return unexpected_internal_error<bool>();
+    return unexpected_internal_error();
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Check Exists Error for chat_id {}: {}", chat_id, e.what());
-    return unexpected_internal_error<bool>();
+    return unexpected_internal_error();
   }
 }
 
@@ -657,7 +657,7 @@ OdaiResult<void> OdaiSqliteDb::create_chat(const ChatId& chat_id, const ChatConf
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (!chat_config.is_sane())
@@ -743,12 +743,12 @@ OdaiResult<void> OdaiSqliteDb::create_chat(const ChatId& chat_id, const ChatConf
     }
 
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create chat session, SQLite Error: {}", e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to create chat session Error: {}", e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 
@@ -759,7 +759,7 @@ OdaiResult<ChatConfig> OdaiSqliteDb::get_chat_config(const ChatId& chat_id)
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<ChatConfig>();
+      return unexpected_not_initialized();
     }
 
     // always use named fields to extract data instead of index
@@ -779,7 +779,7 @@ OdaiResult<ChatConfig> OdaiSqliteDb::get_chat_config(const ChatId& chat_id)
     if (chat_config_col.isNull())
     {
       ODAI_LOG(ODAI_LOG_ERROR, "chat_config is null for chat_id {}", chat_id);
-      return unexpected_internal_error<ChatConfig>();
+      return unexpected_internal_error();
     }
 
     nlohmann::json chat_config_json = nlohmann::json::parse(chat_config_col.getString());
@@ -789,7 +789,7 @@ OdaiResult<ChatConfig> OdaiSqliteDb::get_chat_config(const ChatId& chat_id)
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to Load Chat, Chat Id : {}, Error: {}", chat_id, e.what());
-    return unexpected_internal_error<ChatConfig>();
+    return unexpected_internal_error();
   }
 }
 
@@ -800,7 +800,7 @@ OdaiResult<std::vector<ChatMessage>> OdaiSqliteDb::get_chat_history(const ChatId
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<std::vector<ChatMessage>>();
+      return unexpected_not_initialized();
     }
 
     std::vector<ChatMessage> messages;
@@ -866,7 +866,7 @@ OdaiResult<std::vector<ChatMessage>> OdaiSqliteDb::get_chat_history(const ChatId
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to get chat history, Chat Id : {}, Error: {}", chat_id, e.what());
-    return unexpected_internal_error<std::vector<ChatMessage>>();
+    return unexpected_internal_error();
   }
 }
 
@@ -877,7 +877,7 @@ OdaiResult<void> OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const
     if (m_db == nullptr)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Database not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (messages.empty())
@@ -985,12 +985,12 @@ OdaiResult<void> OdaiSqliteDb::insert_chat_messages(const ChatId& chat_id, const
     }
 
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to insert chat messages SQLite Error: {}", e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
   catch (const std::exception& e)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to insert chat messages Error: {}", e.what());
-    return unexpected_internal_error<void>();
+    return unexpected_internal_error();
   }
 }
 

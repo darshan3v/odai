@@ -41,14 +41,14 @@ OdaiResult<std::string> calculate_file_checksum(const std::string& path)
   if (state == nullptr)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to allocate XXH3 state for file checksum");
-    return unexpected_internal_error<std::string>();
+    return unexpected_internal_error();
   }
 
   if (XXH3_64bits_reset(state) != XXH_OK)
   {
     XXH3_freeState(state);
     ODAI_LOG(ODAI_LOG_ERROR, "Failed to reset XXH3 state for file checksum");
-    return unexpected_internal_error<std::string>();
+    return unexpected_internal_error();
   }
 
   const uint32_t buffer_size = static_cast<const uint32_t>(512 * BYTES_PER_KB); // 512KB buffer

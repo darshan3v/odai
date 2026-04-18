@@ -16,15 +16,13 @@ constexpr c_OdaiResult to_c_result(OdaiResultEnum result)
 }
 
 /// Creates a standard INTERNAL_ERROR unexpected result for catch-all failure paths.
-template <class T>
-tl::unexpected<OdaiResultEnum> unexpected_internal_error()
+inline tl::unexpected<OdaiResultEnum> unexpected_internal_error()
 {
   return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
 }
 
 /// Creates a standard NOT_INITIALIZED unexpected result for lifecycle guard paths.
-template <class T>
-tl::unexpected<OdaiResultEnum> unexpected_not_initialized()
+inline tl::unexpected<OdaiResultEnum> unexpected_not_initialized()
 {
   return tl::unexpected(OdaiResultEnum::NOT_INITIALIZED);
 }

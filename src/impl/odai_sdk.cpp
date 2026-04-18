@@ -105,7 +105,7 @@ OdaiResult<void> OdaiSdk::initialize_sdk(const DBConfig& db_config, const Backen
     if ((rag_engine == nullptr))
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Failed to create RAG engine");
-      return unexpected_internal_error<void>();
+      return unexpected_internal_error();
     }
 
     OdaiResult<void> init_res = rag_engine->initialize_rag_engine();
@@ -121,7 +121,7 @@ OdaiResult<void> OdaiSdk::initialize_sdk(const DBConfig& db_config, const Backen
     ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK Initialized successfully");
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::shutdown()
@@ -133,7 +133,7 @@ OdaiResult<void> OdaiSdk::shutdown()
     ODAI_LOG(ODAI_LOG_INFO, "ODAI SDK shutdown completed");
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::register_model_files(const ModelName& name, const ModelFiles& files)
@@ -143,12 +143,12 @@ OdaiResult<void> OdaiSdk::register_model_files(const ModelName& name, const Mode
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     return m_ragEngine->register_model_files(name, files);
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::update_model_files(const ModelName& name, const ModelFiles& files, UpdateModelFlag flag)
@@ -158,12 +158,12 @@ OdaiResult<void> OdaiSdk::update_model_files(const ModelName& name, const ModelF
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     return m_ragEngine->update_model_files(name, files, flag);
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::create_semantic_space(const SemanticSpaceConfig& config)
@@ -173,7 +173,7 @@ OdaiResult<void> OdaiSdk::create_semantic_space(const SemanticSpaceConfig& confi
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (!config.is_sane())
@@ -194,7 +194,7 @@ OdaiResult<void> OdaiSdk::create_semantic_space(const SemanticSpaceConfig& confi
 
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<SemanticSpaceConfig> OdaiSdk::get_semantic_space_config(const SemanticSpaceName& name)
@@ -204,7 +204,7 @@ OdaiResult<SemanticSpaceConfig> OdaiSdk::get_semantic_space_config(const Semanti
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<SemanticSpaceConfig>();
+      return unexpected_not_initialized();
     }
 
     OdaiResult<SemanticSpaceConfig> res = m_ragEngine->get_semantic_space_config(name);
@@ -217,7 +217,7 @@ OdaiResult<SemanticSpaceConfig> OdaiSdk::get_semantic_space_config(const Semanti
 
     return res;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<SemanticSpaceConfig>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSdk::list_semantic_spaces()
@@ -227,7 +227,7 @@ OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSdk::list_semantic_spaces()
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<std::vector<SemanticSpaceConfig>>();
+      return unexpected_not_initialized();
     }
 
     OdaiResult<std::vector<SemanticSpaceConfig>> res = m_ragEngine->list_semantic_spaces();
@@ -240,7 +240,7 @@ OdaiResult<std::vector<SemanticSpaceConfig>> OdaiSdk::list_semantic_spaces()
 
     return res;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<std::vector<SemanticSpaceConfig>>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
@@ -250,7 +250,7 @@ OdaiResult<void> OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     OdaiResult<void> res = m_ragEngine->delete_semantic_space(name);
@@ -263,7 +263,7 @@ OdaiResult<void> OdaiSdk::delete_semantic_space(const SemanticSpaceName& name)
 
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<void> OdaiSdk::add_document(const std::string& content, const DocumentId& document_id,
@@ -274,7 +274,7 @@ OdaiResult<void> OdaiSdk::add_document(const std::string& content, const Documen
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<void>();
+      return unexpected_not_initialized();
     }
 
     if (content.empty() || document_id.empty() || semantic_space_name.empty() || scope_id.empty())
@@ -289,7 +289,7 @@ OdaiResult<void> OdaiSdk::add_document(const std::string& content, const Documen
 
     return {};
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<void>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<StreamingStats> OdaiSdk::generate_streaming_response(const LLMModelConfig& llm_model_config,
@@ -302,7 +302,7 @@ OdaiResult<StreamingStats> OdaiSdk::generate_streaming_response(const LLMModelCo
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<StreamingStats>();
+      return unexpected_not_initialized();
     }
 
     if (!llm_model_config.is_sane())
@@ -340,7 +340,7 @@ OdaiResult<StreamingStats> OdaiSdk::generate_streaming_response(const LLMModelCo
 
     return stream_res;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<StreamingStats>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<ChatId> OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConfig& chat_config)
@@ -350,7 +350,7 @@ OdaiResult<ChatId> OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConf
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<ChatId>();
+      return unexpected_not_initialized();
     }
 
     ChatId chat_id;
@@ -392,7 +392,7 @@ OdaiResult<ChatId> OdaiSdk::create_chat(const ChatId& chat_id_in, const ChatConf
 
     return chat_id;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<ChatId>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<std::vector<ChatMessage>> OdaiSdk::get_chat_history(const ChatId& chat_id)
@@ -402,7 +402,7 @@ OdaiResult<std::vector<ChatMessage>> OdaiSdk::get_chat_history(const ChatId& cha
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<std::vector<ChatMessage>>();
+      return unexpected_not_initialized();
     }
 
     if (chat_id.empty())
@@ -420,7 +420,7 @@ OdaiResult<std::vector<ChatMessage>> OdaiSdk::get_chat_history(const ChatId& cha
 
     return res;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<std::vector<ChatMessage>>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
 
 OdaiResult<StreamingStats> OdaiSdk::generate_streaming_chat_response(const ChatId& chat_id,
@@ -433,7 +433,7 @@ OdaiResult<StreamingStats> OdaiSdk::generate_streaming_chat_response(const ChatI
     if (!m_sdkInitialized)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "SDK is not initialized");
-      return unexpected_not_initialized<StreamingStats>();
+      return unexpected_not_initialized();
     }
 
     if (chat_id.empty())
@@ -477,5 +477,5 @@ OdaiResult<StreamingStats> OdaiSdk::generate_streaming_chat_response(const ChatI
 
     return stream_res;
   }
-  ODAI_CATCH_RETURN(unexpected_internal_error<StreamingStats>())
+  ODAI_CATCH_RETURN(unexpected_internal_error())
 }
