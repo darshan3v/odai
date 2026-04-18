@@ -10,7 +10,6 @@
 - [ ] May be convert int type based enum to true C++ enums, and have conversion fns to convert from C style enum to Cpp enum, that way Cpp side api is more idiomatic
 - [ ] Our ODAIDb (sqlite impl) is not thread safe, since db, statement, transaction, if at all we want to make it thread safe then one db object per thread, or use mutex locks
 - [ ] Update defaults of structs, structs like Generator Config all needs to have good defaults
-- [ ] Some functions like register model return false if model already registered , we need to properly express it with rich types
 
 ### Features / Bugs
 
@@ -42,7 +41,6 @@
 - [ ] Automate fetch and build of sqlite-vec also, like we have already did for sqlitecpp (& sqlite ) and llama
 - [ ] Think on what would be the best way to structure your codebase, that is how to cross communicate JNI Libs and JNI cpp file
 - [ ] Understand why android builds are resulting in large binary
-- [ ] Have to make Pre-commit hook with clang efficient runnig scripts/lint.sh on all files is too much intensive
 
 
 ### Android / Mobile

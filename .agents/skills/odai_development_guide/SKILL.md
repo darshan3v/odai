@@ -168,7 +168,7 @@ Enforced by `clang-format` (`.clang-format`):
 
 Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
 - **`format.sh`** - Format code using clang-format (`--help` for usage)
-- **`lint.sh`** - Enforce naming conventions using clang-tidy (`lint.sh [OPTIONS]`)
+- **`lint.sh`** - Enforce naming conventions using `run-clang-tidy` in parallel (`lint.sh [OPTIONS]`). The script regenerates `build/compile_commands.json` with the `linux-default-release` preset and symlinks it at the repo root before linting.
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
 

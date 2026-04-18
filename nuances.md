@@ -10,6 +10,7 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
         - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-cc-library)
         - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
         - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
+    - [Parallel clang-tidy Requires `run-clang-tidy` and Process-Group Cleanup](#parallel-clang-tidy-requires-run-clang-tidy-and-process-group-cleanup)
 - [Runtime Behavior](#runtime-behavior)
     - [Explicit SDK Shutdown for Deterministic Backend Cleanup](#explicit-sdk-shutdown-for-deterministic-backend-cleanup)
     - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
@@ -91,6 +92,13 @@ When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (
     #include "miniaudio.h"
     #undef ma_atomic_global_lock
     ```
+
+### Parallel clang-tidy Requires `run-clang-tidy` and Process-Group Cleanup
+ODAI's lint workflow now relies on `run-clang-tidy` instead of invoking `clang-tidy` serially per file.
+
+* **Why this exists:** Full-tree linting was too slow for the shared pre-commit hook once the codebase grew. `run-clang-tidy` reuses the compilation database and spreads checks across a worker pool, which keeps the "lint all sources" policy practical.
+* **Non-obvious dependency:** Developers need the `run-clang-tidy` helper installed, not just the `clang-tidy` binary. The helper usually ships with the clang-tidy package but may be packaged separately depending on distro/toolchain.
+* **Why the signal trap matters:** Interrupting `run-clang-tidy` can leave child workers running unless the script kills the whole process group. `scripts/lint.sh` traps `INT`/`TERM` and calls `kill -- -$$` specifically to avoid orphaned background clang-tidy processes during local runs or pre-commit aborts.
 
 ## Runtime Behavior
 

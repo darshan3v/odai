@@ -32,7 +32,6 @@ EXAMPLES:
 
 REQUIREMENTS:
     - compile_commands.json must exist in build/
-    - Run CMake first: cmake --preset linux-default-debug
     - run-clang-tidy must be installed (ships with clang-tidy)
 EOF
 }
