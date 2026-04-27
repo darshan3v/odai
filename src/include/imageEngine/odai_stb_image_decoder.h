@@ -16,8 +16,9 @@ public:
   OdaiStbImageDecoder& operator=(OdaiStbImageDecoder&&) = delete;
 
   /// Checks if the given image format is supported by this decoder.
-  /// Formats typically supported by this decoder: "png", "jpg", "jpeg", "bmp", "tga", "gif", "hdr", "pic", "pnm"
-  /// @param format The format to check (e.g. extension like "png" or "jpg")
+  /// Formats supported by this decoder: "png", "jpg", "jpeg", "bmp", "tga", "gif", "hdr", "pnm", "ppm", "pgm", "psd"
+  /// @param format The image format extension without a leading dot (e.g. "png" or "jpg"). Matching is
+  /// case-insensitive.
   /// @return true if the format is supported, false otherwise
   bool is_supported(const std::string& format) override;
 

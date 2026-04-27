@@ -7,7 +7,7 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
 - [Build System (CMake)](#build-system-cmake)
     - [Third-Party Library Integration Quirks](#third-party-library-integration-quirks)
         - [Miniaudio (Header-Only STB-style)](#miniaudio-header-only-stb-style)
-        - [Llama.cpp (Traditional C/C++ Library)](#llamacpp-traditional-cc-library)
+        - [Llama.cpp (Shared Library + Dynamic Backends)](#llamacpp-shared-library--dynamic-backends)
         - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
         - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
     - [Parallel clang-tidy Requires `run-clang-tidy` and Process-Group Cleanup](#parallel-clang-tidy-requires-run-clang-tidy-and-process-group-cleanup)
@@ -22,6 +22,7 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
     - [mtmd Does Not Own A Separate Rolling Context Window](#mtmd-does-not-own-a-separate-rolling-context-window)
     - [LLM Load Preallocates One Reusable Context](#llm-load-preallocates-one-reusable-context)
     - [llama.cpp Load Failures Must Collapse to Return Paths for Fallback](#llamacpp-load-failures-must-collapse-to-return-paths-for-fallback)
+    - [SQLite Foreign Keys Must Be Enabled Per Connection](#sqlite-foreign-keys-must-be-enabled-per-connection)
 
 ## Build System (CMake)
 
@@ -46,16 +47,21 @@ Miniaudio is a single-file header library (`miniaudio.h`). It requires a specifi
    ```
    **Why:** Because miniaudio is implemented directly into our code via `#define MINIAUDIO_IMPLEMENTATION`, the actual C/C++ compiler needs to see the same feature-pruning defines while compiling the `odai` target. In practice ODAI strips the unused codec, device-I/O, resource-manager, node-graph, engine, and generation paths at compile time.
 
-#### Llama.cpp (Traditional C/C++ Library)
-Unlike miniaudio, `llama.cpp` builds as a traditional, separate library containing multiple `.cpp` and `.h` files.
+#### Llama.cpp (Shared Library + Dynamic Backends)
+Unlike miniaudio, `llama.cpp` builds as traditional compiled targets. ODAI currently builds those targets shared and enables GGML's dynamic backend loader.
 
-* **Configuration:**
+* **Configuration shape:**
   ```cmake
-  set(LLAMA_BUILD_TESTS OFF CACHE BOOL "" FORCE)
+  set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
+  set(LLAMA_BUILD_TOOLS ON CACHE BOOL "" FORCE)
+  set(LLAMA_BUILD_COMMON ON CACHE BOOL "" FORCE)
+  odai_configure_dependency_build_type(llama SHARED)
   FetchContent_MakeAvailable(llama)
-  target_link_libraries(odai PRIVATE llama)
+  target_link_libraries(odai PRIVATE llama mtmd)
   ```
-  **Why:** These flags instruct `llama.cpp`'s internal CMake script on *how* to compile its own `.cpp` files into a library. Once it is built, our `odai` library only needs to *link* to the resulting `llama` binary. We do not need to pass `target_compile_definitions` to our `odai` target for llama features, because our compiler is not compiling the llama source code directly—it is just pulling in the pre-compiled symbols.
+  ODAI also redirects `llama`, `ggml`, `ggml-base`, `mtmd`, and any `GGML_AVAILABLE_BACKENDS` outputs into the SDK output directories so runtime backend discovery can load the backend shared objects from the same library directory as `odai`.
+
+* **Why:** `odai` compiles ODAI's llama integration code, but it does not compile llama.cpp source directly. It links to the shared `llama` and `mtmd` targets, while GGML backend implementations are discovered at runtime via `ggml_backend_load_all_from_path()` from the loaded module directory. This keeps backend variants swappable without baking every backend into `odai` and matches the runtime device-discovery flow documented under `docs/architecture/implementations/llamacpp-backend.md`.
 
 #### Best Practice: Dedicated Implementation File (Header-Only)
 The preferred way to handle header-only libraries (STB-style) in this SDK is to use a **dedicated implementation file**. Instead of defining the implementation macro inside decoder or engine files, create a separate file in `src/impl/headerOnlyLib/`.
@@ -77,7 +83,7 @@ The preferred way to handle header-only libraries (STB-style) in this SDK is to 
     *   **Cleaner Feature Code:** Decoder and engine files can include the library normally without carrying macro-heavy setup.
 
 #### Duplicate Symbol Errors (Header-Only Libraries)
-When linking `libmtmd.a` and integrating `miniaudio.h` into your main codebase (`odai`), you might encounter duplicate symbol linker errors if both libraries try to compile the `MINIAUDIO_IMPLEMENTATION` or if one compiles it globally and the other tries to link to it.
+When linking dependencies that may also embed `miniaudio.h` and integrating `miniaudio.h` into your main codebase (`odai`), you might encounter duplicate symbol linker errors if more than one target compiles `MINIAUDIO_IMPLEMENTATION` globally.
 
 > [!TIP]
 > Use the [Dedicated Implementation File](#best-practice-dedicated-implementation-file-header-only) approach mentioned above as the primary fix.
@@ -169,3 +175,9 @@ ODAI's CPU-retry logic only works if accelerated-load failures stay inside the n
 
 * **Why local catch blocks are needed:** `llama_model_load_from_file()` does catch some internal `std::exception` cases in upstream `llama.cpp`, but not the entire wrapper path around model construction, device-list setup, or every downstream helper. `mtmd_init_from_file()` is also outside ODAI's control. If either load step throws past ODAI, the accelerated path can bypass the planned CPU retry entirely.
 * **Implementation rule:** Keep exception guards directly around ODAI's load attempts and translate any thrown failure into a logged `false`/error result. That preserves fallback behavior and keeps exceptions from leaking toward higher layers or the C API boundary.
+
+### SQLite Foreign Keys Must Be Enabled Per Connection
+SQLite parses foreign key declarations by default, but does not enforce them for a connection unless `PRAGMA foreign_keys = ON` is executed on that connection.
+
+* **Why this matters for ODAI:** `chat_messages.chat_id` references `chats.chat_id`, and `insert_chat_messages()` maps SQLite foreign-key violations to `OdaiResultEnum::NOT_FOUND`. Without the pragma, inserting messages for an unknown chat can silently create orphan rows and bypass the intended error path.
+* **Implementation rule:** Every new `OdaiSqliteDb` connection must enable foreign-key enforcement immediately after opening the `SQLite::Database` object and before normal schema-backed operations run.

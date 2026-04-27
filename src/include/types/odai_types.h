@@ -2,6 +2,7 @@
 
 #include "odai_ctypes.h"
 #include "types/odai_common_types.h"
+#include "utils/string_utils.h"
 #include <cstdint>
 #include <nlohmann/json.hpp>
 #include <optional>
@@ -117,19 +118,22 @@ struct InputItem
   std::vector<uint8_t> m_data;
   std::string m_mimeType;
 
-  /// Identifies the MediaType from a given mime_type string.
+  /// Identifies the MediaType from the MIME type string.
+  /// MIME type prefix matching is case-insensitive; the original m_mimeType value is not modified.
   /// @return The appropriate MediaType enum.
   MediaType get_media_type() const
   {
-    if (m_mimeType.rfind("text/", 0) == 0)
+    const std::string lower_mime_type = to_lower(m_mimeType);
+
+    if (lower_mime_type.rfind("text/", 0) == 0)
     {
       return MediaType::TEXT;
     }
-    if (m_mimeType.rfind("image/", 0) == 0)
+    if (lower_mime_type.rfind("image/", 0) == 0)
     {
       return MediaType::IMAGE;
     }
-    if (m_mimeType.rfind("audio/", 0) == 0)
+    if (lower_mime_type.rfind("audio/", 0) == 0)
     {
       return MediaType::AUDIO;
     }

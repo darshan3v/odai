@@ -1,7 +1,7 @@
 # OdaiLlamaEngine — llama.cpp Backend Implementation
 
 **Interface**: [`IOdaiBackendEngine`](../interfaces/backend-engine.md)  
-**Header**: [`src/include/backendEngine/odai_llamacpp/odai_llama_backend_engine.h`](../../src/include/backendEngine/odai_llamacpp/odai_llama_backend_engine.h)  
+**Header**: [`src/include/backendEngine/odai_llamacpp/odai_llama_backend_engine.h`](../../../src/include/backendEngine/odai_llamacpp/odai_llama_backend_engine.h)  
 **Implementation**: `src/impl/backendEngine/odai_llamacpp/`  
 **CMake Guard**: `ODAI_ENABLE_LLAMA_BACKEND`
 
@@ -29,7 +29,7 @@ Notes:
 
 - **Desktop AUTO** does not run a second iGPU-only pass after GPU probing fails
 - Discovery logs both the configured probe order and the per-backend probe result counts so later placement behavior can be explained without mixing discovery into load heuristics
-- The Vulkan-on-Android device-class nuance is documented in [`nuances.md`](../../nuances.md#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
+- The Vulkan-on-Android device-class nuance is documented in [`dev_nuances.md`](../../../dev_nuances.md#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
 
 ## LLM Placement Planning
 
@@ -59,7 +59,7 @@ Accelerated plans are now validated with `llama_params_fit()` against the reques
 - if acceleration cannot satisfy the requested context window exactly, the planner materializes an explicit CPU-only load plan instead of silently shrinking context
 
 The shared-memory reserve rationale for single-accelerator targets lives in
-[`nuances.md`](../../nuances.md#single-accelerator-placement-keeps-a-shared-memory-reserve).
+[`dev_nuances.md`](../../../dev_nuances.md#single-accelerator-placement-keeps-a-shared-memory-reserve).
 
 ## Thread Policy Hook
 
@@ -161,7 +161,7 @@ During `process_input_items()`, the engine:
 
 All llama.cpp resources use `std::unique_ptr` with custom deleters (`LlamaModelDeleter`, `LlamaContextDeleter`, `LlamaSamplerDeleter`, `LlamaBatchDeleter`, `MtmdContextDeleter`) to ensure proper RAII cleanup.
 
-Applications should release those resources through the normal SDK lifecycle (`OdaiSdk::shutdown()` / `odai_shutdown()`). The teardown rationale is documented in [`nuances.md`](../../nuances.md#explicit-sdk-shutdown-for-deterministic-backend-cleanup).
+Applications should release those resources through the normal SDK lifecycle (`OdaiSdk::shutdown()` / `odai_shutdown()`). The teardown rationale is documented in [`dev_nuances.md`](../../../dev_nuances.md#explicit-sdk-shutdown-for-deterministic-backend-cleanup).
 
 ## Known Limitations
 

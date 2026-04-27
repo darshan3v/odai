@@ -120,6 +120,13 @@ public:
         - `OdaiResult<T>` -> `unexpected_internal_error()`
         - `void` -> log and return
       - If a function needs additional exception-side cleanup, keep the full `catch` local instead of hiding cleanup behind a shared macro.
+    - **`OdaiResult<T>` Usage** (defined in `src/include/types/odai_result.h`):
+      - `OdaiResult<T>` is a type alias for `tl::expected<T, OdaiResultEnum>`. It either holds a success value of type `T` or an `OdaiResultEnum` error code.
+      - **Error codes** (`OdaiResultEnum`): `ALREADY_EXISTS`, `NOT_FOUND`, `VALIDATION_FAILED`, `INVALID_ARGUMENT`, `INTERNAL_ERROR`, `NOT_INITIALIZED`.
+      - **Returning success**: Return the value directly — `return some_value;` (implicit conversion).
+      - **Returning failure**: Use the helpers `unexpected_internal_error()` or `unexpected_not_initialized()`, or construct manually — `return tl::unexpected(OdaiResultEnum::NOT_FOUND);`.
+      - **Crossing the C boundary**: Use `to_c_result(error_code)` to cast `OdaiResultEnum` to `c_OdaiResult`.
+      - **When to use which return type**: Prefer `OdaiResult<void>` for operations with no payload, `OdaiResult<T>` for methods returning data, `OdaiResult<bool>` for state queries that can fail operationally. Reserve plain `bool` for true predicates like `is_sane()`.
 
 ## 3. Naming Conventions
 
@@ -160,15 +167,50 @@ Enforced by `clang-format` (`.clang-format`):
 ### 4.2 File Headers
 - **Pragma Once**: Use `#pragma once` at the top of all header files.
 
-### 4.3 Comments
-- **Doxygen**: Use `///` for documentation comments on public APIs (classes, methods, functions).
+### 4.3 Documentation & Comments
+
+#### Comment Styles
+- **Doxygen**: Use `///` (triple slash) for documentation comments on public APIs (classes, methods, functions). Do not use `//` or `/* */` for doc comments.
 - **Implementation**: Use `//` for logic explanations inside functions.
+
+#### Function Documentation
+
+The first line of a doc comment should be a concise, one-line summary. Add additional lines after for behavior details, edge cases, or important notes.
+
+**Required elements:**
+1.  **Brief description**: Start with a clear, concise description of the function's purpose.
+2.  **Parameter documentation**: Use `@param` tags for each parameter:
+    - Format: `/// @param parameter_name Description of the parameter`
+    - Include type information if not obvious from the signature.
+    - Mention if the parameter is modified in place.
+    - Note if the parameter is optional or has special constraints.
+3.  **Return value documentation**: Use `@return` tag:
+    - Format: `/// @return Description of return value`
+    - Always mention error conditions (e.g., "or -1 on error", "or nullptr on error", "or empty vector on error").
+    - Specify what the return value represents.
+
+**Additional guidelines:**
+- Mention edge cases (e.g., "If the same model is already loaded, only updates the configuration").
+- Note side effects and in-place mutations.
+- Document ownership clearly — if a function allocates memory or returns heap-backed data, state who frees it and which matching free function to call.
+- Mark reserved parameters as "currently unused, reserved for future use".
+- Mark unimplemented functions with "ToDo: Implementation not yet defined."
+- Avoid exposing implementation details — focus on what the function does from the user's perspective.
+
+**Checklist** (verify before completing documentation):
+- [ ] Brief description on first line
+- [ ] All parameters documented with `@param`
+- [ ] Return value documented with `@return` including error conditions
+- [ ] Edge cases and special behaviors mentioned
+- [ ] Side effects documented if any
+- [ ] Ownership/allocation rules documented if the API returns or mutates heap-backed data
+- [ ] Complex behavior explained in additional lines
 
 ### 4.4 Code Style Tooling
 
 Style is enforced via git pre-commit hook. Scripts are in `scripts/`:
-- **`format.sh`** - Format code using clang-format (`--help` for usage)
-- **`lint.sh`** - Enforce naming conventions using `run-clang-tidy` in parallel (`lint.sh [OPTIONS]`). The script regenerates `build/compile_commands.json` with the `linux-default-release` preset and symlinks it at the repo root before linting.
+- **`format.sh`** - Format code using clang-format. Accepts files or directories as arguments (e.g. `format.sh src/ tests/`). Covers both production and test code.
+- **`lint.sh`** - Enforce naming conventions using `run-clang-tidy` in parallel. Accepts directories as arguments (e.g. `lint.sh src/`). The script regenerates `build/compile_commands.json` with the `linux-default-release` preset and symlinks it at the repo root before linting.
 
 > **Maintenance**: When updating `format.sh` or `lint.sh`, also update this guideline if behavior changes.
 

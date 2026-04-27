@@ -1,13 +1,13 @@
 # OdaiSqliteDb — SQLite Database Implementation
 
 **Interface**: [`IOdaiDb`](../interfaces/database.md)  
-**Header**: [`src/include/db/odai_sqlite/odai_sqlite_db.h`](../../src/include/db/odai_sqlite/odai_sqlite_db.h)  
+**Header**: [`src/include/db/odai_sqlite/odai_sqlite_db.h`](../../../src/include/db/odai_sqlite/odai_sqlite_db.h)  
 **Implementation**: `src/impl/db/odai_sqlite/`  
 **CMake Guard**: `ODAI_ENABLE_SQLITE_DB`
 
 ## Overview
 
-Uses SQLite (via [SQLiteCpp](https://github.com/SRombauts/SQLiteCpp) wrapper) with the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for vector similarity search. Single-file database suitable for on-device deployment. The `sqlite-vec` extension is registered before opening the database.
+Uses SQLite (via [SQLiteCpp](https://github.com/SRombauts/SQLiteCpp) wrapper) with the [sqlite-vec](https://github.com/asg017/sqlite-vec) extension for vector similarity search. Single-file database suitable for on-device deployment. The `sqlite-vec` extension is registered before opening the database, and each opened connection enables foreign-key enforcement before schema-backed operations run.
 
 ## Schema Overview
 

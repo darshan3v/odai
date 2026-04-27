@@ -5,7 +5,7 @@
 
 ## System Layers
 
-The SDK is organized into three distinct layers, each with a clear responsibility boundary:
+The SDK is organized into four top-level areas, each with a clear responsibility boundary:
 
 ```mermaid
 graph TD
@@ -62,8 +62,8 @@ For the full request lifecycle (C types → sanitize → convert → SDK → eng
 ## Documentation Boundaries
 
 - `docs/architecture/` owns stable structure: layers, interfaces, implementations, data flow, and current runtime responsibilities.
-- [`nuances.md`](../nuances.md) owns non-obvious rationale: build quirks, third-party integration workarounds, platform-specific gotchas, and behavior that exists mainly because tools or dependencies behave a certain way.
-- When a topic needs both, keep the architectural shape here and link to `nuances.md` for the workaround-heavy reasoning instead of repeating it.
+- [`dev_nuances.md`](../../dev_nuances.md) owns non-obvious rationale: build quirks, third-party integration workarounds, platform-specific gotchas, and behavior that exists mainly because tools or dependencies behave a certain way.
+- When a topic needs both, keep the architectural shape here and link to `dev_nuances.md` for the workaround-heavy reasoning instead of repeating it.
 
 ---
 
@@ -110,12 +110,13 @@ It handles model registration/update workflows, chat session management, and str
 4. **Wire the factory** — update `odai_sdk.cpp` (or `odai_rag_engine.cpp`) to instantiate your impl when the flag is set.  
 5. **Document** — add a file in `docs/architecture/implementations/` and link it from this README.
 
-For coding patterns and conventions, see the [Development Guide skill](../.agents/skills/odai_development_guide/SKILL.md).
+For coding patterns and conventions, see the [Development Guide skill](../../.agents/skills/odai_development_guide/SKILL.md).
 
 ---
 
 ## Further Reading
 
 - [Data Flow & Type System](./data-flow-and-type-system.md) — Request lifecycle, C↔C++ type layers, memory ownership
-- [Development Guide](../.agents/skills/odai_development_guide/SKILL.md) — Coding patterns, naming conventions, interface design rules
-- [Build Nuances](../nuances.md) — Build system quirks and gotchas
+- [Testing Architecture](./testing.md) — Test framework design, layer mapping, data pipeline, fixture patterns
+- [Development Guide](../../.agents/skills/odai_development_guide/SKILL.md) — Coding patterns, naming conventions, interface design rules
+- [Build Nuances](../../dev_nuances.md) — Build system quirks and gotchas

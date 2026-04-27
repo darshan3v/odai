@@ -1,40 +1,36 @@
 #!/bin/bash
-# ODAI SDK Code Formatter
-# Uses clang-format to format C/C++ source files
+# General-purpose C/C++ code formatter using clang-format.
+# Accepts individual files or directories to search recursively.
 
 set -e
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
-
 show_help() {
     cat << EOF
-ODAI Code Formatter - Format C/C++ source files using clang-format
+Code Formatter - Format C/C++ source files using clang-format
 
 USAGE:
-    format.sh [OPTIONS] [FILES...]
+    format.sh [OPTIONS] [FILES_OR_DIRS...]
 
 OPTIONS:
-    --all       Format all project source files (src/ and main.cpp)
     --check     Check formatting without modifying files (for CI)
     --help      Show this help message
 
-EXAMPLES:
-    format.sh --all                     # Format all project files
-    format.sh --all --check             # Check all files (CI mode)
-    format.sh src/impl/odai_sdk.cpp     # Format specific file
-    format.sh src/include/*.h           # Format all headers
+ARGUMENTS:
+    Pass any combination of files and directories.
+    Directories are searched recursively for .c, .cpp, .cc, .h, .hpp files.
+    If no arguments are given, shows this help.
 
-FILES:
-    If no --all flag and no files specified, shows this help.
-    Only project files (src/, main.cpp) are processed.
+EXAMPLES:
+    format.sh src/ tests/                   # Format all files in src/ and tests/
+    format.sh src/ tests/ --check           # Check formatting (CI mode)
+    format.sh src/impl/odai_sdk.cpp         # Format a specific file
+    format.sh src/include/*.h               # Format matching headers
 EOF
 }
 
 # Parse arguments
 CHECK_MODE=false
-ALL_MODE=false
-FILES=()
+INPUTS=()
 
 for arg in "$@"; do
     case $arg in
@@ -45,28 +41,33 @@ for arg in "$@"; do
         --check)
             CHECK_MODE=true
             ;;
-        --all)
-            ALL_MODE=true
-            ;;
         *)
-            FILES+=("$arg")
+            INPUTS+=("$arg")
             ;;
     esac
 done
 
-# Determine files to process
-if [ "$ALL_MODE" = true ]; then
-    FILES=($(find "$PROJECT_ROOT/src" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.c" \) 2>/dev/null))
-    if [ -f "$PROJECT_ROOT/main.cpp" ]; then
-        FILES+=("$PROJECT_ROOT/main.cpp")
-    fi
-elif [ ${#FILES[@]} -eq 0 ]; then
+if [ ${#INPUTS[@]} -eq 0 ]; then
     show_help
     exit 0
 fi
 
+# Expand directories into file lists, pass files through as-is
+FILES=()
+for input in "${INPUTS[@]}"; do
+    if [ -d "$input" ]; then
+        while IFS= read -r -d '' file; do
+            FILES+=("$file")
+        done < <(find "$input" -type f \( -name "*.cpp" -o -name "*.h" -o -name "*.c" -o -name "*.cc" -o -name "*.hpp" \) -print0 2>/dev/null)
+    elif [ -f "$input" ]; then
+        FILES+=("$input")
+    else
+        echo "Warning: '$input' is not a file or directory, skipping."
+    fi
+done
+
 if [ ${#FILES[@]} -eq 0 ]; then
-    echo "No files found to format."
+    echo "No C/C++ files found."
     exit 0
 fi
 

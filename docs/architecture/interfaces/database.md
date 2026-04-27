@@ -1,6 +1,6 @@
 # IOdaiDb — Database Interface
 
-**Header**: [`src/include/db/odai_db.h`](../../src/include/db/odai_db.h)
+**Header**: [`src/include/db/odai_db.h`](../../../src/include/db/odai_db.h)
 
 ## Purpose
 
@@ -17,12 +17,14 @@ Abstracts all persistent storage: model registration, chat sessions, semantic sp
 - **Semantic spaces** — CRUD for named knowledge domains with embedding model + chunking strategy configs.
 - **Media caching** — store media items (images/audio) to disk, deduplicate by checksum, return file paths.
 - **Initialization and transactions** — report database startup, begin/commit/rollback, and other lifecycle failures through `OdaiResult<void>`.
+- **Persistence across sessions** — data written before `close()` must remain readable when a new implementation instance is created with the same `DBConfig`.
 
 ## Important Behavioral Contracts
 
 - **`update_model_files` is a full replace** — the caller (RAG engine) merges old + new details before calling. The DB layer overwrites the entire record.
 - **Media items flow** — before `insert_chat_messages`, callers must `store_media_item()` for each media item to get its cached file path. Text items (`MEMORY_BUFFER`) skip storage.
 - **Chat history retrieval** — media items are returned as `FILE_PATH` pointing to cached files, not raw binary data.
+- **Session durability** — records committed through the interface are durable across `close()` plus a fresh implementation instance using the same config.
 - **Result semantics** — operation-style methods use `OdaiResult<void>`, retrieval methods use `OdaiResult<T>`, chat existence checks use `OdaiResult<bool>`, and initialization/transaction helpers also use `OdaiResult<void>` so callers can distinguish `NOT_FOUND`, `ALREADY_EXISTS`, `NOT_INITIALIZED`, validation failures, and internal failures.
 
 ## Current Implementation

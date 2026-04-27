@@ -28,15 +28,15 @@ fi
 # Call format.sh with the files
 "$PROJECT_ROOT/scripts/format.sh" "${FILE_ARRAY[@]}"
 
-# 2. Lint and Fix ALL files, then verify
+# 2. Lint and Fix ALL source files, then verify
 # As requested, we run full lint to ensure holistic consistency (e.g. header changes affecting cpp)
 echo "Linting and fixing all files..."
-"$PROJECT_ROOT/scripts/lint.sh" --fix
+"$PROJECT_ROOT/scripts/lint.sh" --fix "$PROJECT_ROOT/src"
 
 # Turn off set -e to catch the error and show a custom message
 set +e
 echo "Verifying fixes..."
-"$PROJECT_ROOT/scripts/lint.sh"
+"$PROJECT_ROOT/scripts/lint.sh" "$PROJECT_ROOT/src"
 LINT_EXIT=$?
 set -e
 

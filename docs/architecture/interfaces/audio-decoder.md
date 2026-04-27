@@ -1,10 +1,13 @@
 # IOdaiAudioDecoder — Audio Decoder Interface
 
-**Header**: [`src/include/audioEngine/odai_audio_decoder.h`](../../src/include/audioEngine/odai_audio_decoder.h)
+**Header**: [`src/include/audioEngine/odai_audio_decoder.h`](../../../src/include/audioEngine/odai_audio_decoder.h)
 
 ## Purpose
 
 Abstracts audio file decoding. Decodes audio inputs (file path or memory buffer) into raw float32 PCM samples matching a target specification (sample rate, channel count).
+
+`is_supported()` accepts a file extension token without a leading dot and matches it case-insensitively.
+`decode_to_spec()` accepts `InputItem` values whose MIME type has an `audio/` prefix. Prefix matching is case-insensitive through `InputItem::get_media_type()`, and the original MIME string is not modified by that classification.
 
 ## Ownership
 

@@ -16,6 +16,23 @@
 
 extern "C" int sqlite3_vec_init(sqlite3* db, char** pz_err_msg, const sqlite3_api_routines* p_api);
 
+namespace
+{
+OdaiResult<std::string> to_model_type_db_value(ModelType model_type)
+{
+  if (model_type == ModelType::LLM)
+  {
+    return std::string{"LLM"};
+  }
+  if (model_type == ModelType::EMBEDDING)
+  {
+    return std::string{"EMBEDDING"};
+  }
+
+  return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
+}
+} // namespace
+
 OdaiSqliteDb::OdaiSqliteDb(const DBConfig& db_config) : IOdaiDb(db_config)
 {
   if (db_config.m_dbType != SQLITE_DB)
@@ -81,6 +98,7 @@ OdaiResult<void> OdaiSqliteDb::initialize_db()
 
     // create db object only after registering sqlite-vec extension
     m_db = std::make_unique<SQLite::Database>(m_dbConfig.m_dbPath, SQLite::OPEN_READWRITE | SQLite::OPEN_CREATE);
+    m_db->exec("PRAGMA foreign_keys = ON");
 
     ODAI_LOG(ODAI_LOG_INFO, "Opened / created database successfully at {}", m_dbConfig.m_dbPath);
 
@@ -210,19 +228,11 @@ OdaiResult<void> OdaiSqliteDb::register_model_files(const ModelName& name, const
       return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
     }
 
-    std::string type_str;
-    if (model_file_details.m_modelType == ModelType::LLM)
-    {
-      type_str = "LLM";
-    }
-    else if (model_file_details.m_modelType == ModelType::EMBEDDING)
-    {
-      type_str = "EMBEDDING";
-    }
-    else
+    OdaiResult<std::string> type_str = to_model_type_db_value(model_file_details.m_modelType);
+    if (!type_str)
     {
       ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed");
-      return tl::unexpected(OdaiResultEnum::INVALID_ARGUMENT);
+      return tl::unexpected(type_str.error());
     }
 
     nlohmann::json j = model_file_details;
@@ -233,7 +243,7 @@ OdaiResult<void> OdaiSqliteDb::register_model_files(const ModelName& name, const
     insert.bind(":name", name);
     insert.bind(":file_details", model_file_details_json);
     insert.bind(":checksums", checksums);
-    insert.bind(":type", type_str);
+    insert.bind(":type", type_str.value());
 
     insert.exec();
 
@@ -326,14 +336,27 @@ OdaiResult<void> OdaiSqliteDb::update_model_files(const ModelName& name, const M
       return unexpected_not_initialized();
     }
 
+    if (new_checksums.empty())
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Empty checksums passed for model: {}", name);
+      return tl::unexpected(OdaiResultEnum::VALIDATION_FAILED);
+    }
+
+    OdaiResult<std::string> type_str = to_model_type_db_value(new_model_file_details.m_modelType);
+    if (!type_str)
+    {
+      ODAI_LOG(ODAI_LOG_ERROR, "Invalid Model Type passed for update");
+      return tl::unexpected(type_str.error());
+    }
+
     nlohmann::json j = new_model_file_details;
     std::string new_model_file_details_json = j.dump();
 
-    SQLite::Statement update(
-        *m_db,
-        "UPDATE models SET file_details = jsonb(:file_details), checksums = jsonb(:checksums) WHERE name = :name");
+    SQLite::Statement update(*m_db, "UPDATE models SET file_details = jsonb(:file_details), "
+                                    "checksums = jsonb(:checksums), type = :type WHERE name = :name");
     update.bind(":file_details", new_model_file_details_json);
     update.bind(":checksums", new_checksums);
+    update.bind(":type", type_str.value());
     update.bind(":name", name);
 
     int rows_modified = update.exec();

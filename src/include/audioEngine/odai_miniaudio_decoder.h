@@ -16,8 +16,9 @@ public:
   OdaiMiniAudioDecoder& operator=(OdaiMiniAudioDecoder&&) = delete;
 
   /// Checks if the given audio format is supported by this decoder.
-  /// Formats typically supported by this decoder: "wav", "mp3", "flac"
-  /// @param format The format to check (e.g. extension like "wav" or "mp3")
+  /// Formats supported by this decoder: "wav", "mp3", "flac"
+  /// @param format The audio format extension without a leading dot (e.g., "wav", "mp3", "flac", "ogg"). Matching is
+  /// case-insensitive.
   /// @return true if the format is supported, false otherwise
   bool is_supported(const std::string& format) override;
 

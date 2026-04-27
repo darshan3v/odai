@@ -69,6 +69,8 @@ The SDK maintains strict separation between types used at the API boundary and t
 - **Enums use fixed-width typedefs** — `typedef uint8_t c_ModelType` instead of C `enum` for ABI stability.
 - **No unions in public API** — use tagged structs instead.
 - **Backend-specific type conversions** follow `to_odai_<type>()` naming (e.g. `to_odai_backend_device_type()`).
+- **Input item media-type classification** matches the MIME type prefix (`text/`, `image/`, `audio/`)
+  case-insensitively and preserves the original MIME string for storage and conversion.
 
 ---
 

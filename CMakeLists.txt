@@ -55,7 +55,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${OUTPUT_BASE_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${OUTPUT_BASE_DIR}/bin")
 
 # -----------------------------------------------------------------
-# 2. Dependencies (FetchContent)
+# 2. Build Options
+# -----------------------------------------------------------------
+option(ODAI_BUILD_TESTS "Build ODAI test targets" OFF)
+
+# -----------------------------------------------------------------
+# 3. Dependencies (FetchContent)
 # -----------------------------------------------------------------
 include(FetchContent)
 
@@ -222,7 +227,7 @@ if(ODAI_ENABLE_STB_IMAGE)
 endif()
 
 # -----------------------------------------------------------------
-# 3. Main Library (odai)
+# 4. Main Library (odai)
 # -----------------------------------------------------------------
 set(BUILD_SHARED_LIBS ON CACHE BOOL "" FORCE)
 
@@ -240,11 +245,13 @@ set(ODAI_SOURCES
 
 add_library(odai SHARED ${ODAI_SOURCES})
 
-target_include_directories(odai PUBLIC src/include)
-target_include_directories(odai PRIVATE 
-    ${nlohmann_json_SOURCE_DIR}
-    ${xxHash_SOURCE_DIR}
-    ${tl_expected_SOURCE_DIR}/include
+target_include_directories(odai
+    PUBLIC
+        src/include
+        ${nlohmann_json_SOURCE_DIR}/include
+        ${tl_expected_SOURCE_DIR}/include
+    PRIVATE
+        ${xxHash_SOURCE_DIR}
 )
 
 target_compile_definitions(odai PRIVATE 
@@ -312,10 +319,27 @@ if(ODAI_ENABLE_STB_IMAGE)
 endif()
 
 # -----------------------------------------------------------------
-# 4. Platform Specifics
+# 5. Platform Specifics
 # -----------------------------------------------------------------
 if(ANDROID)
     add_library(odaiAndroid SHARED src/impl/odai_jni.cpp)
     target_include_directories(odaiAndroid PUBLIC src/include)
     target_link_libraries(odaiAndroid PRIVATE odai)
+endif()
+
+# -----------------------------------------------------------------
+# 6. Tests
+# -----------------------------------------------------------------
+if(ODAI_BUILD_TESTS)
+    FetchContent_Declare(
+        googletest
+        GIT_REPOSITORY https://github.com/google/googletest.git
+        GIT_TAG v1.17.0
+    )
+    odai_configure_dependency_build_type(googletest STATIC)
+    FetchContent_MakeAvailable(googletest)
+
+    include(CTest)
+    enable_testing()
+    add_subdirectory(tests)
 endif()

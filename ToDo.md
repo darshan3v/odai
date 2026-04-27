@@ -1,7 +1,7 @@
 ### AI
 
 - [ ] May be make a agent which can go through all the source files, and let us know if anything redundant, what can be removed, what can be optimized , what can be refactored etc.., because its very much required to maintain code quality as we are growing
-- [ ] Ask AI to redocument every functions at once, and may be make some index, architecute.md that will be useful for it
+- [ ] Ask AI to redocument every functions at once
 - [ ] Update development guide so that its in sync with clang tidy
 
 ### Language / Structure Specific
@@ -63,3 +63,4 @@
     - [ ] Test Windows / Linux lapotp are using optimal CPU for all variants
     - [ ] Test Android with / without vulkan, also check if dotprod and kleidiAI are enabled / used on devices
     - [ ] Test Apple devices with / without Metal, also check if dotprod and kleidiAI are enabled / used on devices
+ - [ ] Explore lightweight AI-assisted checks for cases that currently remain in `test_nuances.md` as manual verification, starting with audio decoder perceptual sanity checks

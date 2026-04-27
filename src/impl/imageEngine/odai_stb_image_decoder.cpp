@@ -2,6 +2,7 @@
 #include "odai_logger.h"
 #include "types/odai_common_types.h"
 #include "types/odai_types.h"
+#include "utils/string_utils.h"
 
 #include "stb_image.h"
 #include "stb_image_resize2.h"
@@ -11,12 +12,11 @@
 
 bool OdaiStbImageDecoder::is_supported(const std::string& format)
 {
-  std::string lower_format = format;
-  std::transform(lower_format.begin(), lower_format.end(), lower_format.begin(), ::tolower);
+  const std::string lower_format = to_lower(format);
 
   return (lower_format == "jpg" || lower_format == "jpeg" || lower_format == "png" || lower_format == "bmp" ||
-          lower_format == "tga" || lower_format == "gif" || lower_format == "hdr" || lower_format == "pic" ||
-          lower_format == "pnm");
+          lower_format == "tga" || lower_format == "gif" || lower_format == "hdr" || lower_format == "pnm" ||
+          lower_format == "ppm" || lower_format == "pgm" || lower_format == "psd");
 }
 
 OdaiResult<void> OdaiStbImageDecoder::do_decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,

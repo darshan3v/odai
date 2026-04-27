@@ -22,7 +22,8 @@ public:
 
   /// Checks if the given audio format is supported by this decoder.
   /// Provides documentation on what kind of file types/formats are supported.
-  /// @param format The audio format extension (e.g., "wav", "mp3", "flac", "ogg").
+  /// @param format The audio format extension without a leading dot (e.g., "wav", "mp3", "flac", "ogg"). Matching is
+  /// case-insensitive.
   /// @return true if the format is supported, false otherwise.
   virtual bool is_supported(const std::string& format) = 0;
 

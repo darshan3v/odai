@@ -82,7 +82,8 @@ struct c_InputItem
   void* m_data;
   /// Size of the data in bytes.
   size_t m_dataSize;
-  /// Optional MIME type (e.g., "image/jpeg"). Dynamically allocated if present, caller frees.
+  /// Optional MIME type (e.g., "image/jpeg"). Media-type prefix matching is case-insensitive. Dynamically allocated if
+  /// present, caller frees.
   char* m_mimeType;
 };
 

@@ -21,7 +21,8 @@ public:
   IOdaiImageDecoder& operator=(IOdaiImageDecoder&&) = delete;
 
   /// Checks if the given image format is supported by this decoder.
-  /// @param format The format to check (e.g. extension like "png" or "jpg")
+  /// @param format The image format extension without a leading dot (e.g. "png" or "jpg"). Matching is
+  /// case-insensitive.
   /// @return true if the format is supported, false otherwise
   virtual bool is_supported(const std::string& format) = 0;
 

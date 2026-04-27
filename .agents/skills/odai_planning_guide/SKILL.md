@@ -38,30 +38,30 @@ When adding functionality:
 ## 4. Break Work into Phases
 
 Order your work by dependency:
-1. **Types** — New structs, enums, configs in `odai_types.h` / `odai_ctypes.h`
-2. **Interface changes** — New or modified virtual methods
-3. **Implementation** — Concrete logic in the chosen backend
-4. **Wiring** — Factory/instantiation changes in `odai_sdk.cpp` or `odai_rag_engine.cpp`
-5. **Public API** — Expose via `odai_public.h` / `odai_public.cpp` with sanitizers and converters
-6. **Tests** — Verify at each layer
+1. **Types & Errors** — New structs, enums, configs in `odai_types.h` / `odai_ctypes.h`, and any new `OdaiResultEnum` values.
+2. **Interface changes** — New or modified virtual methods.
+3. **Implementation** — Concrete logic in the chosen backend.
+4. **Wiring** — Factory/instantiation changes in central orchestrators (e.g., `odai_sdk.cpp` or `odai_rag_engine.cpp`).
+5. **Public API** — Expose via `odai_public.h` / `odai_public.cpp` with sanitizers and `toCpp`/`toC` converters.
+6. **Tests** — Verify at each layer.
 
 ## 5. Check Existing Patterns
 
 Before writing code:
-- Read `.agents/skills/odai_development_guide/SKILL.md` for coding patterns (sanitize → convert → forward, `is_sane()`, naming conventions, interface design rules).
-- Read `nuances.md` for known build quirks, especially when integrating new third-party libraries or header-only libraries.
+- Read the `odai_development_guide` skill for coding patterns (sanitize → convert → forward, `is_sane()`, `OdaiResult<T>`, naming conventions, interface design rules, and documentation).
+- Read `dev_nuances.md` for known build quirks, especially when integrating new third-party libraries or header-only libraries.
 - Search the codebase for similar features already implemented — follow the established patterns rather than inventing new ones.
 
 ## 6. Verify Impact
 
 Before executing your plan:
-- List which existing tests might break
-- Identify which build presets (Linux, Android) are affected
-- Note if the change affects the C ABI surface (breaking change for consumers)
+- List which existing tests might break.
+- Identify which build presets (Linux, Android) are affected.
+- Note if the change affects the C ABI surface (modifying structs in `odai_ctypes.h` or signatures in `odai_public.h`). This is a breaking change for consumers and should be highlighted.
 
 ## 7. Update Docs
 
 If your plan touches architecture, include explicit steps in the plan to:
 - Update the relevant `docs/architecture/` files
-- Update `nuances.md` if build quirks are involved
+- Update `dev_nuances.md` if build quirks are involved
 - Update the development guide skill if new patterns are introduced
