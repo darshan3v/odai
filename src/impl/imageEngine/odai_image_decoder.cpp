@@ -1,6 +1,18 @@
 #include "imageEngine/odai_image_decoder.h"
+#include "imageEngine/odai_stb_image_decoder.h"
 #include "odai_logger.h"
 #include "types/odai_types.h"
+
+#include <memory>
+
+std::unique_ptr<IOdaiImageDecoder> IOdaiImageDecoder::create_default()
+{
+#ifdef ODAI_ENABLE_STB_IMAGE
+  return std::make_unique<OdaiStbImageDecoder>();
+#else
+  return nullptr;
+#endif
+}
 
 OdaiResult<void> IOdaiImageDecoder::decode_to_spec(const InputItem& input, const OdaiImageTargetSpec& target_spec,
                                                    OdaiDecodedImage& decoded_image)

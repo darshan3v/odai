@@ -18,7 +18,7 @@ Abstracts the LLM inference runtime. Any backend that can load models and genera
 
 ## Input Contract
 
-Media items in prompts must be `FILE_PATH` type; text must be `MEMORY_BUFFER` type. The engine is responsible for decoding media items internally — it creates audio/image decoder instances on demand (via `OdaiSdk::get_new_odai_audio_decoder_instance()` / `get_new_odai_image_decoder_instance()`) and uses them to convert raw files into the format required by the underlying inference runtime.
+Media items in prompts must be `FILE_PATH` type; text must be `MEMORY_BUFFER` type. The engine is responsible for decoding media items internally — it creates audio/image decoder instances on demand (via `IOdaiAudioDecoder::create_default()` / `IOdaiImageDecoder::create_default()`) and uses them to convert raw files into the format required by the underlying inference runtime.
 
 ## Config Types
 

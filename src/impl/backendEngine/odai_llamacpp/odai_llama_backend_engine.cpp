@@ -1,3 +1,4 @@
+#include "common/fit.h"
 #include "ggml-backend.h"
 #include "llama.h"
 #include "mtmd-helper.h"
@@ -7,8 +8,6 @@
 #include "backendEngine/odai_llamacpp/odai_llama_backend_engine.h"
 #include "backendEngine/odai_llamacpp/odai_llama_type_conversions.h"
 #include "imageEngine/odai_image_decoder.h"
-
-#include "odai_sdk.h"
 
 #include "types/odai_common_types.h"
 #include "types/odai_type_conversions.h"
@@ -581,18 +580,18 @@ OdaiResult<bool> OdaiLlamaEngine::fit_llm_runtime_params_for_plan(const std::str
     return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 
-  const llama_params_fit_status fit_status = llama_params_fit(
+  const common_params_fit_status fit_status = common_fit_params(
       base_model_path.c_str(), &runtime_params.m_modelParams, &runtime_params.m_contextParams,
       runtime_params.m_fitBuffers.m_tensorSplit.data(), runtime_params.m_fitBuffers.m_tensorBuftOverrides.data(),
       runtime_params.m_fitBuffers.m_margins.data(), config.m_contextWindow, GGML_LOG_LEVEL_INFO);
 
-  if (fit_status == LLAMA_PARAMS_FIT_STATUS_ERROR)
+  if (fit_status == COMMON_PARAMS_FIT_STATUS_ERROR)
   {
     ODAI_LOG(ODAI_LOG_ERROR, "llama_params_fit() failed for {}", base_model_path);
     return tl::unexpected(OdaiResultEnum::INTERNAL_ERROR);
   }
 
-  if (fit_status == LLAMA_PARAMS_FIT_STATUS_FAILURE)
+  if (fit_status == COMMON_PARAMS_FIT_STATUS_FAILURE)
   {
     ODAI_LOG(ODAI_LOG_WARN, "llama_params_fit() could not find an accelerated placement for context window {}",
              config.m_contextWindow);
@@ -2049,7 +2048,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
       text_content += mtmd_default_marker();
       std::string file_path = byte_vector_to_string(item.m_data);
 
-      std::unique_ptr<IOdaiImageDecoder> image_decoder = OdaiSdk::get_new_odai_image_decoder_instance();
+      std::unique_ptr<IOdaiImageDecoder> image_decoder = IOdaiImageDecoder::create_default();
       if (!image_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No image decoder available to decode image input");
@@ -2082,7 +2081,7 @@ OdaiLlamaEngine::process_input_items(const std::vector<InputItem>& items)
     else if (media_type == MediaType::AUDIO)
     {
       text_content += mtmd_default_marker();
-      std::unique_ptr<IOdaiAudioDecoder> audio_decoder = OdaiSdk::get_new_odai_audio_decoder_instance();
+      std::unique_ptr<IOdaiAudioDecoder> audio_decoder = IOdaiAudioDecoder::create_default();
       if (!audio_decoder)
       {
         ODAI_LOG(ODAI_LOG_ERROR, "No audio decoder available to decode audio input");

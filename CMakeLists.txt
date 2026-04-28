@@ -105,7 +105,7 @@ endif()
 
 # --- Llama.cpp ---
 if(ODAI_ENABLE_LLAMA_BACKEND)
-    FetchContent_Declare(llama GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git GIT_TAG b8748)
+    FetchContent_Declare(llama GIT_REPOSITORY https://github.com/ggml-org/llama.cpp.git GIT_TAG b8951)
 
     set(GGML_BACKEND_DL ON CACHE BOOL "" FORCE)
     set(GGML_NATIVE OFF CACHE BOOL "" FORCE)

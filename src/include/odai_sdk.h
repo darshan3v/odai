@@ -11,8 +11,6 @@
 // Forward declarations to reduce header dependency surface
 class IOdaiDb;
 class OdaiRagEngine;
-class IOdaiAudioDecoder;
-class IOdaiImageDecoder;
 struct DBConfig;
 struct BackendEngineConfig;
 
@@ -149,12 +147,4 @@ private:
 
 public:
   OdaiLogger* get_logger() { return m_logger.get(); }
-
-  /// @return returns a new AudioDecoder instance that the library was built with, if it was built with none then
-  /// returns nullptr
-  static std::unique_ptr<IOdaiAudioDecoder> get_new_odai_audio_decoder_instance();
-
-  /// @return returns a new ImageDecoder instance that the library was built with, if it was built with none then
-  /// returns nullptr
-  static std::unique_ptr<IOdaiImageDecoder> get_new_odai_image_decoder_instance();
 };

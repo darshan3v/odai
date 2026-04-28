@@ -2,6 +2,7 @@
 
 #include "types/odai_result.h"
 
+#include <memory>
 #include <string>
 
 class InputItem;
@@ -19,6 +20,10 @@ public:
   IOdaiImageDecoder& operator=(const IOdaiImageDecoder&) = delete;
   IOdaiImageDecoder(IOdaiImageDecoder&&) = delete;
   IOdaiImageDecoder& operator=(IOdaiImageDecoder&&) = delete;
+
+  /// Creates the configured default image decoder implementation.
+  /// @return A new image decoder instance for the implementation enabled at build time, or nullptr if none is enabled.
+  static std::unique_ptr<IOdaiImageDecoder> create_default();
 
   /// Checks if the given image format is supported by this decoder.
   /// @param format The image format extension without a leading dot (e.g. "png" or "jpg"). Matching is

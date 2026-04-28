@@ -11,7 +11,7 @@ Abstracts image file decoding. Decodes image inputs (file path or memory buffer)
 
 ## Ownership
 
-Stateless — the backend engine creates a fresh instance on demand via `OdaiSdk::get_new_odai_image_decoder_instance()` within its `process_input_items()` method. The SDK provides the factory, but the engine is the actual consumer.
+Stateless — the backend engine creates a fresh instance on demand via `IOdaiImageDecoder::create_default()` within its `process_input_items()` method. The interface owns the default factory because it is the swappable decoder boundary; the backend engine is the runtime consumer.
 
 ## Design Pattern: Template Method
 

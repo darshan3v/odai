@@ -152,7 +152,7 @@ Ownership and request-time behavior are split:
 
 During `process_input_items()`, the engine:
 
-1. Creates audio/image decoder instances on-demand via `OdaiSdk::get_new_odai_audio_decoder_instance()` / `get_new_odai_image_decoder_instance()`
+1. Creates audio/image decoder instances on-demand via `IOdaiAudioDecoder::create_default()` / `IOdaiImageDecoder::create_default()`
 2. Decodes media files into raw pixel/PCM data using those decoders
 3. Converts decoded data into `mtmd_bitmap` objects
 4. The `mtmd` API then handles tokenizing text with media placeholders, encoding media into embeddings, and interleaving them in context

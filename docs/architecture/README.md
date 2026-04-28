@@ -53,7 +53,7 @@ graph TD
 | **C ABI Surface** | `odai_public.h` / `odai_public.cpp` | Stable binary interface. Sanitizes C inputs, converts to C++ types, forwards to SDK, and returns `c_OdaiResult` for migrated operation-style APIs while keeping payload ownership in output pointers. Exposes explicit lifecycle entry points such as `odai_initialize_sdk()` and `odai_shutdown()`. |
 | **C++ SDK** | `odai_sdk.h` / `odai_sdk.cpp` | Singleton orchestrator. Validates business logic, manages lifecycle, routes to engines, and uses `OdaiResult` for operation-style C++ APIs, including streaming calls via `OdaiResult<StreamingStats>`. |
 | **Internal Engines** | `OdaiRagEngine`, interfaces | Core logic. RAG engine owns a `IOdaiBackendEngine` and `IOdaiDb` instance, and uses `OdaiResult` for operational APIs, including DB initialization and streaming generation. |
-| **Media Decoders** | `IOdaiAudioDecoder`, `IOdaiImageDecoder` | Stateless decoders created on-demand by the backend engine internally to process multimodal inputs (images, audio) before inference. |
+| **Media Decoders** | `IOdaiAudioDecoder`, `IOdaiImageDecoder` | Stateless decoders created on-demand through interface-level default factories and used by the backend engine internally to process multimodal inputs (images, audio) before inference. |
 
 For the full request lifecycle (C types → sanitize → convert → SDK → engine), see [Data Flow & Type System](./data-flow-and-type-system.md).
 
@@ -107,7 +107,7 @@ It handles model registration/update workflows, chat session management, and str
 1. **Create the header** in `src/include/<engineDir>/<yourImpl>/` — inherit from the interface.  
 2. **Create the implementation** in `src/impl/<engineDir>/<yourImpl>/`.  
 3. **Add a CMake guard** (`ODAI_ENABLE_YOUR_IMPL`) and wire it into `CMakeLists.txt`.  
-4. **Wire the factory** — update `odai_sdk.cpp` (or `odai_rag_engine.cpp`) to instantiate your impl when the flag is set.  
+4. **Wire the factory** — update the relevant interface `.cpp` default factory (for example, `IOdaiAudioDecoder::create_default()`) to instantiate your implementation when its build flag is set.  
 5. **Document** — add a file in `docs/architecture/implementations/` and link it from this README.
 
 For coding patterns and conventions, see the [Development Guide skill](../../.agents/skills/odai_development_guide/SKILL.md).

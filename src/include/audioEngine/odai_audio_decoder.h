@@ -2,6 +2,7 @@
 
 #include "types/odai_result.h"
 
+#include <memory>
 #include <string>
 
 class InputItem;
@@ -19,6 +20,10 @@ public:
   IOdaiAudioDecoder& operator=(const IOdaiAudioDecoder&) = delete;
   IOdaiAudioDecoder(IOdaiAudioDecoder&&) = delete;
   IOdaiAudioDecoder& operator=(IOdaiAudioDecoder&&) = delete;
+
+  /// Creates the configured default audio decoder implementation.
+  /// @return A new audio decoder instance for the implementation enabled at build time, or nullptr if none is enabled.
+  static std::unique_ptr<IOdaiAudioDecoder> create_default();
 
   /// Checks if the given audio format is supported by this decoder.
   /// Provides documentation on what kind of file types/formats are supported.

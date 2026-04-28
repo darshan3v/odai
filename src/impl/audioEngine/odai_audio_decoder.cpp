@@ -1,6 +1,18 @@
 #include "audioEngine/odai_audio_decoder.h"
+#include "audioEngine/odai_miniaudio_decoder.h"
 #include "odai_logger.h"
 #include "types/odai_types.h"
+
+#include <memory>
+
+std::unique_ptr<IOdaiAudioDecoder> IOdaiAudioDecoder::create_default()
+{
+#ifdef ODAI_ENABLE_MINIAUDIO
+  return std::make_unique<OdaiMiniAudioDecoder>();
+#else
+  return nullptr;
+#endif
+}
 
 OdaiResult<void> IOdaiAudioDecoder::decode_to_spec(const InputItem& input, const OdaiAudioTargetSpec& target_spec,
                                                    OdaiDecodedAudio& decoded_audio)
