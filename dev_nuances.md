@@ -8,9 +8,10 @@ It is intentionally for non-obvious rationale and workaround-heavy behavior, not
     - [Third-Party Library Integration Quirks](#third-party-library-integration-quirks)
         - [Miniaudio (Header-Only STB-style)](#miniaudio-header-only-stb-style)
         - [Llama.cpp (Shared Library + Dynamic Backends)](#llamacpp-shared-library--dynamic-backends)
-        - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
-        - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
+    - [Best Practice: Dedicated Implementation File (Header-Only)](#best-practice-dedicated-implementation-file-header-only)
+    - [Duplicate Symbol Errors (Header-Only Libraries)](#duplicate-symbol-errors-header-only-libraries)
     - [Parallel clang-tidy Requires `run-clang-tidy` and Process-Group Cleanup](#parallel-clang-tidy-requires-run-clang-tidy-and-process-group-cleanup)
+    - [Pre-commit Lint Runs Only When `src/` Changes](#pre-commit-lint-runs-only-when-src-changes)
 - [Runtime Behavior](#runtime-behavior)
     - [Explicit SDK Shutdown for Deterministic Backend Cleanup](#explicit-sdk-shutdown-for-deterministic-backend-cleanup)
     - [llama.cpp Vulkan Device Type on Android and Other Integrated GPUs](#llamacpp-vulkan-device-type-on-android-and-other-integrated-gpus)
@@ -105,6 +106,13 @@ ODAI's lint workflow now relies on `run-clang-tidy` instead of invoking `clang-t
 * **Why this exists:** Full-tree linting was too slow for the shared pre-commit hook once the codebase grew. `run-clang-tidy` reuses the compilation database and spreads checks across a worker pool, which keeps the "lint all sources" policy practical.
 * **Non-obvious dependency:** Developers need the `run-clang-tidy` helper installed, not just the `clang-tidy` binary. The helper usually ships with the clang-tidy package but may be packaged separately depending on distro/toolchain.
 * **Why the signal trap matters:** Interrupting `run-clang-tidy` can leave child workers running unless the script kills the whole process group. `scripts/lint.sh` traps `INT`/`TERM` and calls `kill -- -$$` specifically to avoid orphaned background clang-tidy processes during local runs or pre-commit aborts.
+
+### Pre-commit Lint Runs Only When `src/` Changes
+The active git hook still formats any staged C/C++ files, but it now skips linting unless the staged diff touches `src/`.
+
+* **Trigger condition:** `.githooks/pre-commit` computes a separate staged-file list for `src/` and only runs `scripts/lint.sh` when that list is non-empty.
+* **Lint scope:** When it does run, the hook still lints the full `src/` tree rather than the individual staged files.
+* **Why this matters:** Test-only changes no longer pay the `clang-tidy` cost, while source changes still get the broader `src/` lint pass to catch cross-file issues.
 
 ## Runtime Behavior
 

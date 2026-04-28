@@ -1,6 +1,5 @@
 #include "audioEngine/odai_audio_decoder.h"
 #include "odai_decoder_test_helpers.h"
-#include "odai_sdk.h"
 #include "odai_test_helpers.h"
 
 #include <gtest/gtest.h>
@@ -18,7 +17,7 @@ namespace
 {
 std::unique_ptr<IOdaiAudioDecoder> make_decoder()
 {
-  std::unique_ptr<IOdaiAudioDecoder> decoder = OdaiSdk::get_new_odai_audio_decoder_instance();
+  std::unique_ptr<IOdaiAudioDecoder> decoder = IOdaiAudioDecoder::create_default();
   if (decoder == nullptr)
   {
     throw std::runtime_error("No audio decoder implementation is enabled for this build");

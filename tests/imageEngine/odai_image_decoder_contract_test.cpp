@@ -1,6 +1,5 @@
 #include "imageEngine/odai_image_decoder.h"
 #include "odai_decoder_test_helpers.h"
-#include "odai_sdk.h"
 #include "odai_test_helpers.h"
 
 #include <gtest/gtest.h>
@@ -18,7 +17,7 @@ namespace
 {
 std::unique_ptr<IOdaiImageDecoder> make_decoder()
 {
-  std::unique_ptr<IOdaiImageDecoder> decoder = OdaiSdk::get_new_odai_image_decoder_instance();
+  std::unique_ptr<IOdaiImageDecoder> decoder = IOdaiImageDecoder::create_default();
   if (decoder == nullptr)
   {
     throw std::runtime_error("No image decoder implementation is enabled for this build");
