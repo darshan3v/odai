@@ -54,8 +54,10 @@
 ### ToDo
 - [ ] Reduce header dependency
 - [ ] Figure out and ensure dotprod optimization is enabled for llamacpp (will have to check how to do)
+- [ ] Properly check if chat template exist instead of relying on null from fn because can fallback to something else so
 
 ### Tests
+ - [ ] Write Backend Layer Test (need to plan as to how to do it)
  - [ ] Test all GPU + optimization support
     - [ ] Test Windows / Linux with / without CUDA / HIP (discrete) / SYSCL (discrete) / Vulkan (iGPU)
     - [ ] For above also compare iGPU vs CPU, also check available RAM shown is correct or not

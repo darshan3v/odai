@@ -6,6 +6,8 @@
 ## Overview
 The ODAI SDK is a high-performance C++ library designed to integrate AI capabilities directly into applications running on edge devices. It enables on-device inference, retrieval-augmented generation (RAG), and persistent chat capabilities without relying on cloud services.
 
+The SDK exposes a stable C ABI for application integration while keeping the internal implementation in C++20. Core backends are selected at build time through swappable interfaces, with current support for llama.cpp inference, SQLite-backed persistence, and media decoding for multimodal inputs.
+
 ### Vision: Service vs. Library
 While the SDK can be linked as a standard library, our vision is to deploy it as a **standalone system service**.
 -   **Efficiency**: A single service instance manages the heavy AI models (LLMs, Embeddings) and vector database.
@@ -37,21 +39,29 @@ A **Scope** provides granular filtering within a Semantic Space.
 The SDK exposes a **C ABI (Application Binary Interface)**.
 -   **Stability**: Ensures binary compatibility across compiler versions and updates.
 -   **Interoperability**: Makes it easy to write bindings for almost any language (Python, Rust, Dart, Java/Kotlin, Swift).
--   **Mobile Support**: We are actively developing JNI (Android) and C-Interdict/Swift (iOS) bindings to make this a first-class mobile library.
+-   **Mobile Support**: We are actively developing JNI (Android) and C interop / Swift (iOS) bindings to make this a first-class mobile library.
+
+Applications should call `odai_initialize_sdk()` before using SDK operations and `odai_shutdown()` during normal teardown so backend resources are released deterministically.
 
 ### Modular Backend
 The architecture is interface-based, allowing core components to be swapped:
 -   **Inference Engine**: Currently uses `llama.cpp`, but can be extended to support other backends (e.g., ONNX, MLC-LLM).
 -   **Vector Database**: Currently uses `SQLite` (via `sqlite-vec` and `SQLiteCpp`), but can be extended to support other vector stores (e.g., FAISS, pgvector).
+-   **Media Decoders**: Currently uses `miniaudio` for audio and `stb_image` for images through decoder interfaces used by the backend engine.
+
+For the detailed layer map, request flow, and interface responsibilities, see [`docs/architecture/`](docs/architecture/README.md).
 
 ## Tech Stack
 -   **Language**: C++ 20 (Core), C (API Surface)
 -   **Build System**: CMake, Ninja
 -   **Key Libraries**:
     -   `llama.cpp`: For LLM inference.
+    -   `mtmd`: Experimental llama.cpp multimodal projector support.
     -   `sqlite-vec`: For vector similarity search.
     -   `nlohmann/json`: For JSON manipulation.
     -   `SQLiteCpp`: C++ wrapper for SQLite.
+    -   `miniaudio`: Audio decoding.
+    -   `stb_image`: Image decoding.
 
 ## Build Instructions
 
@@ -78,8 +88,12 @@ cmake --build --preset linux-default-release
 ```
 
 #### Android (ARM64)
-Ensure `ANDROID_HOME` is set.
+Ensure `ANDROID_HOME` is set and contains the configured Android NDK.
 ```bash
+# Debug Build
+cmake --preset android-arm64-debug
+cmake --build --preset android-arm64-debug
+
 # Release Build
 cmake --preset android-arm64-release
 cmake --build --preset android-arm64-release
@@ -88,15 +102,16 @@ cmake --build --preset android-arm64-release
 ## Current Capabilities & Limitations
 
 ### Implemented
--   ✅ **Inference**: Basic LLM text generation.
--   ✅ **Chat**: Stateful chat sessions with history persistence and system prompts.
--   ✅ **RAG Core**: Vector store basis, semantic search, and context retrieval.
--   ✅ **Data Isolation**: Semantic Spaces and Scoping are functional.
--   ✅ **Multi-Modal Support**: Support for image and audio inputs using the experimental `mtmd` backend API.
+-   **Inference**: Basic LLM text generation with llama.cpp.
+-   **Chat**: Stateful chat sessions with history persistence and system prompts.
+-   **RAG Core**: Vector store basis, semantic search, and context retrieval.
+-   **Data Isolation**: Semantic Spaces and Scoping are functional.
+-   **Multi-Modal Support**: Image and audio inputs using decoder interfaces and the experimental `mtmd` backend API.
+-   **Lifecycle Management**: Explicit SDK initialization and shutdown entry points.
 
 ### Limitations (Work in Progress)
--   ❌ **Document Ingestion**: Logic for parsing files (PDF, raw text) and chunking them is **not yet implemented**.
--   ❌ **Embedding Generation**: The pipeline to automatically compute embeddings from raw text input is currently under development. Developers currently must handle embedding generation or insert pre-computed vectors (for testing).
+-   **Document Ingestion**: Logic for parsing files (PDF, raw text) and chunking them is **not yet implemented**.
+-   **Embedding Generation**: The pipeline to automatically compute embeddings from raw text input is currently under development. Developers currently must handle embedding generation or insert pre-computed vectors.
 
 ## Future Roadmap
 
@@ -118,4 +133,4 @@ To ensure a consistent development environment, we use shared git hooks.
 This configures extensive pre-commit checks (clang-format, clang-tidy) to ensure code quality.
 
 ## AI-Assisted Development
-This repository includes a `.agent/skills` directory designed to enhance AI-based coding workflows. These resources provide context, guidelines, and specific skills to help AI agents assist you more effectively in this codebase.
+This repository includes a `.agents/skills` directory designed to enhance AI-based coding workflows. These resources provide context, guidelines, and specific skills to help AI agents assist you more effectively in this codebase.
